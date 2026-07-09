@@ -363,6 +363,10 @@ export async function getProducts(): Promise<Product[]> {
   return Array.isArray(res) ? res : res.data;
 }
 
+export async function getCategories(): Promise<string[]> {
+  return trpcQuery<string[]>("product.categories");
+}
+
 export async function createOrder(input: CreateOrderInput): Promise<{ id: number }> {
   return trpcMutation<{ id: number }>("order.create", input);
 }
