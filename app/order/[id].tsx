@@ -1,22 +1,26 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Animated,
   Share,
   Alert,
-  Dimensions,
+  RefreshControl,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
+} from "react-native-reanimated";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { notify } from "../../src/store/toast";
 import { format, parseISO } from "date-fns";
 import { ru } from "date-fns/locale";
-import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import {
   getMyOrders,
@@ -28,14 +32,13 @@ import {
   Typography,
   Spacing,
   Radii,
-  Gradients,
   Shadows,
   ThemeColors,
 } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
-import { Badge, Card, IconCircle } from "../../src/components/ui";
-
-const { width: SCREEN_W } = Dimensions.get("window");
+import { Card, IconCircle } from "../../src/components/ui";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { PressableScale } from "../../src/components/Animated";
 
 // ── Status config ─────────────────────────────────────────────────────────────
 type IconName = keyof typeof Feather.glyphMap;
@@ -50,10 +53,10 @@ const STATUS_CONFIG: Record<
     step: number; // 0-based index in pipeline
   }
 > = {
-  new:        { label: "Новый",       gradient: ["#38BDF8","#0EA5E9"], icon: "file-text",    badgeVariant: "info",    step: 0 },
-  processing: { label: "В обработке", gradient: ["#F5A524","#F76B1C"], icon: "loader",       badgeVariant: "warning", step: 1 },
-  completed:  { label: "Выполнен",    gradient: ["#22D3A8","#16A38A"], icon: "check-circle", badgeVariant: "success", step: 2 },
-  cancelled:  { label: "Отменён",     gradient: ["#F4516C","#D63A6A"], icon: "x-circle",     badgeVariant: "danger",  step: -1 },
+  new:        { label: "Новый",       gradient: ["#4a9de8","#4b6cf6"], icon: "file-text",    badgeVariant: "info",    step: 0 },
+  processing: { label: "В обработке", gradient: ["#e8a830","#f09050"], icon: "loader",       badgeVariant: "warning", step: 1 },
+  completed:  { label: "Выполнен",    gradient: ["#34c473","#2ec4b0"], icon: "check-circle", badgeVariant: "success", step: 2 },
+  cancelled:  { label: "Отменён",     gradient: ["#e85050","#f06895"], icon: "x-circle",     badgeVariant: "danger",  step: -1 },
 };
 
 const PIPELINE_STEPS = ["Новый", "В обработке", "Выполнен"];
@@ -64,33 +67,40 @@ function fmt(dateStr: string) {
   catch { return dateStr; }
 }
 
-function money(val: string | number) {
-  return Number(val).toLocaleString("ru") + " сум";
+function money(val: string | number | undefined | null) {
+  const num = typeof val === "number" ? val : Number(String(val ?? "").replace(/[^\d.,-]/g, "").replace(",", "."));
+  if (isNaN(num) || !isFinite(num)) return "0 сум";
+  return num.toLocaleString("ru") + " сум";
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 /** Animated pulsing skeleton row */
 function SkeletonRow({ w = "60%", h = 14, colors }: { w?: number | `${number}%`; h?: number; colors: ThemeColors }) {
-  const pulse = useRef(new Animated.Value(0.4)).current;
+  const pulse = useSharedValue(0.4);
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.4, duration: 900, useNativeDriver: true }),
-      ])
-    ).start();
-  }, [pulse]);
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 900 }),
+      -1,
+      true,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+  }));
   return (
     <Animated.View
-      style={{
-        height: h,
-        width: w,
-        borderRadius: 6,
-        backgroundColor: colors.bg.elevated,
-        opacity: pulse,
-        marginVertical: 4,
-      }}
+      style={[
+        {
+          height: h,
+          width: w,
+          borderRadius: 6,
+          backgroundColor: colors.bg.elevated,
+          marginVertical: 4,
+        },
+        animatedStyle,
+      ]}
     />
   );
 }
@@ -124,19 +134,21 @@ function PipelineBanner({ status, colors }: { status: string; colors: ThemeColor
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.new;
   if (status === "cancelled") {
     return (
-      <LinearGradient colors={cfg.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroBanner}>
-        <Feather name="x-circle" size={32} color="#fff" />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.heroTitle}>Заказ отменён</Text>
-          <Text style={styles.heroSub}>Этот заказ был отменён и не обрабатывается</Text>
+      <View style={[styles.heroBanner, { backgroundColor: colors.bg.card, borderColor: colors.status.danger + "30", borderWidth: 1 }]}>
+        <View style={[styles.heroIcon, { backgroundColor: colors.status.dangerDim }]}>
+          <Feather name="x-circle" size={28} color={colors.status.danger} />
         </View>
-      </LinearGradient>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.heroTitle, { color: colors.text.primary }]}>Заказ отменён</Text>
+          <Text style={[styles.heroSub, { color: colors.text.muted }]}>Этот заказ был отменён и не обрабатывается</Text>
+        </View>
+      </View>
     );
   }
   return (
-    <LinearGradient colors={cfg.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroBanner}>
+    <View style={[styles.heroBanner, { backgroundColor: colors.bg.card, borderColor: colors.status[cfg.badgeVariant] + "20", borderWidth: 1 }]}>
       <View style={{ flex: 1 }}>
-        <Text style={styles.heroTitle}>{cfg.label}</Text>
+        <Text style={[styles.heroTitle, { color: colors.text.primary }]}>{cfg.label}</Text>
         <View style={styles.pipeline}>
           {PIPELINE_STEPS.map((step, i) => {
             const done = i <= cfg.step;
@@ -146,24 +158,26 @@ function PipelineBanner({ status, colors }: { status: string; colors: ThemeColor
                 <View
                   style={[
                     styles.pipelineDot,
-                    done && styles.pipelineDotDone,
-                    active && styles.pipelineDotActive,
+                    done && [styles.pipelineDotDone, { backgroundColor: colors.brand.primary }],
+                    active && [styles.pipelineDotActive, { borderColor: colors.brand.primary }],
                   ]}
                 >
-                  {done && !active && <Feather name="check" size={9} color={cfg.gradient[0]} />}
-                  {active && <View style={styles.pipelineDotInner} />}
+                  {done && !active && <Feather name="check" size={9} color="#fff" />}
+                  {active && <View style={[styles.pipelineDotInner, { backgroundColor: colors.brand.primaryLight }]} />}
                 </View>
-                <Text style={[styles.pipelineLabel, done && styles.pipelineLabelDone]}>{step}</Text>
+                <Text style={[styles.pipelineLabel, done && [styles.pipelineLabelDone, { color: colors.text.primary }]]}>{step}</Text>
                 {i < PIPELINE_STEPS.length - 1 && (
-                  <View style={[styles.pipelineLine, done && i < cfg.step && styles.pipelineLineDone]} />
+                  <View style={[styles.pipelineLine, done && i < cfg.step && [styles.pipelineLineDone, { backgroundColor: colors.brand.primary }]]} />
                 )}
               </View>
             );
           })}
         </View>
       </View>
-      <Feather name={cfg.icon} size={42} color="rgba(255,255,255,0.25)" />
-    </LinearGradient>
+      <View style={[styles.heroIcon, { backgroundColor: colors.status[cfg.badgeVariant] + "12" }]}>
+        <Feather name={cfg.icon} size={32} color={colors.status[cfg.badgeVariant]} />
+      </View>
+    </View>
   );
 }
 
@@ -216,12 +230,13 @@ export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = makeStyles(colors);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(colors, insets.top);
   const queryClient = useQueryClient();
-  const fadeIn = useRef(new Animated.Value(0)).current;
+  const fadeIn = useSharedValue(0);
 
   // Primary: try dedicated endpoint
-  const { data: order, isLoading, isError } = useQuery<OrderDetail>({
+  const { data: order, isLoading, isError, refetch, isFetching } = useQuery<OrderDetail>({
     queryKey: ["order", id],
     queryFn: async () => {
       try {
@@ -253,9 +268,14 @@ export default function OrderDetailScreen() {
 
   useEffect(() => {
     if (order) {
-      Animated.timing(fadeIn, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+      fadeIn.value = withTiming(1, { duration: 350 });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order]);
+
+  const fadeInStyle = useAnimatedStyle(() => ({
+    opacity: fadeIn.value,
+  }));
 
   function handleShare() {
     if (!order) return;
@@ -290,12 +310,12 @@ export default function OrderDetailScreen() {
   if (isError || !order) {
     return (
       <View style={styles.centered}>
-        <LinearGradient colors={Gradients.danger} style={styles.errorIcon}>
-          <Feather name="alert-triangle" size={28} color="#fff" />
-        </LinearGradient>
+        <View style={[styles.errorIcon, { backgroundColor: colors.status.dangerDim }]}>
+          <Feather name="alert-triangle" size={28} color={colors.status.danger} />
+        </View>
         <Text style={styles.errorTitle}>Заказ не найден</Text>
         <Text style={styles.errorSub}>Возможно, он был удалён или у вас нет доступа.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.errorBtn}>
+        <TouchableOpacity onPress={() => router.back()} style={[styles.errorBtn, { backgroundColor: colors.brand.primary, borderRadius: Radii.xl }]}>
           <Feather name="arrow-left" size={16} color="#fff" />
           <Text style={styles.errorBtnText}>Назад к заказам</Text>
         </TouchableOpacity>
@@ -313,26 +333,28 @@ export default function OrderDetailScreen() {
     <View style={styles.root}>
       {/* ── Fixed top bar ── */}
       <View style={styles.topBar}>
-        <TouchableOpacity
+        <PressableScale
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
+          haptic="light"
           style={styles.topBarBack}
         >
           <Feather name="arrow-left" size={22} color={colors.text.primary} />
-        </TouchableOpacity>
+        </PressableScale>
         <View style={{ flex: 1 }}>
           <Text style={styles.topBarTitle}>Заказ #{order.orderNumber}</Text>
           <Text style={styles.topBarSub}>{fmt(order.createdAt)}</Text>
         </View>
-        <TouchableOpacity onPress={handleShare} style={styles.topBarAction}>
+        <PressableScale onPress={handleShare} haptic="light" style={styles.topBarAction}>
           <Feather name="share-2" size={18} color={colors.brand.primaryLight} />
-        </TouchableOpacity>
+        </PressableScale>
       </View>
 
-      <Animated.ScrollView
-        style={{ flex: 1, opacity: fadeIn }}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <Animated.View style={[{ flex: 1 }, fadeInStyle]}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={isFetching} onRefresh={() => refetch()} tintColor={colors.accent.primary} />}
+        >
         {/* ── Status hero banner / pipeline ── */}
         <PipelineBanner status={order.status} colors={colors} />
 
@@ -365,9 +387,9 @@ export default function OrderDetailScreen() {
                   name={item.productName}
                   code={item.productCode}
                   qty={item.quantity}
-                  price={item.unitPrice}
+                  price={Number(item.unitPrice) || 0}
                   discount={item.discount}
-                  total={item.total}
+                  total={Number(item.total) || 0}
                   colors={colors}
                 />
                 {idx < order.items.length - 1 && <View style={styles.itemDivider} />}
@@ -404,43 +426,44 @@ export default function OrderDetailScreen() {
           <View style={styles.finDivider} />
           <View style={styles.finRowTotal}>
             <Text style={styles.finLabelTotal}>Итого</Text>
-            <LinearGradient colors={cfg.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.finTotalChip}>
+            <View style={[styles.finTotalChip, { backgroundColor: colors.brand.primary }]}>
               <Text style={styles.finTotalText}>{money(order.total)}</Text>
-            </LinearGradient>
+            </View>
           </View>
         </Card>
 
         {/* ── Actions ── */}
         <View style={styles.actions}>
           {canCancel && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.actionBtnDanger]}
-              onPress={handleCancel}
-              disabled={cancelMutation.isPending}
-            >
+          <PressableScale
+            onPress={handleCancel}
+            haptic="medium"
+            style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "40", ...Shadows.sm }}
+          >
               {cancelMutation.isPending
                 ? <ActivityIndicator size="small" color={colors.status.danger} />
                 : <Feather name="x" size={18} color={colors.status.danger} />
               }
               <Text style={styles.actionBtnTextDanger}>Отменить заказ</Text>
-            </TouchableOpacity>
+            </PressableScale>
           )}
-          <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={handleShare}>
-            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.actionBtnGradient}>
+          <PressableScale onPress={handleShare} haptic="light" style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden", ...Shadows.sm }}>
+            <View style={[styles.actionBtnGradient, { backgroundColor: colors.brand.primary }]}>
               <Feather name="share-2" size={18} color="#fff" />
               <Text style={styles.actionBtnTextPrimary}>Поделиться</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+            </View>
+          </PressableScale>
         </View>
 
         <View style={{ height: 32 }} />
-      </Animated.ScrollView>
+        </ScrollView>
+      </Animated.View>
     </View>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, topInset: number = 56) {
   return {
     root: { flex: 1, backgroundColor: colors.bg.primary },
     container: { flex: 1, backgroundColor: colors.bg.primary },
@@ -452,7 +475,7 @@ function makeStyles(colors: ThemeColors) {
       alignItems: "center" as const,
       gap: 12,
       paddingHorizontal: Spacing.base,
-      paddingTop: 56,
+      paddingTop: topInset + 8,
       paddingBottom: 14,
       backgroundColor: colors.bg.secondary,
       borderBottomWidth: 1,
@@ -480,29 +503,36 @@ function makeStyles(colors: ThemeColors) {
       padding: Spacing.lg,
       marginTop: Spacing.base,
       marginBottom: Spacing.base,
-      overflow: "hidden" as const,
+      ...Shadows.sm,
     },
-    heroTitle: { fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: "#fff", marginBottom: 10 },
-    heroSub: { fontSize: Typography.size.sm, color: "rgba(255,255,255,0.8)" },
+    heroIcon: {
+      width: 56,
+      height: 56,
+      borderRadius: Radii.lg,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    heroTitle: { fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: 10 },
+    heroSub: { fontSize: Typography.size.sm },
 
     // Pipeline
     pipeline: { flexDirection: "row" as const, alignItems: "center" as const },
     pipelineItem: { flexDirection: "row" as const, alignItems: "center" as const },
     pipelineDot: {
       width: 18, height: 18, borderRadius: Radii.full,
-      backgroundColor: "rgba(255,255,255,0.25)",
+      backgroundColor: colors.border.subtle,
       alignItems: "center" as const, justifyContent: "center" as const,
     },
-    pipelineDotDone: { backgroundColor: "#fff" },
-    pipelineDotActive: { backgroundColor: "#fff", borderWidth: 2, borderColor: "rgba(255,255,255,0.5)" },
-    pipelineDotInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#6366F1" },
-    pipelineLabel: { fontSize: 10, color: "rgba(255,255,255,0.65)", marginHorizontal: 4, fontFamily: Typography.fontMedium },
-    pipelineLabelDone: { color: "#fff" },
-    pipelineLine: { width: 16, height: 2, backgroundColor: "rgba(255,255,255,0.25)", borderRadius: 1 },
-    pipelineLineDone: { backgroundColor: "rgba(255,255,255,0.7)" },
+    pipelineDotDone: {},
+    pipelineDotActive: { borderWidth: 2 },
+    pipelineDotInner: { width: 6, height: 6, borderRadius: 3 },
+    pipelineLabel: { fontSize: Typography.size.xs, color: colors.text.muted, marginHorizontal: 4, fontFamily: Typography.fontMedium },
+    pipelineLabelDone: {},
+    pipelineLine: { width: 16, height: 2, backgroundColor: colors.border.subtle, borderRadius: 1 },
+    pipelineLineDone: {},
 
     // Card
-    card: { marginBottom: Spacing.sm, padding: 0, overflow: "hidden" as const },
+    card: { marginBottom: Spacing.sm, padding: 0, overflow: "hidden" as const, backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.subtle, ...Shadows.sm },
     cardHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: 10, padding: Spacing.base, paddingBottom: 12 },
     cardTitle: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary },
     divider: { height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base },
@@ -532,7 +562,7 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.status.successDim,
       paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radii.sm,
     },
-    discountText: { fontSize: 10, color: colors.status.success, fontFamily: Typography.fontSemibold },
+    discountText: { fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontSemibold },
     itemTotal: { fontSize: Typography.size.sm, fontFamily: Typography.fontBold, color: colors.text.primary },
     itemPrice: { fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 },
     itemDivider: { height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base },
@@ -553,7 +583,7 @@ function makeStyles(colors: ThemeColors) {
 
     // Actions
     actions: { flexDirection: "row" as const, gap: 12, marginTop: 8 },
-    actionBtn: { flex: 1, borderRadius: Radii.lg, overflow: "hidden" as const },
+    actionBtn: { flex: 1, borderRadius: Radii.xl, overflow: "hidden" as const },
     actionBtnDanger: {
       flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8,
       paddingVertical: 14, paddingHorizontal: 16,
@@ -564,6 +594,7 @@ function makeStyles(colors: ThemeColors) {
     actionBtnGradient: {
       flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8,
       paddingVertical: 14, paddingHorizontal: 16,
+      borderRadius: Radii.xl,
     },
     actionBtnTextDanger: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.status.danger },
     actionBtnTextPrimary: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: "#fff" },
@@ -573,14 +604,15 @@ function makeStyles(colors: ThemeColors) {
 
     // Centered error
     centered: { flex: 1, justifyContent: "center" as const, alignItems: "center" as const, padding: Spacing.xl, gap: 14 },
-    errorIcon: { width: 64, height: 64, borderRadius: 32, alignItems: "center" as const, justifyContent: "center" as const },
+    errorIcon: { width: 64, height: 64, borderRadius: 32, alignItems: "center" as const, justifyContent: "center" as const, ...Shadows.sm },
     errorTitle: { fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary },
     errorSub: { fontSize: Typography.size.sm, color: colors.text.muted, textAlign: "center" as const },
     errorBtn: {
       flexDirection: "row" as const, alignItems: "center" as const, gap: 8,
       backgroundColor: colors.brand.primary,
       paddingHorizontal: 20, paddingVertical: 12,
-      borderRadius: Radii.md, marginTop: 8,
+      borderRadius: Radii.xl, marginTop: 8,
+      ...Shadows.sm,
     },
     errorBtnText: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: "#fff" },
   };

@@ -12,7 +12,6 @@ import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { getMyShops, getAllShopsForSupervisor, Shop } from "../../src/api";
 import { usePerformanceMonitor } from "../../src/hooks/usePerformanceMonitor";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
@@ -20,31 +19,114 @@ import { useAuthStore } from "../../src/store/auth";
 import { useLocation, getDistanceKm, getEstimatedTime } from "../../src/hooks/useLocation";
 import * as Haptics from "expo-haptics";
 import {
-  Typography,
-  Radii,
-  Gradients,
-  ThemeColors,
-} from "../../src/theme";
-import {
-  ScreenHeader,
-} from "../../src/components/ui";
+  WebColors,
+  WebShadows,
+  WebTypography,
+  WebSpacing,
+  WebRadii,
+} from "../../src/theme-web-match";
+import { ScreenHeader } from "../../src/components/ui";
 import {
   FadeInItem,
   PressableScale,
   ShimmerSkeleton,
 } from "../../src/components/Animated";
 
-interface ShopWithDistance extends Shop {
-  _distance: number;
-  _estimatedTime: string;
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function c(isDark: boolean) {
+  return isDark ? WebColors.dark : WebColors.light;
 }
 
-// ── Shop card — clean minimal style ──────────────────────────────────────────
+function s(isDark: boolean) {
+  return isDark ? WebShadows.dark : WebShadows.light;
+}
+
+// ── KPI Hero Card (matches web .kpi-hero) ────────────────────────────────────
+
+function KpiHeroCard({
+  label,
+  value,
+  icon,
+  gradient,
+  isDark,
+  index,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  gradient: string;
+  isDark: boolean;
+  index: number;
+}) {
+  const col = c(isDark);
+  const sh = s(isDark);
+
+  return (
+    <FadeInItem delay={index * 40}>
+      <View
+        style={{
+          backgroundColor: col.surface,
+          borderRadius: WebRadii.xxl,
+          borderWidth: 1,
+          borderColor: col.border,
+          padding: WebSpacing["2xl"],
+          ...sh.sm,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              fontFamily: WebTypography.family,
+              fontSize: 10,
+              fontWeight: WebTypography.weight.semibold as any,
+              textTransform: "uppercase",
+              letterSpacing: 0.8,
+              color: col.textTertiary,
+            }}
+          >
+            {label}
+          </Text>
+          <Text
+            style={{
+              fontFamily: WebTypography.family,
+              fontSize: 32,
+              fontWeight: WebTypography.weight.bold as any,
+              color: col.textPrimary,
+              marginTop: WebSpacing.sm + 4,
+              lineHeight: 36,
+              letterSpacing: -0.96,
+            }}
+          >
+            {value}
+          </Text>
+        </View>
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: gradient,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {icon}
+        </View>
+      </View>
+    </FadeInItem>
+  );
+}
+
+// ── Shop Card (matches web neo-card / ShopCard) ──────────────────────────────
+
 const ShopCard = React.memo(function ShopCard({
   shop,
   onOrder,
   onView,
-  colors,
   isDark,
   index,
   distance,
@@ -53,12 +135,13 @@ const ShopCard = React.memo(function ShopCard({
   shop: Shop;
   onOrder: () => void;
   onView: () => void;
-  colors: ThemeColors;
   isDark: boolean;
   index: number;
   distance?: number;
   estimatedTime?: string;
 }) {
+  const col = c(isDark);
+  const sh = s(isDark);
   const hasDebt = Number(shop.debt ?? 0) > 0;
   const isActive = shop.status !== "inactive";
 
@@ -67,27 +150,29 @@ const ShopCard = React.memo(function ShopCard({
       <PressableScale onPress={onView} haptic="light" scaleTo={0.98}>
         <View
           style={{
+            backgroundColor: col.surface,
+            borderRadius: WebRadii.xxl,
+            borderWidth: 1,
+            borderColor: col.border,
+            padding: WebSpacing.xl,
+            ...sh.md,
             flexDirection: "row",
-            backgroundColor: isDark ? "#1c1e2a" : "#ffffff",
-            borderRadius: 16,
-            overflow: "hidden",
-            padding: 12,
-            gap: 12,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.2 : 0.06,
-            shadowRadius: 8,
-            elevation: 3,
+            alignItems: "center",
+            gap: WebSpacing.lg,
           }}
         >
-          {/* Photo */}
+          {/* Photo — web uses w-20 h-20 (80px) for lg */}
           <View
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 12,
+              width: 80,
+              height: 80,
+              borderRadius: WebRadii.lg,
               overflow: "hidden",
-              backgroundColor: isDark ? "#2a2d3e" : "#f0f0f5",
+              backgroundColor: "rgba(75,108,246,.08)",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: col.borderSubtle,
             }}
           >
             {shop.photoUrl ? (
@@ -97,121 +182,166 @@ const ShopCard = React.memo(function ShopCard({
                 resizeMode="cover"
               />
             ) : (
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="shopping-bag" size={24} color={colors.accent.primary} />
-              </View>
+              <Feather name="shopping-bag" size={22} color={col.primary} />
             )}
-            {/* Status dot */}
-            <View style={{
-              position: "absolute",
-              top: 4,
-              right: 4,
-              width: 8,
-              height: 8,
-              borderRadius: 4,
-              backgroundColor: isActive ? "#34d399" : "#9ca3af",
-              borderWidth: 1.5,
-              borderColor: isDark ? "#1c1e2a" : "#fff",
-            }} />
           </View>
 
           {/* Info */}
-          <View style={{ flex: 1, justifyContent: "center" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text
-                style={{
-                  fontFamily: Typography.fontBold,
-                  fontSize: 15,
-                  color: colors.text.primary,
-                  flex: 1,
-                }}
-                numberOfLines={1}
-              >
-                {shop.name}
-              </Text>
-              {hasDebt && (
-                <Text style={{
-                  fontFamily: Typography.fontSemibold,
-                  fontSize: 11,
-                  color: "#ef4444",
-                  backgroundColor: "rgba(239,68,68,0.1)",
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: 8,
-                }}>
-                  {Number(shop.debt).toLocaleString("ru")}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+              <View style={{ minWidth: 0, flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: WebTypography.family,
+                    fontSize: WebTypography.size.lg,
+                    fontWeight: WebTypography.weight.semibold as any,
+                    color: col.textPrimary,
+                  }}
+                  numberOfLines={1}
+                >
+                  {shop.name}
                 </Text>
-              )}
-            </View>
-
-            {shop.ownerName && (
-              <Text style={{
-                fontFamily: Typography.fontRegular,
-                fontSize: 13,
-                color: colors.text.secondary,
-                marginTop: 2,
-              }} numberOfLines={1}>
-                {shop.ownerName}
-              </Text>
-            )}
-
-            {(shop.district || shop.address) && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-                <Feather name="map-pin" size={11} color={colors.text.muted} />
-                <Text style={{
-                  fontFamily: Typography.fontRegular,
-                  fontSize: 12,
-                  color: colors.text.muted,
-                  flex: 1,
-                }} numberOfLines={1}>
-                  {[shop.city, shop.district, shop.address].filter(Boolean).join(", ")}
-                </Text>
-              </View>
-            )}
-
-            {distance !== undefined && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
-                <View style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  backgroundColor: distance < 1 ? "rgba(16,185,129,0.1)" : distance < 3 ? "rgba(245,158,11,0.1)" : "rgba(107,114,128,0.1)",
-                  paddingHorizontal: 8,
-                  paddingVertical: 3,
-                  borderRadius: 12,
-                }}>
-                  <Feather name="navigation" size={10} color={distance < 1 ? "#10b981" : distance < 3 ? "#f59e0b" : "#6b7280"} />
-                  <Text style={{
-                    fontFamily: Typography.fontMedium,
-                    fontSize: 11,
-                    color: distance < 1 ? "#10b981" : distance < 3 ? "#f59e0b" : "#6b7280",
-                  }}>
-                    {distance < 1 ? `${Math.round(distance * 1000)} м` : `${distance.toFixed(1)} км`}
-                  </Text>
-                </View>
-                {estimatedTime && (
-                  <Text style={{
-                    fontFamily: Typography.fontRegular,
-                    fontSize: 11,
-                    color: colors.text.muted,
-                  }}>
-                    ~{estimatedTime}
+                {shop.ownerName && (
+                  <Text
+                    style={{
+                      fontFamily: WebTypography.family,
+                      fontSize: WebTypography.size.xs + 1,
+                      color: col.textSecondary,
+                      marginTop: 2,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {shop.ownerName}
                   </Text>
                 )}
               </View>
-            )}
+
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                {hasDebt && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      backgroundColor: col.dangerSubtle,
+                      borderRadius: WebRadii.full,
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                    }}
+                  >
+                    <Feather name="alert-circle" size={11} color={col.danger} />
+                    <Text
+                      style={{
+                        fontFamily: WebTypography.family,
+                        fontSize: WebTypography.size.xs + 1,
+                        fontWeight: WebTypography.weight.semibold as any,
+                        color: col.danger,
+                      }}
+                    >
+                      {Number(shop.debt).toLocaleString("ru")}
+                    </Text>
+                  </View>
+                )}
+                <View
+                  style={{
+                    backgroundColor: isActive ? "rgba(74,222,128,.15)" : col.surfaceLight,
+                    borderRadius: WebRadii.full,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: WebTypography.family,
+                      fontSize: 10,
+                      fontWeight: WebTypography.weight.medium as any,
+                      color: isActive ? "#34c473" : col.textSecondary,
+                    }}
+                  >
+                    {isActive ? "Актив" : "Неактив"}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={col.textSecondary} />
+              </View>
+            </View>
+
+            {/* Location + distance row */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+              {(shop.district || shop.address) && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Feather name="map-pin" size={10} color={col.textSecondary} />
+                  <Text
+                    style={{
+                      fontFamily: WebTypography.family,
+                      fontSize: 11,
+                      color: col.textSecondary,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {[shop.city, shop.district, shop.address].filter(Boolean).join(", ")}
+                  </Text>
+                </View>
+              )}
+
+              {distance !== undefined && distance !== Infinity && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      backgroundColor:
+                        distance < 1
+                          ? col.successSubtle
+                          : distance < 3
+                          ? col.warningSubtle
+                          : col.surfaceLight,
+                      borderRadius: WebRadii.full,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                    }}
+                  >
+                    <Feather
+                      name="navigation"
+                      size={10}
+                      color={distance < 1 ? col.success : distance < 3 ? col.warning : col.textTertiary}
+                    />
+                    <Text
+                      style={{
+                        fontFamily: WebTypography.family,
+                        fontSize: 11,
+                        fontWeight: WebTypography.weight.medium as any,
+                        color: distance < 1 ? col.success : distance < 3 ? col.warning : col.textTertiary,
+                      }}
+                    >
+                      {distance < 1 ? `${Math.round(distance * 1000)} м` : `${distance.toFixed(1)} км`}
+                    </Text>
+                  </View>
+                  {estimatedTime && (
+                    <Text style={{ fontFamily: WebTypography.family, fontSize: 11, color: col.textTertiary }}>
+                      ~{estimatedTime}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
           </View>
 
-          {/* Order button */}
-          <View style={{ justifyContent: "center" }}>
+          {/* Order button — web neo-btn-primary */}
+          <View style={{ justifyContent: "center", flexShrink: 0 }}>
             <PressableScale onPress={onOrder} haptic="medium" scaleTo={0.95}>
-              <View style={{
-                backgroundColor: colors.accent.primary,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                borderRadius: 10,
-              }}>
-                <Feather name="shopping-cart" size={16} color="#fff" />
+              <View
+                style={{
+                  backgroundColor: col.primary,
+                  borderRadius: WebRadii.md,
+                  width: 44,
+                  height: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  ...s(isDark).xs,
+                }}
+              >
+                <Feather name="shopping-cart" size={18} color="#fff" />
               </View>
             </PressableScale>
           </View>
@@ -220,6 +350,8 @@ const ShopCard = React.memo(function ShopCard({
     </FadeInItem>
   );
 });
+
+// ── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ShopsScreen() {
   const router = useRouter();
@@ -233,6 +365,9 @@ export default function ShopsScreen() {
   const [activeCity, setActiveCity] = useState<string | null>(null);
   const [sortByDistance, setSortByDistance] = useState(false);
   const { location } = useLocation();
+
+  const col = c(isDark);
+  const sh = s(isDark);
 
   const {
     data: shops,
@@ -266,7 +401,6 @@ export default function ShopsScreen() {
         s.name.toLowerCase().includes(search.toLowerCase()) ||
         s.ownerName?.toLowerCase().includes(search.toLowerCase()) ||
         s.district?.toLowerCase().includes(search.toLowerCase());
-      // Filter by territory (city — district)
       const city = s.city || "";
       const district = s.district || "";
       const territory = district ? `${city} — ${district}` : city;
@@ -274,7 +408,6 @@ export default function ShopsScreen() {
       return matchesSearch && matchesTerritory;
     }).map((s) => ({ ...s, _distance: Infinity, _estimatedTime: "" }));
 
-    // Add distance info and sort by distance if enabled
     if (sortByDistance && location) {
       result = result
         .map((s) => {
@@ -289,11 +422,19 @@ export default function ShopsScreen() {
 
     perf.end("filterShops");
     return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shops, search, activeCity, sortByDistance, location]);
 
+  // KPI stats
+  const kpiStats = useMemo(() => {
+    const all = shops ?? [];
+    const total = all.length;
+    const activeCount = all.filter((s) => s.status !== "inactive").length;
+    const debtCount = all.filter((s) => Number(s.debt ?? 0) > 0).length;
+    const totalDebt = all.reduce((sum, s) => sum + Number(s.debt ?? 0), 0);
+    return { total, activeCount, debtCount, totalDebt };
+  }, [shops]);
+
   const sections = useMemo(() => {
-    // When sorting by distance, flatten into a single section
     if (sortByDistance && location) {
       return [{
         key: "distance",
@@ -302,7 +443,6 @@ export default function ShopsScreen() {
       }];
     }
 
-    // Group by territory: "City — District" (e.g., "Ташкент — Юнусабад")
     const map = new Map<string, ShopWithDistance[]>();
     for (const s of filtered) {
       const city = s.city || "Неизвестный город";
@@ -325,11 +465,11 @@ export default function ShopsScreen() {
   }, [filtered, sortByDistance, location]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
+    <View style={{ flex: 1, backgroundColor: col.canvas }}>
       <ScreenHeader
         title="Магазины"
         right={
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flexDirection: "row", gap: WebSpacing.sm }}>
             {location && (
               <PressableScale
                 onPress={() => {
@@ -338,109 +478,159 @@ export default function ShopsScreen() {
                 }}
                 haptic="light"
               >
-                <LinearGradient
-                  colors={sortByDistance ? Gradients.success : Gradients.primary}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+                <View
                   style={{
+                    backgroundColor: sortByDistance ? col.primary : col.surface,
+                    borderRadius: WebRadii.full,
+                    borderWidth: sortByDistance ? 0 : 1,
+                    borderColor: col.border,
                     width: 36,
                     height: 36,
-                    borderRadius: 18,
                     alignItems: "center",
                     justifyContent: "center",
+                    ...sh.xs,
                   }}
                 >
-                  <Feather name={sortByDistance ? "check" : "navigation"} size={18} color="#fff" />
-                </LinearGradient>
+                  <Feather
+                    name={sortByDistance ? "check" : "navigation"}
+                    size={18}
+                    color={sortByDistance ? "#fff" : col.textPrimary}
+                  />
+                </View>
               </PressableScale>
             )}
-            <PressableScale
-              onPress={() => router.push("/shop/nearby")}
-              haptic="light"
-            >
-              <LinearGradient
-                colors={Gradients.success}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Feather name="navigation" size={18} color="#fff" />
-              </LinearGradient>
-            </PressableScale>
             <PressableScale
               onPress={() => router.push("/shop/new")}
               haptic="light"
             >
-              <LinearGradient
-                colors={Gradients.primary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+              <View
                 style={{
+                  backgroundColor: col.primary,
+                  borderRadius: WebRadii.full,
                   width: 36,
                   height: 36,
-                  borderRadius: 18,
                   alignItems: "center",
                   justifyContent: "center",
+                  ...sh.xs,
                 }}
               >
                 <Feather name="plus" size={20} color="#fff" />
-              </LinearGradient>
+              </View>
             </PressableScale>
           </View>
         }
       />
 
-      {/* Search with glass background */}
-      <FadeInItem delay={80}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+      {/* KPI Stats Row — matches web ShopStats grid */}
+      <View style={{ paddingHorizontal: 16, gap: WebSpacing.lg }}>
+        <View style={{ flexDirection: "row", gap: WebSpacing.md }}>
+          <View style={{ flex: 1 }}>
+            <KpiHeroCard
+              label="ВСЕГО МАГАЗИНОВ"
+              value={String(kpiStats.total)}
+              icon={<Feather name="shopping-bag" size={20} color="#fff" />}
+              gradient="linear-gradient(135deg, #4b6cf6, #4b6cf6)"
+              isDark={isDark}
+              index={0}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <KpiHeroCard
+              label="АКТИВНЫЕ"
+              value={String(kpiStats.activeCount)}
+              icon={<Feather name="users" size={20} color="#fff" />}
+              gradient="linear-gradient(135deg, #16a34a, #22c47a)"
+              isDark={isDark}
+              index={1}
+            />
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", gap: WebSpacing.md }}>
+          <View style={{ flex: 1 }}>
+            <KpiHeroCard
+              label="С ДОЛГОМ"
+              value={String(kpiStats.debtCount)}
+              icon={<Feather name="alert-circle" size={20} color="#fff" />}
+              gradient="linear-gradient(135deg, #fb923c, #f97316)"
+              isDark={isDark}
+              index={2}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <KpiHeroCard
+              label="ОБЩИЙ ДОЛГ"
+              value={kpiStats.totalDebt.toLocaleString("ru")}
+              icon={<Feather name="dollar-sign" size={20} color="#fff" />}
+              gradient="linear-gradient(135deg, #e85050, #e85050)"
+              isDark={isDark}
+              index={3}
+            />
+          </View>
+        </View>
+      </View>
+
+      {/* Filter bar — matches web ShopFilters */}
+      <FadeInItem delay={100}>
+        <View style={{ paddingHorizontal: 16, paddingTop: WebSpacing.lg }}>
           <View
             style={{
+              backgroundColor: col.surface,
+              borderRadius: WebRadii.lg,
+              padding: WebSpacing.lg,
+              borderWidth: 1,
+              borderColor: col.border,
+              ...sh.sm,
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: isDark
-                ? "rgba(26,29,38,0.8)"
-                : "rgba(240,242,247,0.9)",
-              borderRadius: Radii.md,
-              borderWidth: 1,
-              borderColor: colors.border.default,
-              paddingHorizontal: 10,
-              gap: 8,
+              gap: WebSpacing.md,
+              flexWrap: "wrap",
             }}
           >
-            <Feather name="search" size={16} color={colors.text.tertiary} />
-            <TextInput
-              style={{
-                flex: 1,
-                fontFamily: Typography.fontRegular,
-                fontSize: Typography.size.base,
-                color: colors.text.primary,
-                paddingVertical: 10,
-              }}
-              placeholder="Поиск магазинов или района…"
-              placeholderTextColor={colors.text.tertiary}
-              value={search}
-              onChangeText={setSearch}
-            />
-            {search.length > 0 && (
-              <PressableScale onPress={() => setSearch("")} haptic="selection">
-                <Feather name="x" size={15} color={colors.text.tertiary} />
-              </PressableScale>
-            )}
+            {/* Search input — web neo-input style */}
+            <View style={{ flex: 1, minWidth: 200 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  backgroundColor: col.surfaceLight,
+                  borderRadius: WebRadii.md,
+                  borderWidth: 1.5,
+                  borderColor: "transparent",
+                  paddingHorizontal: 14,
+                  paddingVertical: WebSpacing.sm + 2,
+                }}
+              >
+                <Feather name="search" size={16} color={col.textSecondary} />
+                <TextInput
+                  style={{
+                    flex: 1,
+                    fontFamily: WebTypography.family,
+                    fontSize: WebTypography.size.sm,
+                    color: col.textPrimary,
+                    paddingVertical: 0,
+                  }}
+                  placeholder="Поиск магазинов…"
+                  placeholderTextColor={col.textSecondary}
+                  value={search}
+                  onChangeText={setSearch}
+                />
+                {search.length > 0 && (
+                  <PressableScale onPress={() => setSearch("")} haptic="selection">
+                    <Feather name="x" size={15} color={col.textSecondary} />
+                  </PressableScale>
+                )}
+              </View>
+            </View>
           </View>
 
-          {/* Territory filter chips */}
+          {/* Territory chips — web filter chip style */}
           {territories.length > 1 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={{ marginTop: 10 }}
-              contentContainerStyle={{ gap: 8 }}
+              style={{ marginTop: WebSpacing.md }}
+              contentContainerStyle={{ gap: WebSpacing.sm }}
             >
               <PressableScale
                 onPress={() => setActiveCity(null)}
@@ -448,23 +638,20 @@ export default function ShopsScreen() {
               >
                 <View
                   style={{
-                    paddingHorizontal: 14,
-                    paddingVertical: 7,
-                    borderRadius: Radii.full,
-                    backgroundColor: !activeCity
-                      ? colors.accent.primary
-                      : colors.bg.input,
-                    borderWidth: 1,
-                    borderColor: !activeCity
-                      ? colors.accent.primary
-                      : colors.border.default,
+                    backgroundColor: !activeCity ? col.primary : col.surface,
+                    borderRadius: WebRadii.full,
+                    borderWidth: !activeCity ? 0 : 1,
+                    borderColor: col.border,
+                    paddingHorizontal: WebSpacing.base + 2,
+                    paddingVertical: WebSpacing.sm + 2,
                   }}
                 >
                   <Text
                     style={{
-                      fontFamily: Typography.fontSemibold,
-                      fontSize: Typography.size.sm,
-                      color: !activeCity ? "#fff" : colors.text.secondary,
+                      fontFamily: WebTypography.family,
+                      fontSize: WebTypography.size.sm,
+                      fontWeight: WebTypography.weight.semibold as any,
+                      color: !activeCity ? "#fff" : col.textSecondary,
                     }}
                   >
                     Все территории
@@ -481,28 +668,23 @@ export default function ShopsScreen() {
                 >
                   <View
                     style={{
-                      paddingHorizontal: 14,
-                      paddingVertical: 7,
-                      borderRadius: Radii.full,
-                      backgroundColor:
-                        activeCity === territory
-                          ? colors.accent.primary
-                          : colors.bg.input,
-                      borderWidth: 1,
-                      borderColor:
-                        activeCity === territory
-                          ? colors.accent.primary
-                          : colors.border.default,
+                      backgroundColor: activeCity === territory ? col.primary : col.surface,
+                      borderRadius: WebRadii.full,
+                      borderWidth: activeCity === territory ? 0 : 1,
+                      borderColor: col.border,
+                      paddingHorizontal: WebSpacing.base + 2,
+                      paddingVertical: WebSpacing.sm + 2,
                     }}
                   >
                     <Text
                       style={{
-                        fontFamily: Typography.fontSemibold,
-                        fontSize: Typography.size.sm,
+                        fontFamily: WebTypography.family,
+                        fontSize: WebTypography.size.sm,
+                        fontWeight: WebTypography.weight.semibold as any,
                         color:
                           activeCity === territory
                             ? "#fff"
-                            : colors.text.secondary,
+                            : col.textSecondary,
                       }}
                     >
                       {territory}
@@ -516,9 +698,9 @@ export default function ShopsScreen() {
       </FadeInItem>
 
       {isLoading ? (
-        <View style={{ flex: 1, paddingTop: 16, paddingHorizontal: 16, gap: 12 }}>
+        <View style={{ flex: 1, paddingTop: WebSpacing.lg, paddingHorizontal: 16, gap: WebSpacing.md }}>
           {[1, 2, 3, 4].map((i) => (
-            <ShimmerSkeleton key={i} height={145} radius={Radii.xl} />
+            <ShimmerSkeleton key={i} height={145} radius={WebRadii.xxl} />
           ))}
         </View>
       ) : isError ? (
@@ -527,28 +709,32 @@ export default function ShopsScreen() {
             flex: 1,
             alignItems: "center",
             justifyContent: "center",
-            gap: 12,
+            gap: WebSpacing.lg,
             paddingHorizontal: 32,
           }}
         >
-              <View
+          <View
             style={{
               width: 72,
               height: 72,
               borderRadius: 36,
-              backgroundColor: colors.status.dangerDim,
               alignItems: "center",
               justifyContent: "center",
+              backgroundColor: col.surface,
+              borderWidth: 1,
+              borderColor: col.border,
+              ...sh.sm,
               marginBottom: 4,
             }}
           >
-            <Feather name="wifi-off" size={28} color={colors.accent.danger} />
+            <Feather name="wifi-off" size={28} color={col.danger} />
           </View>
           <Text
             style={{
-              fontFamily: Typography.fontBold,
-              fontSize: Typography.size.lg,
-              color: colors.text.primary,
+              fontFamily: WebTypography.family,
+              fontSize: WebTypography.size.lg,
+              fontWeight: WebTypography.weight.bold as any,
+              color: col.textPrimary,
               textAlign: "center",
             }}
           >
@@ -556,9 +742,9 @@ export default function ShopsScreen() {
           </Text>
           <Text
             style={{
-              fontFamily: Typography.fontRegular,
-              fontSize: Typography.size.sm,
-              color: colors.text.tertiary,
+              fontFamily: WebTypography.family,
+              fontSize: WebTypography.size.sm,
+              color: col.textTertiary,
               textAlign: "center",
               lineHeight: 20,
             }}
@@ -566,34 +752,34 @@ export default function ShopsScreen() {
             Проверьте подключение к интернету и попробуйте снова
           </Text>
           <PressableScale onPress={() => refetch()} haptic="light">
-            <LinearGradient
-              colors={Gradients.primary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+            <View
               style={{
-                paddingHorizontal: 24,
+                backgroundColor: col.primary,
+                borderRadius: WebRadii.md,
                 paddingVertical: 12,
-                borderRadius: Radii.lg,
-                marginTop: 8,
+                paddingHorizontal: 20,
+                marginTop: WebSpacing.sm + 4,
+                ...sh.xs,
               }}
             >
               <Text
                 style={{
-                  fontFamily: Typography.fontSemibold,
-                  fontSize: Typography.size.sm,
+                  fontFamily: WebTypography.family,
+                  fontSize: WebTypography.size.sm,
+                  fontWeight: WebTypography.weight.semibold as any,
                   color: "#fff",
                 }}
               >
                 Повторить
               </Text>
-            </LinearGradient>
+            </View>
           </PressableScale>
         </View>
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={(s) => String(s.id)}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ paddingTop: WebSpacing.lg, paddingBottom: insets.bottom + 24 }}
           stickySectionHeadersEnabled={false}
           windowSize={11}
           maxToRenderPerBatch={8}
@@ -603,7 +789,7 @@ export default function ShopsScreen() {
             <RefreshControl
               refreshing={isFetching}
               onRefresh={refetch}
-              tintColor={colors.accent.primary}
+              tintColor={col.primary}
             />
           }
           renderSectionHeader={({ section }) => (
@@ -613,46 +799,46 @@ export default function ShopsScreen() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 paddingHorizontal: 20,
-                paddingTop: 14,
-                paddingBottom: 8,
+                paddingTop: WebSpacing.base + 2,
+                paddingBottom: WebSpacing.sm,
               }}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <Feather
-                  name="map-pin"
-                  size={12}
-                  color={colors.accent.primary}
-                />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Feather name="map-pin" size={12} color={col.primary} />
                 <Text
                   style={{
-                    fontFamily: Typography.fontBold,
-                    fontSize: Typography.size.sm,
-                    color: colors.text.secondary,
+                    fontFamily: WebTypography.family,
+                    fontSize: WebTypography.size.sm,
+                    fontWeight: WebTypography.weight.bold as any,
+                    color: col.textSecondary,
                     letterSpacing: 0.5,
                   }}
                 >
                   {section.label.toUpperCase()}
                 </Text>
               </View>
-              <Text
+              {/* Badge — web style */}
+              <View
                 style={{
-                  fontFamily: Typography.fontSemibold,
-                  fontSize: Typography.size.sm,
-                  color: colors.text.muted,
-                  backgroundColor: colors.bg.elevated,
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  borderRadius: Radii.full,
+                  backgroundColor: col.primary,
+                  borderRadius: WebRadii.sm,
+                  paddingHorizontal: WebSpacing.sm + 2,
+                  paddingVertical: WebSpacing.xs,
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                {section.data.length}
-              </Text>
+                <Text
+                  style={{
+                    fontFamily: WebTypography.family,
+                    fontSize: WebTypography.size.xs,
+                    fontWeight: WebTypography.weight.semibold as any,
+                    color: "#fff",
+                  }}
+                >
+                  {section.data.length}
+                </Text>
+              </View>
             </View>
           )}
           ListEmptyComponent={
@@ -661,7 +847,7 @@ export default function ShopsScreen() {
                 alignItems: "center",
                 justifyContent: "center",
                 paddingTop: 80,
-                gap: 16,
+                gap: WebSpacing.xl,
               }}
             >
               <View
@@ -669,47 +855,32 @@ export default function ShopsScreen() {
                   width: 88,
                   height: 88,
                   borderRadius: 44,
-                backgroundColor: colors.brand.primaryDim,
                   alignItems: "center",
                   justifyContent: "center",
+                  backgroundColor: col.surface,
+                  borderWidth: 1,
+                  borderColor: col.border,
+                  ...sh.md,
                 }}
               >
-                <LinearGradient
-                  colors={isDark
-                    ? ["rgba(124,127,245,0.15)", "rgba(124,127,245,0.05)"]
-                    : ["rgba(85,88,232,0.12)", "rgba(85,88,232,0.04)"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{
-                    width: 88,
-                    height: 88,
-                    borderRadius: 44,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Feather
-                    name="shopping-bag"
-                    size={36}
-                    color={colors.accent.primary}
-                  />
-                </LinearGradient>
+                <Feather name="shopping-bag" size={36} color={col.primary} />
               </View>
               <View style={{ alignItems: "center", gap: 6 }}>
                 <Text
                   style={{
-                    fontFamily: Typography.fontBold,
-                    fontSize: Typography.size.lg,
-                    color: colors.text.primary,
+                    fontFamily: WebTypography.family,
+                    fontSize: WebTypography.size.lg,
+                    fontWeight: WebTypography.weight.bold as any,
+                    color: col.textPrimary,
                   }}
                 >
                   {search || activeCity ? "Нет совпадений" : "Нет магазинов"}
                 </Text>
                 <Text
                   style={{
-                    fontFamily: Typography.fontRegular,
-                    fontSize: Typography.size.sm,
-                    color: colors.text.tertiary,
+                    fontFamily: WebTypography.family,
+                    fontSize: WebTypography.size.sm,
+                    color: col.textTertiary,
                     textAlign: "center",
                     lineHeight: 20,
                   }}
@@ -724,31 +895,31 @@ export default function ShopsScreen() {
                   onPress={() => router.push("/shop/new")}
                   haptic="light"
                 >
-                  <LinearGradient
-                    colors={Gradients.primary}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
+                  <View
                     style={{
+                      backgroundColor: col.primary,
+                      borderRadius: WebRadii.md,
+                      paddingVertical: 12,
+                      paddingHorizontal: 20,
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 6,
-                      paddingHorizontal: 24,
-                      paddingVertical: 12,
-                      borderRadius: Radii.lg,
-                      marginTop: 4,
+                      gap: WebSpacing.sm,
+                      marginTop: WebSpacing.xs,
+                      ...sh.xs,
                     }}
                   >
                     <Feather name="plus" size={16} color="#fff" />
                     <Text
                       style={{
-                        fontFamily: Typography.fontSemibold,
-                        fontSize: Typography.size.sm,
+                        fontFamily: WebTypography.family,
+                        fontSize: WebTypography.size.sm,
+                        fontWeight: WebTypography.weight.semibold as any,
                         color: "#fff",
                       }}
                     >
                       Добавить магазин
                     </Text>
-                  </LinearGradient>
+                  </View>
                 </PressableScale>
               )}
             </View>
@@ -756,7 +927,6 @@ export default function ShopsScreen() {
           renderItem={({ item: s, index }) => (
             <ShopCard
               shop={s}
-              colors={colors}
               isDark={isDark}
               index={index}
               distance={sortByDistance && location ? s._distance : undefined}
@@ -779,4 +949,9 @@ export default function ShopsScreen() {
       )}
     </View>
   );
+}
+
+interface ShopWithDistance extends Shop {
+  _distance: number;
+  _estimatedTime: string;
 }

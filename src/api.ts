@@ -384,6 +384,22 @@ export async function cancelOrder(id: number): Promise<void> {
   return trpcMutation<void>("order.cancel", { id });
 }
 
+export async function deleteOrder(id: number): Promise<void> {
+  return trpcMutation<void>("order.delete", { id });
+}
+
+export async function restoreOrder(id: number): Promise<void> {
+  return trpcMutation<void>("order.restore", { id });
+}
+
+export async function updateOrder(id: number, data: { notes?: string; discount?: string }): Promise<void> {
+  return trpcMutation<void>("order.update", { id, ...data });
+}
+
+export async function listAllOrders(params?: { page?: number; pageSize?: number; status?: string; showDeleted?: boolean }): Promise<{ data: Order[]; total: number }> {
+  return trpcQuery<{ data: Order[]; total: number }>("order.list", params ?? {});
+}
+
 export async function getShop(id: number): Promise<Shop> {
   return trpcQuery<Shop>("agent.getShopById", { id });
 }
