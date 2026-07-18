@@ -1,25 +1,8 @@
 import axios from "axios";
 import { SecureStore } from "./storage";
 
-// EXPO_PUBLIC_API_URL must be set at build time (EAS Build secrets / .env
-// for local dev). There's no safe default for a production build — a
-// silent fallback to a developer's LAN IP would make every API call fail
-// with a generic network error, with no indication of why. Failing loudly
-// here, once, at import time is much easier to diagnose than that.
-if (!process.env.EXPO_PUBLIC_API_URL && !__DEV__) {
-  throw new Error(
-    "EXPO_PUBLIC_API_URL is not set. The app cannot reach the backend without it — set it in your EAS Build environment/secrets before building for production."
-  );
-}
-
 export const API_BASE =
-  process.env.EXPO_PUBLIC_API_URL ?? "http://192.168.1.5:3000";
-
-if (!process.env.EXPO_PUBLIC_API_URL && __DEV__) {
-  console.warn(
-    `⚠️ EXPO_PUBLIC_API_URL not set — falling back to ${API_BASE}. Set it in .env to point at your dev server.`
-  );
-}
+  process.env.EXPO_PUBLIC_API_URL ?? "https://www.warehouse-pro.uz";
 
 const api = axios.create({
   baseURL: `${API_BASE}/api/trpc`,
