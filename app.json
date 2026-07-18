@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Warehouse Pro",
+    "slug": "warehouse-pro-agent",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0B10"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0B10"
+      },
+      "package": "com.warehousepro.agent"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-location",
+      "expo-camera",
+      "expo-image-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6ae2aa12-a019-46d5-a6d8-99c9ac55620f"
+      }
+    }
+  }
+}
