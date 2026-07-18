@@ -1,279 +1,136 @@
+// Warehouse Pro — Catalog (hero images for client demos)
 import React, { useState, useCallback, useMemo } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  FlatList,
-  Animated,
-  Modal,
-  Pressable,
-  Image,
-  Dimensions,
-  Platform,
+  View, Text, FlatList, TouchableOpacity, TextInput, Modal, Pressable,
+  Image, ActivityIndicator, ScrollView, useWindowDimensions,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getProducts, getCategories, createOrder, getMyShops, Product, Shop } from "../../src/api";
-import { usePerformanceMonitor } from "../../src/hooks/usePerformanceMonitor";
-import { Skeleton } from "../../src/components/ui";
-import { WebColors, WebShadows, WebTypography, WebSpacing, WebRadii, createWebStyles } from "../../src/theme-web-match";
-import { useThemeStore } from "../../src/store/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
+import { Typography, Spacing, Radii, Shadows, ThemeColors } from "../../src/theme";
+import { DarkShadowColor } from "../../src/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
-const HERO_CARD_WIDTH = SCREEN_WIDTH - 32;
-
-type IconName = keyof typeof Feather.glyphMap;
-
-const BASE_CATEGORIES = [
-  { key: "all", label: "Все", uz: "Hammasi", icon: "grid" as IconName },
-  { key: "popular", label: "Популярные", uz: "Mashhur", icon: "trending-up" as IconName },
-];
-
-const HeroProductCard = React.memo(function HeroProductCard({ product, isDark, web, onPress, onAdd, fmt }: {
-  product: Product;
-  isDark: boolean;
-  web: ReturnType<typeof createWebStyles>;
-  onPress: () => void;
-  onAdd: () => void;
-  fmt: (v: number | string | null | undefined) => string;
+// ── Hero Product Card ────────────────────────────────────────────────────────
+function ProductCard({ product, colors, isDark, onPress, onAdd, fmt, cardWidth }: {
+  product: Product; colors: ThemeColors; isDark: boolean; onPress: () => void; onAdd: () => void;
+  fmt: (v: number | string | null | undefined) => string; cardWidth: number;
 }) {
-  const [scaleAnim] = useState(() => new Animated.Value(1));
-  const c = isDark ? WebColors.dark : WebColors.light;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
-  };
+  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
+  const hasPhoto = !!product.photoUrl && product.photoUrl.startsWith("http");
+  const inStock = Number(product.available) > 0;
+  const imgHeight = cardWidth * 0.7;
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }], marginBottom: WebSpacing.lg }}>
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={[
-          web.neoCard,
-          { width: HERO_CARD_WIDTH, height: 280, overflow: "hidden", padding: 0 },
-        ]}
-      >
-        {product.photoUrl ? (
-          <Image source={{ uri: product.photoUrl }} style={{ width: "100%", height: 180 }} resizeMode="cover" />
+    <TouchableOpacity activeOpacity={0.9} onPress={onPress}
+      style={{
+        width: cardWidth, borderRadius: Radii.xl, overflow: "hidden", marginBottom: Spacing.base,
+        backgroundColor: colors.bg.card, borderWidth: 1,
+        borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+        shadowColor: sc, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity,
+        shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation,
+      }}>
+      {/* Big photo */}
+      <View style={{ width: "100%", height: imgHeight, backgroundColor: colors.bg.elevated }}>
+        {hasPhoto ? (
+          <Image source={{ uri: product.photoUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
         ) : (
-          <View style={{ width: "100%", height: 180, backgroundColor: c.surfaceLight, alignItems: "center", justifyContent: "center" }}>
-            <Feather name="package" size={64} color={c.textTertiary} />
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="package" size={40} color={colors.text.muted} />
           </View>
         )}
-
-        <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 100, backgroundColor: "rgba(0,0,0,0.5)" }} />
-
-        <View style={[web.badge, { position: "absolute", top: WebSpacing.md, right: WebSpacing.md }]}>
-          <Text style={{ color: "#fff", fontSize: WebTypography.size.sm, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold }}>
-            {fmt(product.unitPrice)}
-          </Text>
+        {/* Stock badge */}
+        <View style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, backgroundColor: inStock ? "rgba(34,197,94,0.9)" : "rgba(239,68,68,0.9)", borderRadius: Radii.sm, paddingHorizontal: 8, paddingVertical: 4 }}>
+          <Text style={{ color: "#fff", fontSize: 11, fontFamily: Typography.fontSemibold }}>{inStock ? "В наличии" : "Нет в наличии"}</Text>
         </View>
-
-        {Number(product.available) > 0 ? (
-          <View style={[web.badgeSuccess, { position: "absolute", top: WebSpacing.md, left: WebSpacing.md, paddingHorizontal: WebSpacing.sm }]}>
-            <Text style={{ color: "#fff", fontSize: WebTypography.size.xs, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.semibold }}>
-              В наличии
-            </Text>
-          </View>
-        ) : (
-          <View style={[web.badgeDanger, { position: "absolute", top: WebSpacing.md, left: WebSpacing.md, paddingHorizontal: WebSpacing.sm }]}>
-            <Text style={{ color: "#fff", fontSize: WebTypography.size.xs, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.semibold }}>
-              Нет в наличии
-            </Text>
-          </View>
+        {/* Add button */}
+        {inStock && (
+          <TouchableOpacity onPress={(e) => { e.stopPropagation(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAdd(); }}
+            style={{ position: "absolute", bottom: Spacing.sm, right: Spacing.sm, width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center", shadowColor: colors.accent.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 }}>
+            <Feather name="shopping-cart" size={16} color="#fff" />
+          </TouchableOpacity>
         )}
-
-        <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: WebSpacing.lg }}>
-          <Text style={{ color: "#fff", fontSize: WebTypography.size.lg, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold, marginBottom: WebSpacing.xxs }} numberOfLines={1}>
-            {product.name}
-          </Text>
-          {product.code && (
-            <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: WebTypography.size.sm, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.medium }}>
-              Артикул: {product.code}
-            </Text>
-          )}
+      </View>
+      {/* Info */}
+      <View style={{ padding: Spacing.md }}>
+        <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, marginBottom: 4 }} numberOfLines={2}>{product.name}</Text>
+        {product.code && <Text style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMono, marginBottom: 6 }}>Артикул: {product.code}</Text>}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}</Text>
+          {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{product.available} {product.unit || "шт"}</Text>}
         </View>
-
-        <TouchableOpacity
-          onPress={(e) => { e.stopPropagation(); onAdd(); }}
-          style={[web.neoBtnPrimary, { position: "absolute", bottom: WebSpacing.lg, right: WebSpacing.lg, width: 44, height: 44, borderRadius: 22, padding: 0 }]}
-        >
-          <Feather name="plus" size={22} color="#fff" />
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Animated.View>
+      </View>
+    </TouchableOpacity>
   );
-});
+}
 
-const CompactProductCard = React.memo(function CompactProductCard({ product, isDark, web, onPress, onAdd, fmt }: {
-  product: Product;
-  isDark: boolean;
-  web: ReturnType<typeof createWebStyles>;
-  onPress: () => void;
-  onAdd: () => void;
-  fmt: (v: number | string | null | undefined) => string;
-}) {
-  const [scaleAnim] = useState(() => new Animated.Value(1));
-  const c = isDark ? WebColors.dark : WebColors.light;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, { toValue: 0.95, useNativeDriver: true }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
-  };
-
-  return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }], width: CARD_WIDTH }}>
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={[web.neoCard, { overflow: "hidden", marginBottom: WebSpacing.md, padding: 0 }]}
-      >
-        {product.photoUrl ? (
-          <Image source={{ uri: product.photoUrl }} style={{ width: "100%", height: CARD_WIDTH * 0.8 }} resizeMode="cover" />
-        ) : (
-          <View style={{ width: "100%", height: CARD_WIDTH * 0.8, backgroundColor: c.surfaceLight, alignItems: "center", justifyContent: "center" }}>
-            <Feather name="package" size={32} color={c.textTertiary} />
-          </View>
-        )}
-
-        <View style={{ padding: WebSpacing.md }}>
-          <Text style={{ color: c.textPrimary, fontSize: WebTypography.size.sm, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.semibold, marginBottom: WebSpacing.xs }} numberOfLines={2}>
-            {product.name}
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ color: c.primary, fontSize: WebTypography.size.md, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold }}>
-              {fmt(product.unitPrice)}
-            </Text>
-            <TouchableOpacity onPress={(e) => { e.stopPropagation(); onAdd(); }} style={[web.neoBtnPrimary, { width: 32, height: 32, borderRadius: WebRadii.full, padding: 0 }]}>
-              <Feather name="plus" size={16} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          {Number(product.available) > 0 ? (
-            <Text style={{ color: c.success, fontSize: WebTypography.size.xs, fontFamily: WebTypography.family, marginTop: WebSpacing.xs }}>
-              {product.available} {product.unit || "шт"}
-            </Text>
-          ) : (
-            <Text style={{ color: c.danger, fontSize: WebTypography.size.xs, fontFamily: WebTypography.family, marginTop: WebSpacing.xs }}>
-              Нет в наличии
-            </Text>
-          )}
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-});
-
-function ProductDetailModal({ product, visible, onClose, onAdd, isDark, web, fmt }: {
-  product: Product | null;
-  visible: boolean;
-  onClose: () => void;
-  onAdd: (qty: number) => void;
-  isDark: boolean;
-  web: ReturnType<typeof createWebStyles>;
-  fmt: (v: number | string | null | undefined) => string;
+// ── Product Detail Modal ─────────────────────────────────────────────────────
+function ProductDetail({ product, visible, onClose, onAdd, colors, isDark, fmt }: {
+  product: Product | null; visible: boolean; onClose: () => void; onAdd: (qty: number) => void;
+  colors: ThemeColors; isDark: boolean; fmt: (v: number | string | null | undefined) => string;
 }) {
   const [qty, setQty] = useState(1);
-  const c = isDark ? WebColors.dark : WebColors.light;
-
+  const { width: SCREEN_W } = useWindowDimensions();
   if (!product) return null;
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
-        <Pressable
-          style={[web.neoCard, { position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "85%", borderTopLeftRadius: WebRadii.xl, borderTopRightRadius: WebRadii.xl, overflow: "hidden", padding: 0 }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={{ alignItems: "center", paddingVertical: WebSpacing.md }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: c.border }} />
+      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={onClose}>
+        <Pressable style={{
+          position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "88%",
+          backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, overflow: "hidden",
+        }} onPress={e => e.stopPropagation()}>
+          {/* Handle */}
+          <View style={{ alignItems: "center", paddingVertical: 10 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
           </View>
-
-          {product.photoUrl ? (
-            <Image source={{ uri: product.photoUrl }} style={{ width: "100%", height: 250 }} resizeMode="cover" />
-          ) : (
-            <View style={{ width: "100%", height: 250, backgroundColor: c.surfaceLight, alignItems: "center", justifyContent: "center" }}>
-              <Feather name="package" size={80} color={c.textTertiary} />
-            </View>
-          )}
-
-          <View style={{ padding: WebSpacing.xl }}>
-            <Text style={{ color: c.textPrimary, fontSize: WebTypography.size.xxl, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold, marginBottom: WebSpacing.sm }}>
-              {product.name}
-            </Text>
-
-            {product.code && (
-              <Text style={{ color: c.textTertiary, fontSize: WebTypography.size.sm, fontFamily: WebTypography.family, marginBottom: WebSpacing.lg }}>
-                Артикул: {product.code}
-              </Text>
-            )}
-
-            <View style={{ flexDirection: "row", gap: WebSpacing.md, marginBottom: WebSpacing.xl }}>
-              <View style={[web.neoCardSm, { flex: 1, padding: WebSpacing.lg }]}>
-                <Text style={{ color: c.textTertiary, fontSize: WebTypography.size.xs, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.medium, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  Цена
-                </Text>
-                <Text style={{ color: c.primary, fontSize: WebTypography.size.xl, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold, marginTop: WebSpacing.xs }}>
-                  {fmt(product.unitPrice)}
-                </Text>
+          {/* Big photo */}
+          <View style={{ width: "100%", height: SCREEN_W * 0.6, backgroundColor: colors.bg.elevated }}>
+            {product.photoUrl ? (
+              <Image source={{ uri: product.photoUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+            ) : (
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="package" size={56} color={colors.text.muted} />
               </View>
-              <View style={[web.neoCardSm, { flex: 1, padding: WebSpacing.lg }]}>
-                <Text style={{ color: c.textTertiary, fontSize: WebTypography.size.xs, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.medium, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  Остаток
-                </Text>
-                <Text style={{ color: Number(product.available) > 0 ? c.success : c.danger, fontSize: WebTypography.size.xl, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold, marginTop: WebSpacing.xs }}>
+            )}
+          </View>
+          <View style={{ padding: Spacing.xl }}>
+            <Text style={{ fontSize: 22, fontFamily: Typography.fontBold, color: colors.text.primary, marginBottom: 4 }}>{product.name}</Text>
+            {product.code && <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginBottom: 12 }}>Артикул: {product.code}</Text>}
+            {/* Price + Stock row */}
+            <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: 20 }}>
+              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
+                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Цена</Text>
+                <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: colors.accent.primary, marginTop: 4 }}>{fmt(product.unitPrice)}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
+                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Остаток</Text>
+                <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: Number(product.available) > 0 ? colors.status.success : colors.status.danger, marginTop: 4 }}>
                   {product.available} {product.unit || "шт"}
                 </Text>
               </View>
             </View>
-
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: WebSpacing.xl, marginBottom: WebSpacing.xl }}>
-              <TouchableOpacity
-                onPress={() => setQty(Math.max(1, qty - 1))}
-                style={[web.neoBtn, { width: 48, height: 48, borderRadius: WebRadii.full, padding: 0 }]}
-              >
-                <Feather name="minus" size={20} color={c.textPrimary} />
+            {/* Qty stepper */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24, marginBottom: 20 }}>
+              <TouchableOpacity onPress={() => setQty(Math.max(1, qty - 1))}
+                style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="minus" size={20} color={colors.text.primary} />
               </TouchableOpacity>
-              <Text style={{ color: c.textPrimary, fontSize: WebTypography.size["2xl"], fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold, minWidth: 60, textAlign: "center" }}>
-                {qty}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setQty(qty + 1)}
-                style={[web.neoBtnPrimary, { width: 48, height: 48, borderRadius: WebRadii.full, padding: 0 }]}
-              >
+              <Text style={{ fontSize: 32, fontFamily: Typography.fontBold, color: colors.text.primary, minWidth: 50, textAlign: "center" }}>{qty}</Text>
+              <TouchableOpacity onPress={() => setQty(qty + 1)}
+                style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="plus" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                onAdd(qty);
-                setQty(1);
-              }}
-              style={[web.neoBtnPrimary, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: WebSpacing.sm }]}
-            >
-              <Feather name="shopping-cart" size={20} color="#fff" />
-              <Text style={{ color: "#fff", fontSize: WebTypography.size.lg, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold }}>
-                Добавить в заказ
-              </Text>
+            {/* Add button */}
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAdd(qty); setQty(1); }}
+              style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              <Feather name="shopping-cart" size={18} color="#fff" />
+              <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Добавить в заказ</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -282,114 +139,40 @@ function ProductDetailModal({ product, visible, onClose, onAdd, isDark, web, fmt
   );
 }
 
-function QuickOrderSheet({ visible, shops, onClose, onSubmit, isDark, web }: {
-  visible: boolean;
-  shops: Shop[];
-  onClose: () => void;
-  onSubmit: (shopId: number) => void;
-  isDark: boolean;
-  web: ReturnType<typeof createWebStyles>;
+// ── Shop Picker Modal ────────────────────────────────────────────────────────
+function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
+  visible: boolean; shops: Shop[]; onSelect: (shopId: number) => void; onClose: () => void; colors: ThemeColors;
 }) {
-  const [selectedShop, setSelectedShop] = useState<number | null>(null);
-  const c = isDark ? WebColors.dark : WebColors.light;
-
-  const shopItems = useMemo(() => {
-    let prevCity = "";
-    let prevDistrict = "";
-    return shops.map((shop) => {
-      const city = shop.city ?? "";
-      const district = shop.district ?? "";
-      const showCityHeader = city !== "" && city !== prevCity;
-      const showDistrictHeader = district !== "" && district !== prevDistrict;
-      if (city) prevCity = city;
-      if (district) prevDistrict = district;
-      return { ...shop, showCityHeader, showDistrictHeader, city, district };
-    });
-  }, [shops]);
-
+  const [selected, setSelected] = useState<number | null>(null);
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
-        <Pressable
-          style={[web.neoCard, { position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "60%", borderTopLeftRadius: WebRadii.xl, borderTopRightRadius: WebRadii.xl, padding: WebSpacing.xl }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={{ alignItems: "center", paddingBottom: WebSpacing.md }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: c.border }} />
+        <Pressable style={{
+          position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "60%",
+          backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
+        }} onPress={e => e.stopPropagation()}>
+          <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
           </View>
-
-          <Text style={{ color: c.textPrimary, fontSize: WebTypography.size.xl, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold, marginBottom: WebSpacing.lg }}>
-            Выберите магазин
-          </Text>
-
-          <ScrollView style={{ maxHeight: 300 }}>
-            {shopItems.map((shop) => {
-              const { showCityHeader, showDistrictHeader, city, district } = shop;
-              return (
-                <View key={shop.id}>
-                  {showCityHeader && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: WebSpacing.sm, marginTop: WebSpacing.md, marginBottom: WebSpacing.xs }}>
-                      <Feather name="map-pin" size={12} color={c.primary} />
-                      <Text style={{ color: c.primary, fontSize: WebTypography.size.xs, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                        {city}
-                      </Text>
-                      <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-                    </View>
-                  )}
-                  {showDistrictHeader && !showCityHeader && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: WebSpacing.sm, marginTop: WebSpacing.sm, marginBottom: WebSpacing.xs }}>
-                      <Text style={{ color: c.textTertiary, fontSize: WebTypography.size.xs, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.semibold, marginLeft: 20 }}>
-                        {district}
-                      </Text>
-                      <View style={{ flex: 1, height: 1, backgroundColor: c.borderSubtle }} />
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    onPress={() => setSelectedShop(shop.id)}
-                    style={[
-                      selectedShop === shop.id ? web.neoCardSm : web.neoCard,
-                      {
-                        flexDirection: "row",
-                        alignItems: "center",
-                        padding: WebSpacing.base,
-                        marginBottom: WebSpacing.sm,
-                        borderColor: selectedShop === shop.id ? c.primary : c.border,
-                      }
-                    ]}
-                  >
-                    <View style={[web.avatar, { width: 36, height: 36, borderRadius: WebRadii.full, backgroundColor: selectedShop === shop.id ? c.primary : c.surfaceLight, borderWidth: 0, marginRight: WebSpacing.md, justifyContent: "center" }]}>
-                      <Feather name="shopping-bag" size={16} color={selectedShop === shop.id ? "#fff" : c.textTertiary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: c.textPrimary, fontSize: WebTypography.size.base, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.semibold }}>
-                        {shop.name}
-                      </Text>
-                      {district && (
-                        <Text style={{ color: c.textTertiary, fontSize: WebTypography.size.xs, fontFamily: WebTypography.family }}>
-                          {district}
-                        </Text>
-                      )}
-                    </View>
-                    {selectedShop === shop.id && (
-                      <Feather name="check-circle" size={20} color={c.primary} />
-                    )}
-                  </TouchableOpacity>
+          <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.lg }}>Выберите магазин</Text>
+          <FlatList data={shops} keyExtractor={s => String(s.id)} style={{ maxHeight: 300 }}
+            renderItem={({ item: shop }) => (
+              <TouchableOpacity onPress={() => setSelected(shop.id)}
+                style={{ flexDirection: "row", alignItems: "center", padding: Spacing.base, marginBottom: Spacing.sm, borderRadius: Radii.md, backgroundColor: selected === shop.id ? colors.accent.primary + "12" : colors.bg.card, borderWidth: 1.5, borderColor: selected === shop.id ? colors.accent.primary : colors.border.default }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: selected === shop.id ? colors.accent.primary : colors.bg.elevated, alignItems: "center", justifyContent: "center", marginRight: Spacing.md }}>
+                  <Feather name="shopping-bag" size={16} color={selected === shop.id ? "#fff" : colors.text.muted} />
                 </View>
-              );
-            })}
-          </ScrollView>
-
-          <TouchableOpacity
-            onPress={() => selectedShop && onSubmit(selectedShop)}
-            disabled={!selectedShop}
-            style={[
-              web.neoBtnPrimary,
-              { marginTop: WebSpacing.lg, opacity: selectedShop ? 1 : 0.5 }
-            ]}
-          >
-            <Text style={{ color: selectedShop ? "#fff" : c.textTertiary, fontSize: WebTypography.size.lg, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold }}>
-              Создать заказ
-            </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text.primary, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold }}>{shop.name}</Text>
+                  {shop.district && <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.xs }}>{shop.district}</Text>}
+                </View>
+                {selected === shop.id && <Feather name="check-circle" size={20} color={colors.accent.primary} />}
+              </TouchableOpacity>
+            )}
+          />
+          <TouchableOpacity onPress={() => selected && onSelect(selected)} disabled={!selected}
+            style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center", marginTop: Spacing.lg, opacity: selected ? 1 : 0.5 }}>
+            <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Создать заказ</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
@@ -397,281 +180,221 @@ function QuickOrderSheet({ visible, shops, onClose, onSubmit, isDark, web }: {
   );
 }
 
+// ── Payment Picker Modal ─────────────────────────────────────────────────────
+function PaymentPicker({ visible, onSelect, onClose, colors }: {
+  visible: boolean; onSelect: (method: string) => void; onClose: () => void; colors: ThemeColors;
+}) {
+  const [selected, setSelected] = useState<string>("cash");
+  const options = [
+    { key: "cash", label: "Наличные", icon: "dollar-sign" as const },
+    { key: "card", label: "Карта", icon: "credit-card" as const },
+    { key: "transfer", label: "Перевод", icon: "send" as const },
+    { key: "debt", label: "Долг", icon: "alert-circle" as const },
+  ];
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
+        <Pressable style={{
+          position: "absolute", bottom: 0, left: 0, right: 0,
+          backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
+        }} onPress={e => e.stopPropagation()}>
+          <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
+          </View>
+          <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.lg }}>Способ оплаты</Text>
+          <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.xl }}>
+            {options.map(opt => {
+              const active = selected === opt.key;
+              return (
+                <TouchableOpacity key={opt.key} onPress={() => setSelected(opt.key)} activeOpacity={0.8}
+                  style={{ flex: 1, alignItems: "center", gap: 6, paddingVertical: 14, borderRadius: Radii.md, borderWidth: 1.5, backgroundColor: active ? colors.accent.primary + "12" : colors.bg.elevated, borderColor: active ? colors.accent.primary : colors.border.default }}>
+                  <Feather name={opt.icon} size={18} color={active ? colors.accent.primary : colors.text.secondary} />
+                  <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontSemibold, color: active ? colors.accent.primary : colors.text.secondary }}>{opt.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TouchableOpacity onPress={() => onSelect(selected)}
+            style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center" }}>
+            <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Подтвердить</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
+  const { width: SCREEN_W } = useWindowDimensions();
+  const CARD_W = useMemo(() => (SCREEN_W - Spacing.base * 2 - Spacing.md) / 2, [SCREEN_W]);
   const { isDark } = useThemeStore();
-  const web = useMemo(() => createWebStyles(isDark), [isDark]);
-  const c = isDark ? WebColors.dark : WebColors.light;
+  const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const lang = (user as { lang?: string })?.lang ?? "ru";
-  const t = (ru: string, uz: string) => (lang === "uz" ? uz : ru);
-  const perf = usePerformanceMonitor("CatalogScreen");
 
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [viewMode, setViewMode] = useState<"hero" | "grid">("hero");
+  const [selectedCat, setSelectedCat] = useState("all");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showDetail, setShowDetail] = useState(false);
-  const [showOrderSheet, setShowOrderSheet] = useState(false);
+  const [showShopPicker, setShowShopPicker] = useState(false);
   const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
   const [pendingQty, setPendingQty] = useState(1);
+  const [pendingShopId, setPendingShopId] = useState<number | null>(null);
+  const [showPaymentPicker, setShowPaymentPicker] = useState(false);
 
-  const { data: products = [], isLoading } = useQuery({
-    queryKey: ["products"],
-    queryFn: getProducts,
+  const canAccessAgent = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
+  const { data: products = [], isLoading, isError, error } = useQuery({
+    queryKey: ["products", search],
+    queryFn: () => getProducts(search),
+    enabled: canAccessAgent,
   });
+  const { data: shopsData } = useQuery({ queryKey: ["myShops"], queryFn: getMyShops, enabled: canAccessAgent });
+  const { data: serverCategories = [] } = useQuery({ queryKey: ["categories"], queryFn: getCategories, enabled: canAccessAgent });
 
-  const { data: shopsData } = useQuery({
-    queryKey: ["myShops"],
-    queryFn: getMyShops,
-  });
-  const shops = useMemo(() => {
-    const list = shopsData ?? [];
-    return [...list].sort((a, b) => {
-      const cityA = (a.city ?? "").toLowerCase();
-      const cityB = (b.city ?? "").toLowerCase();
-      if (cityA !== cityB) return cityA.localeCompare(cityB);
-      const districtA = (a.district ?? "").toLowerCase();
-      const districtB = (b.district ?? "").toLowerCase();
-      if (districtA !== districtB) return districtA.localeCompare(districtB);
-      return (a.name ?? "").localeCompare(b.name ?? "");
-    });
-  }, [shopsData]);
-
-  const fmt = useCallback((v: number | string | null | undefined) => {
-    const num = Number(v ?? 0);
-    return num.toLocaleString("ru-RU", { style: "currency", currency: "UZS", maximumFractionDigits: 0 });
-  }, []);
-
-  const { data: serverCategories = [] } = useQuery({
-    queryKey: ["categories"],
-    queryFn: getCategories,
-  });
+  const shops = useMemo(() => (shopsData ?? []).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")), [shopsData]);
 
   const categories = useMemo(() => {
-    const dynamicCats = (serverCategories ?? []).filter(Boolean).map((c: string) => ({
-      key: c.toLowerCase(),
-      label: c,
-      uz: c,
-      icon: "tag" as IconName,
-    }));
-    return [...BASE_CATEGORIES, ...dynamicCats];
+    const dynamic = (serverCategories ?? []).filter(Boolean).map((c: string) => ({ key: c.toLowerCase(), label: c }));
+    return [{ key: "all", label: "Все" }, ...dynamic];
   }, [serverCategories]);
 
-  const filteredProducts = useMemo(() => {
-    perf.start("filterProducts");
+  const filtered = useMemo(() => {
     let result = products;
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.code?.toLowerCase().includes(q) ||
-        p.category?.toLowerCase().includes(q)
-      );
-    }
-    if (selectedCategory === "popular") {
-      result = result.slice(0, 10);
-    } else if (selectedCategory !== "all") {
-      result = result.filter((p) => p.category?.toLowerCase() === selectedCategory);
-    }
-    perf.end("filterProducts");
+    if (search) { const q = search.toLowerCase(); result = result.filter(p => p.name.toLowerCase().includes(q) || p.code?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q)); }
+    if (selectedCat !== "all") result = result.filter(p => p.category?.toLowerCase() === selectedCat);
     return result;
-  }, [products, search, selectedCategory]);
+  }, [products, search, selectedCat]);
+
+  const fmt = useCallback((v: number | string | null | undefined) => {
+    return Number(v ?? 0).toLocaleString("ru-RU", { style: "currency", currency: "UZS", maximumFractionDigits: 0 });
+  }, []);
 
   const createOrderMutation = useMutation({
-    mutationFn: (input: { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[] }) =>
-      createOrder(input),
-    onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Заказ создан!");
-      setShowOrderSheet(false);
-      setPendingProduct(null);
-      queryClient.invalidateQueries({ queryKey: ["myOrders"] });
-    },
-    onError: (e: Error) => {
-      notify.error(e.message || "Ошибка создания заказа");
-    },
+    mutationFn: (input: { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[]; paymentMethod?: string }) => createOrder(input),
+    onSuccess: () => { notify.success("Заказ создан!"); setShowShopPicker(false); setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null); queryClient.invalidateQueries({ queryKey: ["myOrders"] }); },
+    onError: (e: Error) => notify.error(e.message || "Ошибка"),
   });
 
-  const handleAddToOrder = useCallback((product: Product, qty: number) => {
-    if (shops.length === 0) {
-      notify.error("Нет магазинов для заказа");
-      return;
-    }
+  const handleAdd = useCallback((product: Product, qty: number) => {
+    if (shops.length === 0) { notify.error("Нет магазинов"); return; }
     if (shops.length === 1) {
-      createOrderMutation.mutate({
-        shopId: shops[0].id,
-        items: [{ productId: product.id, quantity: qty, unitPrice: Number(product.unitPrice) }],
-      });
+      setPendingProduct(product); setPendingQty(qty); setPendingShopId(shops[0].id); setShowPaymentPicker(true);
     } else {
-      setPendingProduct(product);
-      setPendingQty(qty);
-      setShowOrderSheet(true);
+      setPendingProduct(product); setPendingQty(qty); setShowShopPicker(true);
     }
-  }, [shops, createOrderMutation]);
-
-  const handleShopSelect = (shopId: number) => {
-    if (pendingProduct) {
-      createOrderMutation.mutate({
-        shopId,
-        items: [{ productId: pendingProduct.id, quantity: pendingQty, unitPrice: Number(pendingProduct.unitPrice) }],
-      });
-    }
-  };
+  }, [shops]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.canvas }}>
-      <View style={{ paddingTop: Platform.OS === "ios" ? 60 : 40, paddingHorizontal: WebSpacing.lg, paddingBottom: WebSpacing.lg }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: WebSpacing.lg }}>
-          <View>
-            <Text style={{ color: c.textPrimary, fontSize: WebTypography.size.xxl, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.bold }}>
-              {t("Каталог", "Katalog")}
-            </Text>
-            <Text style={{ color: c.textTertiary, fontSize: WebTypography.size.sm, fontFamily: WebTypography.family, marginTop: WebSpacing.xxs }}>
-              {filteredProducts.length} {t("товаров", "mahsulot")}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setViewMode(viewMode === "hero" ? "grid" : "hero")}
-            style={web.neoCardSm}
-          >
-            <Feather name={viewMode === "hero" ? "grid" : "maximize-2"} size={18} color={c.textPrimary} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={web.neoInput}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Feather name="search" size={18} color={c.textTertiary} />
-            <TextInput
-              style={{ flex: 1, marginLeft: WebSpacing.sm, color: c.textPrimary, fontSize: WebTypography.size.sm, fontFamily: WebTypography.family }}
-              placeholder={t("Поиск товаров…", "Mahsulot qidirish…")}
-              placeholderTextColor={c.textTertiary}
-              value={search}
-              onChangeText={setSearch}
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch("")}>
-                <Feather name="x" size={18} color={c.textTertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
+    <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
+      {/* Header */}
+      <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
+        <Text style={{ color: colors.text.primary, fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, marginBottom: Spacing.md }}>Каталог</Text>
+        {/* Search */}
+        <View style={{
+          flexDirection: "row", alignItems: "center", gap: Spacing.sm,
+          backgroundColor: colors.bg.input, borderRadius: Radii.lg,
+          paddingHorizontal: Spacing.md, paddingVertical: 10,
+          borderWidth: 1, borderColor: colors.border.default,
+        }}>
+          <Feather name="search" size={16} color={colors.text.muted} />
+          <TextInput
+            style={{ flex: 1, fontSize: Typography.size.base, color: colors.text.primary, fontFamily: Typography.fontBody }}
+            placeholder="Поиск товаров..."
+            placeholderTextColor={colors.text.muted}
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+          />
+          {!!search && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Feather name="x" size={15} color={colors.text.muted} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: WebSpacing.lg, gap: WebSpacing.sm, marginBottom: WebSpacing.lg, paddingVertical: WebSpacing.xs }}
-      >
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat.key}
-            onPress={() => setSelectedCategory(cat.key)}
-            style={selectedCategory === cat.key ? web.neoBtnPrimary : web.neoBtn}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: WebSpacing.xs, minWidth: 90, paddingHorizontal: WebSpacing.sm, paddingVertical: WebSpacing.xs }}>
-              <Feather name={cat.icon} size={14} color={selectedCategory === cat.key ? "#fff" : c.textSecondary} />
-              <Text style={{ color: selectedCategory === cat.key ? "#fff" : c.textSecondary, fontSize: WebTypography.size.sm, fontFamily: WebTypography.family, fontWeight: WebTypography.weight.semibold }}>
-                {t(cat.label, cat.uz)}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* Category chips */}
+      {categories.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: Spacing.base, gap: Spacing.sm, marginBottom: Spacing.base }}>
+          {categories.map(cat => {
+            const active = selectedCat === cat.key;
+            return (
+              <TouchableOpacity key={cat.key} onPress={() => setSelectedCat(cat.key)}
+                style={{ backgroundColor: active ? colors.accent.primary : colors.bg.elevated, borderRadius: Radii.full, borderWidth: active ? 0 : 1, borderColor: colors.border.default, paddingHorizontal: 16, paddingVertical: 8, minHeight: 36, justifyContent: "center" }}>
+                <Text style={{ color: active ? "#fff" : colors.text.primary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, textAlign: "center" }}>{cat.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
-      {isLoading ? (
-        <View style={{ padding: WebSpacing.lg }}>
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} height={280} style={{ borderRadius: WebRadii.xl, marginBottom: WebSpacing.lg }} />
+      {/* Products — 2-column grid with big images */}
+      {isError ? (
+        <View style={{ alignItems: "center", paddingVertical: 80, paddingHorizontal: Spacing.xl }}>
+          <View style={{ width: 72, height: 72, borderRadius: Radii.xl, backgroundColor: colors.status.dangerDim, alignItems: "center", justifyContent: "center", marginBottom: Spacing.md }}>
+            <Feather name="wifi-off" size={32} color={colors.status.danger} />
+          </View>
+          <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>Ошибка загрузки</Text>
+          <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>{error?.message ?? "Проверьте подключение"}</Text>
+        </View>
+      ) : isLoading ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.md, paddingHorizontal: Spacing.base }}>
+          {[1, 2, 3, 4].map(i => (
+            <View key={i} style={{ width: CARD_W, height: 220, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated, opacity: 0.5 }} />
           ))}
         </View>
-      ) : viewMode === "hero" ? (
-        <FlatList
-          data={filteredProducts}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ paddingHorizontal: WebSpacing.lg, paddingBottom: WebSpacing.xxxl }}
-          showsVerticalScrollIndicator={false}
-          windowSize={11}
-          maxToRenderPerBatch={8}
-          removeClippedSubviews
-          updateCellsBatchingPeriod={50}
-          renderItem={({ item }) => (
-            <HeroProductCard
-              product={item}
-              isDark={isDark}
-              web={web}
-              onPress={() => { setSelectedProduct(item); setShowDetail(true); }}
-              onAdd={() => handleAddToOrder(item, 1)}
-              fmt={fmt}
-            />
-          )}
-          ListEmptyComponent={
-            <View style={{ alignItems: "center", paddingVertical: 60 }}>
-              <Feather name="package" size={48} color={c.textTertiary} />
-              <Text style={{ color: c.textTertiary, fontSize: WebTypography.size.base, fontFamily: WebTypography.family, marginTop: WebSpacing.md }}>
-                {t("Товары не найдены", "Mahsulotlar topilmadi")}
-              </Text>
-            </View>
-          }
-        />
       ) : (
         <FlatList
-          key={`grid-${viewMode}`}
-          data={filteredProducts}
-          keyExtractor={(item) => String(item.id)}
+          data={filtered}
+          keyExtractor={item => String(item.id)}
           numColumns={2}
-          columnWrapperStyle={{ gap: WebSpacing.md, paddingHorizontal: WebSpacing.lg }}
-          contentContainerStyle={{ paddingBottom: WebSpacing.xxxl }}
+          columnWrapperStyle={{ gap: Spacing.md, paddingHorizontal: Spacing.base }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
           showsVerticalScrollIndicator={false}
-          windowSize={11}
-          maxToRenderPerBatch={10}
-          removeClippedSubviews
-          updateCellsBatchingPeriod={50}
           renderItem={({ item }) => (
-            <CompactProductCard
-              product={item}
-              isDark={isDark}
-              web={web}
+            <ProductCard
+              product={item} colors={colors} isDark={isDark}
               onPress={() => { setSelectedProduct(item); setShowDetail(true); }}
-              onAdd={() => handleAddToOrder(item, 1)}
-              fmt={fmt}
-            />
+              onAdd={() => handleAdd(item, 1)} fmt={fmt} cardWidth={CARD_W} />
           )}
           ListEmptyComponent={
-            <View style={{ alignItems: "center", paddingVertical: 60, flex: 1 }}>
-              <Feather name="package" size={48} color={c.textTertiary} />
-              <Text style={{ color: c.textTertiary, fontSize: WebTypography.size.base, fontFamily: WebTypography.family, marginTop: WebSpacing.md }}>
-                {t("Товары не найдены", "Mahsulotlar topilmadi")}
+            <View style={{ alignItems: "center", paddingVertical: 80, paddingHorizontal: Spacing.xl }}>
+              <View style={{ width: 72, height: 72, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center", marginBottom: Spacing.md }}>
+                <Feather name="search" size={32} color={colors.text.muted} />
+              </View>
+              <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>
+                {search ? "Товары не найдены" : "Введите запрос для поиска"}
+              </Text>
+              <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>
+                {search ? "Попробуйте изменить запрос" : "Начните вводить название товара"}
               </Text>
             </View>
           }
         />
       )}
 
-      <ProductDetailModal
-        product={selectedProduct}
-        visible={showDetail}
+      <ProductDetail product={selectedProduct} visible={showDetail} colors={colors} isDark={isDark} fmt={fmt}
         onClose={() => { setShowDetail(false); setSelectedProduct(null); }}
-        onAdd={(qty) => {
-          if (selectedProduct) {
-            handleAddToOrder(selectedProduct, qty);
-            setShowDetail(false);
-            setSelectedProduct(null);
-          }
-        }}
-        isDark={isDark}
-        web={web}
-        fmt={fmt}
-      />
+        onAdd={(qty) => { if (selectedProduct) { handleAdd(selectedProduct, qty); setShowDetail(false); setSelectedProduct(null); } }} />
 
-      <QuickOrderSheet
-        visible={showOrderSheet}
-        shops={shops}
-        onClose={() => { setShowOrderSheet(false); setPendingProduct(null); }}
-        onSubmit={handleShopSelect}
-        isDark={isDark}
-        web={web}
-      />
+      <ShopPicker visible={showShopPicker} shops={shops} colors={colors}
+        onClose={() => { setShowShopPicker(false); setPendingProduct(null); }}
+        onSelect={(shopId) => {
+          setShowShopPicker(false);
+          setPendingShopId(shopId);
+          setShowPaymentPicker(true);
+        }} />
+
+      <PaymentPicker visible={showPaymentPicker} colors={colors}
+        onClose={() => { setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null); }}
+        onSelect={(method) => {
+          if (pendingProduct && pendingShopId) {
+            createOrderMutation.mutate({ shopId: pendingShopId, items: [{ productId: pendingProduct.id, quantity: pendingQty, unitPrice: Number(pendingProduct.unitPrice) }], paymentMethod: method });
+          }
+        }} />
     </View>
   );
 }

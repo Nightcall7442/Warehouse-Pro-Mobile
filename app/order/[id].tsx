@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   Share,
   Alert,
   RefreshControl,
+  TextInput,
+  Modal,
+  Pressable,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -23,9 +26,9 @@ import { format, parseISO } from "date-fns";
 import { ru } from "date-fns/locale";
 import * as Haptics from "expo-haptics";
 import {
-  getMyOrders,
   getOrderById,
   cancelOrder,
+  updateOrder,
   type OrderDetail,
 } from "../../src/api";
 import {
@@ -242,11 +245,7 @@ export default function OrderDetailScreen() {
       try {
         return await getOrderById(Number(id));
       } catch {
-        // Fallback: find in list
-        const list = await getMyOrders();
-        const found = list.find(o => o.id === Number(id));
-        if (!found) throw new Error("Not found");
-        return { ...found, items: [], subtotal: found.total };
+        throw new Error("Заказ не найден");
       }
     },
     enabled: !!id,
@@ -263,6 +262,25 @@ export default function OrderDetailScreen() {
     onError: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       notify.error("Не удалось отменить заказ. Попробуйте ещё раз.");
+    },
+  });
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editNotes, setEditNotes] = useState("");
+  const [editDiscount, setEditDiscount] = useState("");
+
+  const updateMutation = useMutation({
+    mutationFn: () => updateOrder(Number(id), { notes: editNotes || undefined, discount: editDiscount || undefined }),
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notify.success("Заказ обновлён");
+      setShowEditModal(false);
+      queryClient.invalidateQueries({ queryKey: ["order", id] });
+      queryClient.invalidateQueries({ queryKey: ["myOrders"] });
+    },
+    onError: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      notify.error("Не удалось обновить заказ");
     },
   });
 
@@ -303,6 +321,12 @@ export default function OrderDetailScreen() {
     );
   }
 
+  function handleEditOpen() {
+    setEditNotes(order?.notes ?? "");
+    setEditDiscount(order?.discount != null ? String(order.discount) : "");
+    setShowEditModal(true);
+  }
+
   // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) return <LoadingState colors={colors} />;
 
@@ -323,7 +347,6 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const cfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.new;
   const canCancel = order.status === "new" || order.status === "processing";
   const subtotal = order.subtotal ?? order.total;
   const discount = order.discount ?? 0;
@@ -434,6 +457,12 @@ export default function OrderDetailScreen() {
 
         {/* ── Actions ── */}
         <View style={styles.actions}>
+          <PressableScale onPress={handleEditOpen} haptic="light" style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden", ...Shadows.sm }}>
+            <View style={[styles.actionBtnGradient, { backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default }]}>
+              <Feather name="edit-2" size={18} color={colors.text.primary} />
+              <Text style={[styles.actionBtnTextPrimary, { color: colors.text.primary }]}>Изменить</Text>
+            </View>
+          </PressableScale>
           {canCancel && (
           <PressableScale
             onPress={handleCancel}
@@ -447,17 +476,41 @@ export default function OrderDetailScreen() {
               <Text style={styles.actionBtnTextDanger}>Отменить заказ</Text>
             </PressableScale>
           )}
-          <PressableScale onPress={handleShare} haptic="light" style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden", ...Shadows.sm }}>
-            <View style={[styles.actionBtnGradient, { backgroundColor: colors.brand.primary }]}>
-              <Feather name="share-2" size={18} color="#fff" />
-              <Text style={styles.actionBtnTextPrimary}>Поделиться</Text>
-            </View>
-          </PressableScale>
         </View>
 
         <View style={{ height: 32 }} />
         </ScrollView>
       </Animated.View>
+
+      {/* Edit Modal */}
+      <Modal visible={showEditModal} animationType="slide" transparent>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => setShowEditModal(false)}>
+          <Pressable style={{
+            position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "60%",
+            backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
+          }} onPress={e => e.stopPropagation()}>
+            <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
+              <View style={{ width: 40, height: 4, borderRadius: Radii.full, backgroundColor: colors.border.default }} />
+            </View>
+            <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.lg }}>Редактировать заказ</Text>
+            <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>Заметки</Text>
+            <TextInput value={editNotes} onChangeText={setEditNotes} placeholder="Заметки к заказу..."
+              placeholderTextColor={colors.text.muted}
+              style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base, marginBottom: Spacing.lg, minHeight: 60, textAlignVertical: "top" }} multiline />
+            <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>Скидка (%)</Text>
+            <TextInput value={editDiscount} onChangeText={setEditDiscount} placeholder="0" keyboardType="numeric"
+              placeholderTextColor={colors.text.muted}
+              style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base, marginBottom: Spacing.xl }} />
+            <TouchableOpacity onPress={() => updateMutation.mutate()} disabled={updateMutation.isPending}
+              style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center", opacity: updateMutation.isPending ? 0.6 : 1 }}>
+              {updateMutation.isPending
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Сохранить</Text>
+              }
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

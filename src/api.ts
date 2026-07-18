@@ -38,7 +38,11 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
-    if (err?.response?.status === 401) {
+    const status = err?.response?.status;
+    const url = err?.config?.url;
+    const data = err?.response?.data;
+    if (__DEV__) console.error(`[tRPC ERROR] ${status} ${url}`, typeof data === "object" ? JSON.stringify(data)?.slice(0, 500) : data);
+    if (status === 401) {
       await SecureStore.deleteItemAsync("session_token").catch(() => {});
       // Clearing the token alone isn't enough — without this, the auth
       // store still thinks the user is logged in (isAuthenticated stays
@@ -54,36 +58,68 @@ api.interceptors.response.use(
   }
 );
 
-// tRPC + superjson envelope: { result: { data: { json: <payload> } } }
-// Batch mode wraps in array: [{ result: { data: { json: <payload> } } }]
+// tRPC v11 response envelope: { result: { data: { json: <payload>, meta: {...} } } }
+// Batch mode wraps in array: [{ result: { data: { json: <payload>, meta: {...} } } }]
+// Superjson serializes as {json: <data>, meta: {values: {...}}} for each level.
 interface TrpcEnvelope {
-  result?: { data?: { json?: unknown; data?: unknown } };
+  result?: { data?: { json?: unknown; meta?: unknown } | unknown; error?: { message?: string; data?: { code?: string; message?: string } } };
 }
 function unwrap<T>(resData: unknown): T {
   // Handle batch response (array)
   if (Array.isArray(resData) && resData.length > 0) {
     resData = resData[0];
   }
-  const d = (resData as TrpcEnvelope)?.result?.data ?? resData;
-  const obj = d as Record<string, unknown> | undefined;
-  const result = obj?.json ?? obj?.data ?? d;
-  if (result === undefined || result === null) {
+
+  // Check for tRPC error envelope
+  const envelope = resData as TrpcEnvelope | undefined;
+  if (envelope?.result && "error" in envelope.result) {
+    const err = (envelope.result as { error: { message?: string; data?: { code?: string; message?: string } } }).error;
+    const msg = err?.data?.message ?? err?.message ?? "Unknown API error";
+    throw new Error(msg);
+  }
+
+  // Navigate tRPC + superjson envelope: result.data.json
+  const resultData = envelope?.result?.data;
+  if (resultData !== undefined && resultData !== null && typeof resultData === "object" && "json" in (resultData as Record<string, unknown>)) {
+    const jsonPayload = (resultData as { json: unknown }).json;
+    if (jsonPayload === undefined || jsonPayload === null) {
+      throw new Error("Unexpected API response: empty json payload");
+    }
+    return jsonPayload as T;
+  }
+
+  // Fallback: result.data is the payload directly (non-superjson)
+  if (resultData !== undefined && resultData !== null) {
+    return resultData as T;
+  }
+
+  // Last fallback: the raw response is the payload
+  if (resData === undefined || resData === null) {
     throw new Error("Unexpected API response: empty data");
   }
-  return result as T;
+  return resData as T;
 }
 
 async function trpcQuery<T>(procedure: string, input?: unknown): Promise<T> {
-  const params =
-    input !== undefined
-      ? `?input=${encodeURIComponent(JSON.stringify({ json: input }))}`
-      : "";
-  const res = await api.get(`/${procedure}${params}`);
+  // tRPC v11 non-batch format: GET /{procedure}?input={"json": ...}
+  if (input !== undefined) {
+    const encoded = encodeURIComponent(JSON.stringify({ json: input }));
+    if (__DEV__) console.log(`[tRPC GET] ${procedure}`, input);
+    const res = await api.get(`/${procedure}?input=${encoded}`);
+    if (__DEV__) console.log(`[tRPC GET ${procedure}] status=${res.status}`, JSON.stringify(res.data)?.slice(0, 300));
+    return unwrap<T>(res.data);
+  }
+  if (__DEV__) console.log(`[tRPC GET] ${procedure} (no input)`);
+  const res = await api.get(`/${procedure}`);
+  if (__DEV__) console.log(`[tRPC GET ${procedure}] status=${res.status}`, JSON.stringify(res.data)?.slice(0, 300));
   return unwrap<T>(res.data);
 }
 
 async function trpcMutation<T>(procedure: string, input: unknown): Promise<T> {
+  // tRPC v11 non-batch format: body is {"json": input}
+  if (__DEV__) console.log(`[tRPC POST] ${procedure}`, input);
   const res = await api.post(`/${procedure}`, { json: input });
+  if (__DEV__) console.log(`[tRPC POST ${procedure}] status=${res.status}`, JSON.stringify(res.data)?.slice(0, 300));
   return unwrap<T>(res.data);
 }
 
@@ -180,6 +216,7 @@ export interface CreateOrderInput {
   items: OrderItem[];
   notes?: string;
   discount?: number;
+  paymentMethod?: "cash" | "card" | "transfer" | "debt";
 }
 
 export interface Order {
@@ -239,14 +276,19 @@ export async function logout(): Promise<void> {
 }
 
 export async function getMe(): Promise<User> {
-  const res = await trpcQuery<{ id: number; name: string; email: string; role: string; tenantId: number }>('auth.me');
-  // auth.me returns flat user object without tenant, construct minimal User
+  const res = await trpcQuery<User & { tenantId?: number }>('auth.me');
+  // auth.me returns the full user object from ctx.user
+  // It may have tenantId (flat) or tenant (nested) depending on Drizzle serialization
+  const tenantId = res.tenantId ?? (res.tenant as any)?.id;
+  const tenantName = (res.tenant as any)?.name ?? "";
+  const tenantSlug = (res.tenant as any)?.slug ?? "";
   return {
     id: res.id,
     name: res.name,
     email: res.email,
+    avatar: res.avatar,
     role: res.role as User["role"],
-    tenant: { id: res.tenantId, name: "", slug: "" },
+    tenant: { id: tenantId ?? 0, name: tenantName, slug: tenantSlug },
   };
 }
 
@@ -341,6 +383,7 @@ export interface ShopSummary {
   id: number;
   name: string;
   city?: string;
+  district?: string;
 }
 
 export async function getAllShops(): Promise<ShopSummary[]> {
@@ -355,10 +398,11 @@ export async function getSupervisorDashboard(): Promise<SupervisorKpis> {
   return trpcQuery<SupervisorKpis>("dashboard.supervisorDashboard");
 }
 
-export async function getProducts(): Promise<Product[]> {
+export async function getProducts(search?: string): Promise<Product[]> {
   const res = await trpcQuery<{ data: Product[] } | Product[]>("product.list", {
     page: 1,
     pageSize: 200,
+    ...(search ? { search } : {}),
   });
   return Array.isArray(res) ? res : res.data;
 }
@@ -417,6 +461,12 @@ export async function updateShop(id: number, data: Partial<CreateShopInput>): Pr
 
 export async function uploadShopPhoto(shopId: number, dataUrl: string): Promise<void> {
   await trpcMutation("agent.uploadMyShopPhoto", { shopId, dataUrl });
+}
+
+/** Upload a base64 image to S3 via server. Returns the public URL. */
+export async function uploadFile(dataUrl: string, folder: "products" | "shops" | "avatars" | "visits" = "products"): Promise<string> {
+  const result = await trpcMutation<{ url: string }>("upload.file", { dataUrl, folder });
+  return result.url;
 }
 
 export interface UpdateProfileInput {

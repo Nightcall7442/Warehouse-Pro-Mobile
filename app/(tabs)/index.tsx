@@ -1,283 +1,292 @@
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-} from "react-native";
+// Warehouse Pro — Agent Dashboard (matches web AgentDashboard.tsx)
+import React, { useEffect, useMemo, useCallback } from "react";
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
-import { useOfflineStore } from "../../src/store/offline";
-import { notify } from "../../src/store/toast";
-import { getAgentDashboard, getPlans, updatePlanStatus } from "../../src/api";
-import { Card, SectionHeader, Skeleton, ProgressBar } from "../../src/components/ui";
-import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
-import { useThemeColors } from "../../src/store/theme";
+import { getAgentDashboard, getSupervisorDashboard, getPlans, updatePlanStatus, Plan } from "../../src/api";
+import { Card, SectionHeader, Badge } from "../../src/components/ui";
+import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors, Gradients } from "../../src/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
+import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
+import { LinearGradient } from "expo-linear-gradient";
+import { DarkShadowColor } from "../../src/theme";
+import { PageContainer } from "../../src/components/Layout";
 
 type IconName = keyof typeof Feather.glyphMap;
 
-function KpiCard({
-  value, label, icon, accent, colors,
-}: {
-  value: string | number; label: string; icon: IconName; accent?: boolean; colors: ThemeColors;
+// ── CardDots — 3 colored dots signature (matches web) ────────────────────────
+function CardDots() {
+  return (
+    <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f06895" }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f5a825" }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#2ec4b0" }} />
+    </View>
+  );
+}
+
+// ── Compact KPI card (matches web .kpi-card) ─────────────────────────────────
+function KpiCard({ label, value, icon, color, colors, isDark }: {
+  label: string; value: string | number; icon: IconName; color: string; colors: ThemeColors; isDark: boolean;
 }) {
-  const s = makeStyles(colors);
-  if (accent) {
-    return (
-      <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.kpiCard, s.kpiCardAccent]}>
-        <View style={s.kpiIconBoxAccent}>
-          <Feather name={icon} size={16} color="#fff" />
-        </View>
-        <Text style={[s.kpiValue, s.kpiValueAccent]}>{value}</Text>
-        <Text style={[s.kpiLabel, s.kpiLabelAccent]}>{label}</Text>
-      </LinearGradient>
-    );
-  }
+  const shadowColor = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
   return (
-    <View style={s.kpiCard}>
-      <View style={s.kpiIconBox}>
-        <Feather name={icon} size={16} color={colors.brand.primaryLight} />
+    <View style={{
+      flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.xl,
+      padding: Spacing.md, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+      shadowColor, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity, shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation,
+    }}>
+      <View style={{ width: 36, height: 36, borderRadius: Radii.sm, backgroundColor: color + "18", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+        <Feather name={icon} size={16} color={color} />
       </View>
-      <Text style={s.kpiValue}>{value}</Text>
-      <Text style={s.kpiLabel}>{label}</Text>
+      <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: colors.text.primary, fontVariant: ["tabular-nums"] }}>
+        {value}
+      </Text>
+      <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2, letterSpacing: 0.5, textTransform: "uppercase" }}>
+        {label}
+      </Text>
     </View>
   );
 }
 
-function PlanItem({ plan, onDone, colors }: { plan: any; onDone: () => void; colors: ThemeColors }) {
-  const s = makeStyles(colors);
-  const STATUS_META: Record<string, { icon: IconName; color: string; bg: string }> = {
-    visited: { icon: "check", color: colors.status.success, bg: colors.status.successDim },
-    skipped: { icon: "minus", color: colors.status.warning, bg: colors.status.warningDim },
-    planned: { icon: "circle", color: colors.status.info, bg: colors.status.infoDim },
+// ── Plan card (matches web PlanCard) ─────────────────────────────────────────
+function PlanRow({ plan, onDone, onSkip, colors, isDark, index }: {
+  plan: Plan; onDone: () => void; onSkip: () => void; colors: ThemeColors; isDark: boolean; index: number;
+}) {
+  const STATUS_META: Record<string, { icon: IconName; color: string; bg: string; label: string }> = {
+    visited: { icon: "check-circle", color: colors.status.success, bg: colors.status.successDim, label: "Посещён" },
+    skipped: { icon: "clock", color: colors.status.warning, bg: colors.status.warningDim, label: "Пропущен" },
+    planned: { icon: "circle", color: colors.status.info, bg: colors.status.infoDim, label: "Запланирован" },
   };
-  const cfg = STATUS_META[plan.status as string] ?? STATUS_META.planned;
+  const cfg = STATUS_META[plan.status] ?? STATUS_META.planned;
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
+  const shadowColor = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
 
   return (
-    <View style={s.planItem}>
-      <View style={[s.planDot, { backgroundColor: cfg.bg }]}>
-        <Feather name={cfg.icon} size={14} color={cfg.color} />
-      </View>
-      <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={s.planName} numberOfLines={1}>{plan.shopName ?? "Магазин"}</Text>
-        <Text style={s.planAddress} numberOfLines={1}>{plan.shopAddress ?? "Адрес не указан"}</Text>
-      </View>
-      <View style={{ alignItems: "flex-end", gap: 4 }}>
-        {hasDebt && (
-          <Text style={s.planDebt}>
-            {Number(plan.shopDebt).toLocaleString("ru")} сум
+    <FadeInItem delay={index * 60}>
+      <View style={{
+        flexDirection: "row", alignItems: "center",
+        backgroundColor: colors.bg.card, borderRadius: Radii.lg,
+        padding: 12, marginBottom: 8, borderWidth: 1,
+        borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+        shadowColor, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation,
+        opacity: plan.status === "visited" ? 0.6 : 1,
+      }}>
+        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: cfg.bg, alignItems: "center", justifyContent: "center" }}>
+          <Feather name={cfg.icon} size={14} color={cfg.color} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>
+            {plan.shopName ?? "Магазин"}
           </Text>
-        )}
-        {plan.status === "planned" && (
-          <TouchableOpacity style={s.doneBtn} onPress={onDone} activeOpacity={0.8}>
-            <Feather name="check" size={12} color="#fff" />
-            <Text style={s.doneBtnText}>Готово</Text>
-          </TouchableOpacity>
-        )}
+          <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 1 }} numberOfLines={1}>
+            {plan.shopAddress ?? "Адрес не указан"}
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end", gap: 4 }}>
+          {hasDebt && (
+            <Text style={{ fontFamily: Typography.fontMono, fontSize: Typography.size.xs, color: colors.status.danger }}>
+              {Number(plan.shopDebt).toLocaleString("ru")} сум
+            </Text>
+          )}
+          {plan.status === "planned" && (
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSkip(); }} haptic="none" scaleTo={0.93}>
+                <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingVertical: 5, paddingHorizontal: 10 }}>
+                  <Feather name="clock" size={12} color={colors.accent.warning} />
+                </View>
+              </PressableScale>
+              <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDone(); }} haptic="none" scaleTo={0.93}>
+                <View style={{ backgroundColor: colors.accent.success, borderRadius: Radii.sm, paddingVertical: 5, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Feather name="check" size={12} color="#fff" />
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: "#fff" }}>Готово</Text>
+                </View>
+              </PressableScale>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
+    </FadeInItem>
   );
 }
 
-export default function HomeScreen() {
+// ── Agent Home ────────────────────────────────────────────────────────────────
+function AgentHome() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
-  const s = makeStyles(colors);
   const { user } = useAuthStore();
-  const { orders: offlineOrders, syncAll } = useOfflineStore();
   const qc = useQueryClient();
 
+  const isAgentRole = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
+
   const { data: kpis, isLoading: kpisLoading, isError: kpisError, refetch: refetchKpis } = useQuery({
-    queryKey: ["agentDashboard"],
-    queryFn: getAgentDashboard,
-    retry: false,
+    queryKey: ["agentDashboard"], queryFn: getAgentDashboard, retry: false, enabled: isAgentRole,
   });
 
   const { data: plans, isLoading: plansLoading, refetch: refetchPlans } = useQuery({
     queryKey: ["plans"],
-    queryFn: async () => {
-      const result = await getPlans();
-      return Array.isArray(result) ? result : [];
-    },
-    retry: false,
+    queryFn: async () => { const r = await getPlans(); return Array.isArray(r) ? r : []; },
+    retry: false, enabled: isAgentRole,
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ planId, status }: { planId: number; status: any }) =>
-      updatePlanStatus(planId, status),
+    mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) => updatePlanStatus(planId, status),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["plans"] }),
   });
 
-  const pendingOffline = offlineOrders.filter((o) => !o.synced).length;
-
-  const todayVisited = plans?.filter((p) => p.status === "visited").length ?? 0;
-  const todayTotal = plans?.length ?? 0;
-  const progress = todayTotal > 0 ? todayVisited / todayTotal : 0;
-
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
-  const firstName = user?.name?.split(" ")[0] ?? "Агент";
+  const firstName = (user?.name ?? user?.email ?? "Агент").split(" ")[0];
 
-  const handleRefresh = async () => {
+  const visited = plans?.filter(p => p.status === "visited").length ?? 0;
+  const total = plans?.length ?? 0;
+  const pct = total > 0 ? Math.round((visited / total) * 100) : 0;
+
+  const handleRefresh = useCallback(async () => {
     await Promise.all([refetchKpis(), refetchPlans()]);
-  };
+  }, [refetchKpis, refetchPlans]);
+
+  const scrollRefresh = <RefreshControl refreshing={false} onRefresh={handleRefresh} tintColor={colors.brand.primary} />;
 
   return (
-    <ScrollView
-      style={s.container}
-      contentContainerStyle={[s.content, { paddingTop: insets.top + Spacing.base }]}
-      refreshControl={
-        <RefreshControl
-          refreshing={false}
-          onRefresh={handleRefresh}
-          tintColor={colors.brand.primary}
-        />
-      }
-      showsVerticalScrollIndicator={false}
-    >
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
       {/* Header */}
-      <View style={s.header}>
-        <View>
-          <Text style={s.greeting}>{greeting}, {firstName}</Text>
-          <Text style={s.date}>
-            {format(new Date(), "EEEE, d MMMM", { locale: ru })}
-          </Text>
+      <FadeInItem delay={0}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.lg }}>
+          <View>
+            <CardDots />
+            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
+            <Text style={{ fontSize: Typography.size.xl, fontFamily: Typography.fontBold, color: colors.text.primary, marginTop: 2 }}>Мой день</Text>
+            <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBody, color: colors.text.tertiary, marginTop: 2, textTransform: "capitalize" }}>
+              {format(new Date(), "EEEE, d MMMM", { locale: ru })}
+            </Text>
+          </View>
         </View>
-        <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.avatarCircle}>
-          <Text style={s.avatarText}>{firstName[0]?.toUpperCase()}</Text>
-        </LinearGradient>
-      </View>
-
-      {/* Offline banner */}
-      {pendingOffline > 0 && (
-        <TouchableOpacity
-          style={s.offlineBanner}
-          onPress={async () => {
-            const result = await syncAll();
-            if (result.failed > 0) {
-              notify.error(
-                result.synced > 0
-                  ? `Отправлено ${result.synced}, не удалось отправить ${result.failed}`
-                  : `Не удалось отправить ${result.failed} заказ(ов)`
-              );
-            } else if (result.synced > 0) {
-              notify.success(`Отправлено ${result.synced} заказ(ов)`);
-            }
-          }}
-          activeOpacity={0.8}
-        >
-          <Feather name="cloud-off" size={16} color={colors.status.warning} />
-          <Text style={s.offlineBannerText}>
-            {pendingOffline} заказ(ов) ожидают синхронизации. Нажмите для отправки.
-          </Text>
-          <Feather name="chevron-right" size={16} color={colors.status.warning} />
-        </TouchableOpacity>
-      )}
+      </FadeInItem>
 
       {/* KPI row */}
-      <View style={s.kpiRow}>
-        {kpisLoading ? (
-          <>
-            <Skeleton height={92} style={{ flex: 1 }} radius={Radii.lg} />
-            <Skeleton height={92} style={{ flex: 1 }} radius={Radii.lg} />
-            <Skeleton height={92} style={{ flex: 1 }} radius={Radii.lg} />
-          </>
-        ) : kpisError ? (
-          <TouchableOpacity
-            onPress={() => refetchKpis()}
-            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 92, borderRadius: Radii.lg, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "30" }}
-          >
-            <Feather name="wifi-off" size={16} color={colors.status.danger} />
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.status.danger }}>
-              Не удалось загрузить — нажмите для повтора
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <>
-            <KpiCard value={kpis?.todayOrders ?? 0} label="Заказы" icon="shopping-cart" accent colors={colors} />
-            <KpiCard
-              value={(kpis?.todayRevenue ?? 0).toLocaleString("ru")}
-              label="Выручка"
-              icon="trending-up"
-              colors={colors}
-            />
-            <KpiCard value={kpis?.assignedShops ?? 0} label="Магазины" icon="shopping-bag" colors={colors} />
-          </>
-        )}
-      </View>
-
-      {/* Progress bar */}
-      <Card style={{ marginBottom: Spacing.base }}>
-        <View style={s.progressHeader}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Feather name="map" size={14} color={colors.text.secondary} />
-            <Text style={s.progressTitle}>ПЛАН ВИЗИТОВ СЕГОДНЯ</Text>
-          </View>
-          <Text style={s.progressCount}>{todayVisited} / {todayTotal}</Text>
+      <FadeInItem delay={80}>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          {kpisLoading ? (
+            <>
+              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+            </>
+          ) : kpisError ? (
+            <PressableScale onPress={() => refetchKpis()} haptic="light" style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 64, borderRadius: Radii.lg, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "30" }}>
+                <Feather name="wifi-off" size={14} color={colors.status.danger} />
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger }}>Ошибка — тап</Text>
+              </View>
+            </PressableScale>
+          ) : (
+            <>
+              <KpiCard label="ЗАКАЗОВ" value={kpis?.todayOrders ?? 0} icon="clipboard" color={KpiColors.orange} colors={colors} isDark={isDark} />
+              <KpiCard label="ВЫРУЧКА" value={(kpis?.todayRevenue ?? 0).toLocaleString("ru")} icon="trending-up" color={KpiColors.green} colors={colors} isDark={isDark} />
+              <KpiCard label="МАГАЗИНОВ" value={kpis?.assignedShops ?? 0} icon="shopping-bag" color={KpiColors.purple} colors={colors} isDark={isDark} />
+            </>
+          )}
         </View>
-        <ProgressBar progress={progress} />
-        <Text style={s.progressLabel}>
-          {todayTotal > 0
-            ? `${Math.round(progress * 100)}% выполнено`
-            : "Визиты не запланированы"}
-        </Text>
-      </Card>
+      </FadeInItem>
 
-      {/* Quick actions */}
-      <View style={s.actionsRow}>
-        <TouchableOpacity
-          style={{ flex: 1 }}
-          onPress={() => router.push("/order/new")}
-          activeOpacity={0.85}
-        >
-          <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.actionBtn}>
-            <View style={s.actionIconBoxLight}>
-              <Feather name="plus" size={20} color="#fff" />
-            </View>
-            <Text style={s.actionBtnLabelAccent}>НОВЫЙ ЗАКАЗ</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.actionBtn, s.actionBtnSecondary, { flex: 1 }]}
-          onPress={() => router.push("/(tabs)/shops")}
-          activeOpacity={0.85}
-        >
-          <View style={s.actionIconBox}>
-            <Feather name="shopping-bag" size={20} color={colors.brand.primaryLight} />
+      {/* Progress card */}
+      <FadeInItem delay={160}>
+        <Card style={{ marginBottom: Spacing.base }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ПЛАН ВИЗИТОВ</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: pct >= 80 ? colors.status.success : pct >= 40 ? colors.status.warning : colors.accent.primary, fontVariant: ["tabular-nums"] }}>
+              {visited}/{total} · {pct}%
+            </Text>
           </View>
-          <Text style={s.actionBtnLabel}>МОИ МАГАЗИНЫ</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={{ height: 6, backgroundColor: colors.bg.elevated, borderRadius: 3, overflow: "hidden" }}>
+            <View style={{ height: "100%", borderRadius: 3, width: `${pct}%`, backgroundColor: pct >= 80 ? colors.status.success : pct >= 40 ? colors.status.warning : colors.accent.primary }} />
+          </View>
+          <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 8 }}>
+            {total === 0 ? "На сегодня визитов нет" : pct === 100 ? "Все визиты выполнены!" : `Осталось ${total - visited}`}
+          </Text>
+        </Card>
+      </FadeInItem>
+
+      {/* Quick actions — 2x2 grid */}
+      <FadeInItem delay={240}>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          <PressableScale onPress={() => router.push("/order/new")} haptic="light" style={{ flex: 1 }}>
+            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
+              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="plus-circle" size={18} color="#fff" />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>НОВЫЙ ЗАКАЗ</Text>
+            </LinearGradient>
+          </PressableScale>
+          <PressableScale onPress={() => router.push("/(tabs)/shops")} haptic="light" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="shopping-bag" size={18} color={colors.brand.primaryLight} />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>МАГАЗИНЫ</Text>
+            </View>
+          </PressableScale>
+        </View>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          <PressableScale onPress={() => router.push("/(tabs)/gps")} haptic="light" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.successDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="navigation" size={16} color={colors.status.success} />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>GPS</Text>
+            </View>
+          </PressableScale>
+          <PressableScale onPress={() => router.push("/(tabs)/barcode")} haptic="light" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="maximize" size={16} color={colors.accent.primary} />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>БАРКОД</Text>
+            </View>
+          </PressableScale>
+          <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="user" size={16} color={colors.status.info} />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>ПРОФИЛЬ</Text>
+            </View>
+          </PressableScale>
+        </View>
+      </FadeInItem>
 
       {/* Today's visits */}
-      <SectionHeader title="Визиты сегодня" />
+      <FadeInItem delay={320}>
+        <SectionHeader title="Сегодняшние визиты" />
+      </FadeInItem>
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {plansLoading ? (
           <View style={{ padding: Spacing.base, gap: 10 }}>
-            {[1, 2, 3].map((i) => <Skeleton key={i} height={56} />)}
+            {[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={56} radius={Radii.lg} />)}
           </View>
         ) : !plans?.length ? (
-          <View style={s.emptyPlans}>
+          <View style={{ padding: Spacing.xl, alignItems: "center", gap: 8 }}>
             <Feather name="calendar" size={28} color={colors.text.muted} />
-            <Text style={s.emptyText}>Визиты не запланированы</Text>
+            <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>На сегодня визитов нет</Text>
           </View>
         ) : (
           plans.map((plan, idx) => (
             <View key={plan.id}>
-              <PlanItem
-                plan={plan}
-                colors={colors}
+              <PlanRow plan={plan} colors={colors} isDark={isDark} index={idx}
                 onDone={() => updateMutation.mutate({ planId: plan.id, status: "visited" })}
+                onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
               />
-              {idx < plans.length - 1 && <View style={s.itemDivider} />}
+              {idx < plans.length - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 54 }} />}
             </View>
           ))
         )}
@@ -286,248 +295,241 @@ export default function HomeScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
-  return {
-    container: { flex: 1, backgroundColor: colors.bg.primary } as const,
-    content: { padding: Spacing.base, paddingBottom: 120 } as const,
+// ── Supervisor Home ───────────────────────────────────────────────────────────
+function SupervisorHome() {
+  const router = useRouter();
+  const colors = useThemeColors();
+  const { isDark } = useThemeStore();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
 
-    header: {
-      flexDirection: "row" as const,
-      justifyContent: "space-between" as const,
-      alignItems: "center" as const,
-      marginBottom: Spacing.lg,
-    },
-    greeting: {
-      fontSize: Typography.size.xl,
-      fontFamily: Typography.fontBold,
-      color: colors.text.primary,
-    },
-    date: {
-      fontSize: Typography.size.sm,
-      fontFamily: Typography.fontBody,
-      color: colors.text.secondary,
-      marginTop: 2,
-      textTransform: "capitalize" as const,
-    },
-    avatarCircle: {
-      width: 46,
-      height: 46,
-      borderRadius: Radii.full,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-      shadowColor: colors.brand.primary,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.4,
-      shadowRadius: 12,
-      elevation: 6,
-    },
-    avatarText: {
-      fontSize: Typography.size.md,
-      fontFamily: Typography.fontBold,
-      color: "#fff",
-    },
+  const { data: kpis, isLoading, isError, refetch } = useQuery({
+    queryKey: ["supervisorDashboard"], queryFn: getSupervisorDashboard, retry: false,
+  });
 
-    offlineBanner: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      backgroundColor: colors.status.warningDim,
-      borderRadius: Radii.md,
-      borderWidth: 1,
-      borderColor: "rgba(245,165,36,0.25)",
-      padding: Spacing.md,
-      marginBottom: Spacing.base,
-      gap: 10,
-    },
-    offlineBannerText: {
-      flex: 1,
-      fontSize: Typography.size.sm,
-      fontFamily: Typography.fontMedium,
-      color: colors.status.warning,
-      lineHeight: 18,
-    },
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
+  const firstName = (user?.name ?? user?.email ?? "Супервайзер").split(" ")[0];
 
-    kpiRow: {
-      flexDirection: "row" as const,
-      gap: Spacing.sm,
-      marginBottom: Spacing.base,
-    },
-    kpiCard: {
-      flex: 1,
-      backgroundColor: colors.bg.card,
-      borderRadius: Radii.lg,
-      borderWidth: 1,
-      borderColor: colors.border.default,
-      padding: Spacing.md,
-    },
-    kpiCardAccent: {
-      borderWidth: 0,
-      shadowColor: colors.brand.primary,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.35,
-      shadowRadius: 16,
-      elevation: 8,
-    },
-    kpiIconBox: {
-      width: 28,
-      height: 28,
-      borderRadius: Radii.sm,
-      backgroundColor: colors.brand.primaryDim,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-      marginBottom: Spacing.sm,
-    },
-    kpiIconBoxAccent: {
-      width: 28,
-      height: 28,
-      borderRadius: Radii.sm,
-      backgroundColor: "rgba(255,255,255,0.18)",
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-      marginBottom: Spacing.sm,
-    },
-    kpiValue: {
-      fontSize: Typography.size.lg,
-      fontFamily: Typography.fontDisplay,
-      color: colors.text.primary,
-      fontVariant: ["tabular-nums" as const],
-    },
-    kpiValueAccent: { color: "#fff" },
-    kpiLabel: {
-      fontSize: 10,
-      fontFamily: Typography.fontSemibold,
-      color: colors.text.muted,
-      marginTop: 2,
-      letterSpacing: 0.8,
-      textTransform: "uppercase" as const,
-    },
-    kpiLabelAccent: { color: "rgba(255,255,255,0.85)" },
+  const scrollRefresh = <RefreshControl refreshing={false} onRefresh={refetch} tintColor={colors.brand.primary} />;
 
-    progressHeader: {
-      flexDirection: "row" as const,
-      justifyContent: "space-between" as const,
-      alignItems: "center" as const,
-      marginBottom: Spacing.sm,
-    },
-    progressTitle: {
-      fontSize: Typography.size.xs,
-      fontFamily: Typography.fontBold,
-      color: colors.text.secondary,
-      letterSpacing: 1,
-    },
-    progressCount: {
-      fontSize: Typography.size.sm,
-      fontFamily: Typography.fontBold,
-      color: colors.text.primary,
-      fontVariant: ["tabular-nums" as const],
-    },
-    progressLabel: {
-      fontSize: Typography.size.xs,
-      color: colors.text.muted,
-      marginTop: 8,
-    },
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <FadeInItem delay={0}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.lg }}>
+          <View>
+            <CardDots />
+            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
+            <Text style={{ fontSize: Typography.size.xl, fontFamily: Typography.fontBold, color: colors.text.primary, marginTop: 2 }}>Главная</Text>
+          </View>
+        </View>
+      </FadeInItem>
 
-    actionsRow: {
-      flexDirection: "row" as const,
-      gap: Spacing.sm,
-      marginBottom: Spacing.base,
-    },
-    actionBtn: {
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-      paddingVertical: Spacing.lg,
-      borderRadius: Radii.lg,
-      gap: 8,
-      borderWidth: 1,
-      borderColor: "transparent",
-    },
-    actionBtnSecondary: {
-      backgroundColor: colors.bg.card,
-      borderColor: colors.border.default,
-    },
-    actionIconBox: {
-      width: 36,
-      height: 36,
-      borderRadius: Radii.md,
-      backgroundColor: colors.brand.primaryDim,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-    },
-    actionIconBoxLight: {
-      width: 36,
-      height: 36,
-      borderRadius: Radii.md,
-      backgroundColor: "rgba(255,255,255,0.18)",
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-    },
-    actionBtnLabel: {
-      fontSize: Typography.size.xs,
-      fontFamily: Typography.fontBold,
-      color: colors.text.primary,
-      letterSpacing: 1,
-    },
-    actionBtnLabelAccent: {
-      fontSize: Typography.size.xs,
-      fontFamily: Typography.fontBold,
-      color: "#fff",
-      letterSpacing: 1,
-    },
+      {/* KPI row */}
+      <FadeInItem delay={80}>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          {isLoading ? (
+            <>
+              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+            </>
+          ) : isError ? (
+            <PressableScale onPress={() => refetch()} haptic="light" style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 64, borderRadius: Radii.lg, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "30" }}>
+                <Feather name="wifi-off" size={14} color={colors.status.danger} />
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger }}>Ошибка — тап</Text>
+              </View>
+            </PressableScale>
+          ) : (
+            <>
+              <KpiCard label="ЗАКАЗОВ" value={kpis?.todayOrders ?? 0} icon="shopping-cart" color={KpiColors.indigo} colors={colors} isDark={isDark} />
+              <KpiCard label="ВЫРУЧКА" value={(kpis?.todayRevenue ?? 0).toLocaleString("ru")} icon="trending-up" color={KpiColors.green} colors={colors} isDark={isDark} />
+              <KpiCard label="АГЕНТЫ" value={`${kpis?.onlineAgents ?? 0}/${kpis?.activeAgents ?? 0}`} icon="users" color={KpiColors.teal} colors={colors} isDark={isDark} />
+            </>
+          )}
+        </View>
+      </FadeInItem>
 
-    planItem: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      padding: Spacing.base,
-    },
-    planDot: {
-      width: 36,
-      height: 36,
-      borderRadius: Radii.full,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-      flexShrink: 0,
-    },
-    planName: {
-      fontSize: Typography.size.sm,
-      fontFamily: Typography.fontSemibold,
-      color: colors.text.primary,
-    },
-    planAddress: {
-      fontSize: Typography.size.xs,
-      color: colors.text.muted,
-      marginTop: 2,
-    },
-    planDebt: {
-      fontSize: Typography.size.xs,
-      fontFamily: Typography.fontSemibold,
-      color: colors.status.danger,
-    },
-    doneBtn: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      gap: 4,
-      backgroundColor: colors.brand.primary,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: Radii.md,
-    },
-    doneBtnText: {
-      fontSize: Typography.size.xs,
-      color: "#fff",
-      fontFamily: Typography.fontSemibold,
-    },
-    itemDivider: {
-      height: 1,
-      backgroundColor: colors.border.subtle,
-      marginLeft: Spacing.base + 36 + 12,
-    },
-    emptyPlans: {
-      padding: Spacing.xl,
-      alignItems: "center" as const,
-      gap: 8,
-    },
-    emptyText: {
-      fontSize: Typography.size.sm,
-      color: colors.text.muted,
-    },
-  };
+      {/* Quick actions */}
+      <FadeInItem delay={160}>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          <PressableScale onPress={() => router.push("/(tabs)/tracking")} haptic="light" style={{ flex: 1 }}>
+            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.md, gap: 8 }}>
+              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="map-pin" size={18} color="#fff" />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>ТРЕКИНГ</Text>
+            </LinearGradient>
+          </PressableScale>
+          <PressableScale onPress={() => router.push("/(tabs)/plans")} haptic="light" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.md, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default, ...Shadows.panel }}>
+              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="calendar" size={18} color={colors.brand.primaryLight} />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>ПЛАНЫ</Text>
+            </View>
+          </PressableScale>
+        </View>
+      </FadeInItem>
+    </ScrollView>
+  );
+}
+
+// ── Courier Home ──────────────────────────────────────────────────────────────
+const COURIER_STATUS: Record<string, { icon: IconName; variant: string; label: string }> = {
+  assigned:         { icon: "package",    variant: "info",    label: "Назначен" },
+  out_for_delivery: { icon: "truck",      variant: "warning", label: "В пути" },
+  delivered:        { icon: "check-circle", variant: "success", label: "Доставлен" },
+  failed:           { icon: "x-circle",   variant: "danger",  label: "Ошибка" },
+};
+
+function CourierHome() {
+  const router = useRouter();
+  const colors = useThemeColors();
+  const { isDark } = useThemeStore();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
+
+  const { data: deliveries, isLoading, refetch } = useQuery({
+    queryKey: ["myDeliveries"],
+    queryFn: () => import("../../src/api").then(m => m.listMyDeliveries()),
+    retry: false,
+  });
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
+  const firstName = (user?.name ?? user?.email ?? "Курьер").split(" ")[0];
+
+  const assigned = (deliveries ?? []).filter((d: any) => d.deliveryStatus === "assigned").length;
+  const inTransit = (deliveries ?? []).filter((d: any) => d.deliveryStatus === "out_for_delivery").length;
+  const delivered = (deliveries ?? []).filter((d: any) => d.deliveryStatus === "delivered").length;
+  const total = (deliveries ?? []).length;
+
+  const scrollRefresh = <RefreshControl refreshing={false} onRefresh={refetch} tintColor={colors.brand.primary} />;
+  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <FadeInItem delay={0}>
+        <View style={{ marginBottom: Spacing.lg }}>
+          <CardDots />
+          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
+          <Text style={{ fontSize: Typography.size.xl, fontFamily: Typography.fontBold, color: colors.text.primary, marginTop: 2 }}>Доставки</Text>
+        </View>
+      </FadeInItem>
+
+      {/* KPI row */}
+      <FadeInItem delay={80}>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          {isLoading ? (
+            <>
+              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+            </>
+          ) : (
+            <>
+              <KpiCard label="ОЖИДАЮТ" value={assigned} icon="package" color={KpiColors.blue} colors={colors} isDark={isDark} />
+              <KpiCard label="В ПУТИ" value={inTransit} icon="truck" color={KpiColors.amber} colors={colors} isDark={isDark} />
+              <KpiCard label="ДОСТАВЛЕНО" value={delivered} icon="check-circle" color={KpiColors.green} colors={colors} isDark={isDark} />
+            </>
+          )}
+        </View>
+      </FadeInItem>
+
+      {/* Progress */}
+      <FadeInItem delay={120}>
+        <Card style={{ marginBottom: Spacing.base }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ПРОГРЕСС ДНЯ</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.accent.primary, fontVariant: ["tabular-nums"] }}>
+              {delivered}/{total} · {total > 0 ? Math.round((delivered / total) * 100) : 0}%
+            </Text>
+          </View>
+          <View style={{ height: 6, backgroundColor: colors.bg.elevated, borderRadius: 3, overflow: "hidden" }}>
+            <View style={{ height: "100%", borderRadius: 3, width: `${total > 0 ? (delivered / total) * 100 : 0}%`, backgroundColor: colors.status.success }} />
+          </View>
+          <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 8 }}>
+            {total === 0 ? "Нет заказов на сегодня" : delivered === total ? "Все доставлены!" : `Осталось ${total - delivered}`}
+          </Text>
+        </Card>
+      </FadeInItem>
+
+      {/* Quick actions */}
+      <FadeInItem delay={160}>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          <PressableScale onPress={() => router.push("/(tabs)/deliveries")} haptic="none" style={{ flex: 1 }}>
+            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
+              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="truck" size={18} color="#fff" />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>ДОСТАВКИ</Text>
+            </LinearGradient>
+          </PressableScale>
+          <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="none" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="user" size={18} color={colors.status.info} />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>ПРОФИЛЬ</Text>
+            </View>
+          </PressableScale>
+        </View>
+      </FadeInItem>
+
+      {/* Recent deliveries */}
+      <FadeInItem delay={240}>
+        <SectionHeader title="Последние доставки" />
+      </FadeInItem>
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        {isLoading ? (
+          <View style={{ padding: Spacing.base, gap: 10 }}>
+            {[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={56} radius={Radii.lg} />)}
+          </View>
+        ) : !(deliveries as any[])?.length ? (
+          <View style={{ padding: Spacing.xl, alignItems: "center", gap: 8 }}>
+            <Feather name="truck" size={28} color={colors.text.muted} />
+            <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>Доставок пока нет</Text>
+          </View>
+        ) : (
+          (deliveries as any[]).slice(0, 5).map((d: any, idx: number) => {
+            const cfg = COURIER_STATUS[d.deliveryStatus] ?? COURIER_STATUS.assigned;
+            return (
+              <View key={d.id}>
+                <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(tabs)/deliveries")}
+                  style={{ flexDirection: "row", alignItems: "center", padding: Spacing.base, gap: Spacing.md }}>
+                  <View style={{ width: 36, height: 36, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="truck" size={16} color={colors.accent.primary} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{d.orderNumber}</Text>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>{d.shopName ?? "—"}</Text>
+                  </View>
+                  <View style={{ backgroundColor: cfg.variant === "success" ? colors.status.successDim : cfg.variant === "warning" ? colors.status.warningDim : cfg.variant === "danger" ? colors.status.dangerDim : colors.status.infoDim, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 11, fontFamily: Typography.fontSemibold, color: cfg.variant === "success" ? colors.status.success : cfg.variant === "warning" ? colors.status.warning : cfg.variant === "danger" ? colors.status.danger : colors.status.info }}>{cfg.label}</Text>
+                  </View>
+                </TouchableOpacity>
+                {idx < Math.min((deliveries as any[]).length, 5) - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 52 }} />}
+              </View>
+            );
+          })
+        )}
+      </Card>
+    </ScrollView>
+  );
+}
+
+// ── Role router ───────────────────────────────────────────────────────────────
+export default function HomeScreen() {
+  const { user, isLoading } = useAuthStore();
+  if (isLoading || !user) return null;
+  const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
+  const isCourier = user?.role === "courier";
+  if (isCourier) return <CourierHome />;
+  return isSupervisor ? <SupervisorHome /> : <AgentHome />;
 }

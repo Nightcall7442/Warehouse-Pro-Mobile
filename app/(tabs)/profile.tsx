@@ -1,644 +1,295 @@
+// Warehouse Pro — Profile (matches web Settings.tsx exactly)
 import { useState, useEffect, useCallback } from "react";
-import {
-  View,
-  ViewStyle,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Switch,
-  Alert,
-  ActivityIndicator,
-  RefreshControl,
-  Image,
-} from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Switch, Alert, ActivityIndicator, RefreshControl, Image } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "../../src/store/auth";
 import { updateProfile, changePassword, getAgentDashboard, getMyShops } from "../../src/api";
-import { useThemeStore } from "../../src/store/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { notify } from "../../src/store/toast";
-import { ShimmerSkeleton } from "../../src/components/Animated";
-import { TextStyle } from "react-native";
-import {
-  WebColors,
-  WebShadows,
-  WebTypography,
-  WebSpacing,
-  WebRadii,
-  createWebStyles,
-} from "../../src/theme-web-match";
-
-// Cast font weights to React Native compatible types
-const FW = WebTypography.weight as Record<string, TextStyle["fontWeight"]>;
+import { Typography, Spacing, Radii, Shadows, ThemeColors } from "../../src/theme";
+import { DarkShadowColor } from "../../src/theme";
+import Constants from "expo-constants";
 
 type IconName = keyof typeof Feather.glyphMap;
 
-const ROLE_META: Record<string, { label: string; icon: IconName; color: string }> = {
-  agent:        { label: "Агент",          icon: "truck",       color: WebColors.light.primary },
-  supervisor:   { label: "Супервайзер",    icon: "eye",         color: WebColors.light.success },
-  ceo:          { label: "Руководитель",   icon: "briefcase",   color: WebColors.light.warning },
-  operator:     { label: "Оператор",       icon: "headphones",  color: WebColors.light.success },
-  merchandiser: { label: "Мерчандайзер",   icon: "tag",         color: WebColors.light.success },
+const ROLE_META: Record<string, { label: string; icon: IconName }> = {
+  agent: { label: "Агент", icon: "truck" },
+  supervisor: { label: "Супервайзер", icon: "eye" },
+  ceo: { label: "Руководитель", icon: "briefcase" },
+  operator: { label: "Оператор", icon: "headphones" },
+  merchandiser: { label: "Мерчандайзер", icon: "tag" },
+  courier: { label: "Курьер", icon: "truck" },
 };
 
-// ── Stat card for role-specific KPIs (web kpi-hero style) ────────────────────
-function StatCard({ label, value, icon, color }: { label: string; value: string | number; icon: IconName; color: string }) {
-  const { isDark } = useThemeStore();
-  const styles = createWebStyles(isDark);
-  const c = isDark ? WebColors.dark : WebColors.light;
-
+// ── Web-matching components ──────────────────────────────────────────────────
+function NeoCard({ children, style, colors, isDark }: { children: React.ReactNode; style?: object; colors: ThemeColors; isDark: boolean }) {
+  const sc = isDark ? DarkShadowColor : Shadows.lg.shadowColor;
   return (
-    <View style={[styles.kpiHero, { flex: 1 }]}>
-      <View style={{
-        width: 32, height: 32, borderRadius: WebRadii.sm,
-        backgroundColor: color + "18", alignItems: "center", justifyContent: "center",
-        marginBottom: WebSpacing.sm,
-      }}>
-        <Feather name={icon} size={16} color={color} />
-      </View>
-      <Text style={{
-        fontFamily: WebTypography.fontFamily,
-        fontSize: 28,
-        fontWeight: FW.bold,
-        color: c.textPrimary,
-      }}>
-        {value}
-      </Text>
-      <Text style={[styles.kpiHeroLabel, { marginTop: 2 }]}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-// ── Section header ───────────────────────────────────────────────────────────
-function SectionHeader({ title }: { title: string }) {
-  const { isDark } = useThemeStore();
-  const styles = createWebStyles(isDark);
-  return <Text style={styles.sectionHeader}>{title}</Text>;
-}
-
-// ── Setting row (web neo-card style) ─────────────────────────────────────────
-function SettingRow({
-  icon, label, sublabel, right, onPress, danger, isDark,
-}: {
-  icon: IconName; label: string; sublabel?: string; right?: React.ReactNode;
-  onPress?: () => void; danger?: boolean; isDark: boolean;
-}) {
-  const c = isDark ? WebColors.dark : WebColors.light;
-  const s = isDark ? WebShadows.dark : WebShadows.light;
-  const styles = createWebStyles(isDark);
-
-  const rowStyle: ViewStyle = {
-    flexDirection: "row", alignItems: "center",
-    paddingVertical: WebSpacing.base, paddingHorizontal: WebSpacing.lg,
-    gap: WebSpacing.base,
-  };
-
-  const iconBg = danger ? c.dangerSubtle : c.primarySubtle;
-  const iconColor = danger ? c.danger : c.primary;
-
-  if (onPress) {
-    return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-        <View style={[rowStyle, {
-          backgroundColor: c.surface,
-          borderRadius: WebRadii.xl,
-          borderWidth: 1,
-          borderColor: c.border,
-          ...s.md,
-          marginBottom: WebSpacing.sm,
-        }]}>
-          <View style={{
-            width: 36, height: 36, borderRadius: WebRadii.md, alignItems: "center", justifyContent: "center",
-            backgroundColor: iconBg,
-          }}>
-            <Feather name={icon} size={17} color={iconColor} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{
-              fontFamily: WebTypography.fontFamily,
-              fontSize: WebTypography.size.base,
-              fontWeight: FW.medium,
-              color: danger ? c.danger : c.textPrimary,
-            }}>
-              {label}
-            </Text>
-            {sublabel && (
-              <Text style={{
-                fontFamily: WebTypography.fontFamily,
-                fontSize: WebTypography.size.sm,
-                fontWeight: FW.normal,
-                color: c.textTertiary, marginTop: 2,
-              }}>
-                {sublabel}
-              </Text>
-            )}
-          </View>
-          {right ?? <Feather name="chevron-right" size={16} color={c.textTertiary} />}
-        </View>
-      </TouchableOpacity>
-    );
-  }
-
-  return (
-    <View style={[rowStyle, {
-      backgroundColor: c.surface,
-      borderRadius: WebRadii.xl,
+    <View style={{
+      backgroundColor: colors.bg.card,
+      borderRadius: Radii.xxl,
+      padding: Spacing.xl,
       borderWidth: 1,
-      borderColor: c.border,
-      ...s.md,
-      marginBottom: WebSpacing.sm,
-    }]}>
-      <View style={{
-        width: 36, height: 36, borderRadius: WebRadii.md, alignItems: "center", justifyContent: "center",
-        backgroundColor: iconBg,
-      }}>
-        <Feather name={icon} size={17} color={iconColor} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{
-          fontFamily: WebTypography.fontFamily,
-          fontSize: WebTypography.size.base,
-          fontWeight: FW.medium,
-          color: danger ? c.danger : c.textPrimary,
-        }}>
-          {label}
-        </Text>
-        {sublabel && (
-          <Text style={{
-            fontFamily: WebTypography.fontFamily,
-            fontSize: WebTypography.size.sm,
-            fontWeight: FW.normal,
-            color: c.textTertiary, marginTop: 2,
-          }}>
-            {sublabel}
-          </Text>
-        )}
-      </View>
-      {right}
-    </View>
-  );
-}
-
-// ── Divider ──────────────────────────────────────────────────────────────────
-function Divider({ isDark }: { isDark: boolean }) {
-  const styles = createWebStyles(isDark);
-  return <View style={styles.divider} />;
-}
-
-// ── Card wrapper (web neo-card style) ────────────────────────────────────────
-function Card({ children, isDark, style }: { children: React.ReactNode; isDark: boolean; style?: ViewStyle }) {
-  const styles = createWebStyles(isDark);
-  return (
-    <View style={[styles.neoCard, { marginBottom: WebSpacing.lg, overflow: "hidden" }, style]}>
+      borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+      shadowColor: sc, shadowOffset: Shadows.lg.shadowOffset, shadowOpacity: Shadows.lg.shadowOpacity,
+      shadowRadius: Shadows.lg.shadowRadius, elevation: Shadows.lg.elevation,
+      overflow: "hidden",
+      ...style,
+    }}>
+      {/* Top highlight line (matches web .neo-card::before) */}
+      <View pointerEvents="none" style={{ position: "absolute", top: 0, left: Spacing.xl, right: Spacing.xl, height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.4)" }} />
       {children}
     </View>
   );
 }
 
-// ── Main screen ──────────────────────────────────────────────────────────────
+function NeoInput({ value, onChangeText, placeholder, secureTextEntry, keyboardType, colors, isDark, style }: {
+  value: string; onChangeText: (t: string) => void; placeholder?: string; secureTextEntry?: boolean;
+  keyboardType?: "default" | "email-address" | "phone-pad" | "numeric"; colors: ThemeColors; isDark: boolean; style?: object;
+}) {
+  const sc = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={colors.text.tertiary}
+      secureTextEntry={secureTextEntry}
+      keyboardType={keyboardType}
+      style={[{
+        backgroundColor: colors.bg.input,
+        borderRadius: Radii.lg,
+        borderWidth: 0,
+        paddingHorizontal: 18,
+        paddingVertical: 13,
+        fontSize: Typography.size.base,
+        fontFamily: Typography.fontRegular,
+        color: colors.text.primary,
+        // Inset shadow (matches web neo-input box-shadow: var(--shadow-pressed))
+        shadowColor: sc,
+        shadowOffset: { width: -3, height: -3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+        elevation: -1,
+      }, style]}
+    />
+  );
+}
+
+function Label({ children, colors }: { children: React.ReactNode; colors: ThemeColors }) {
+  return (
+    <Text style={{ fontSize: 10, fontFamily: Typography.fontMedium, color: colors.text.secondary, letterSpacing: 0.06, textTransform: "uppercase" as const, marginBottom: 6 }}>
+      {children}
+    </Text>
+  );
+}
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, toggleTheme } = useThemeStore();
   const { user, logout, updateUser } = useAuthStore();
-  const c = isDark ? WebColors.dark : WebColors.light;
-  const s = isDark ? WebShadows.dark : WebShadows.light;
-  const styles = createWebStyles(isDark);
+  const colors = useThemeColors();
 
-  const [editName, setEditName] = useState(false);
   const [newName, setNewName] = useState(user?.name ?? "");
-  const [editPwd, setEditPwd] = useState(false);
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (!editName && user?.name) setNewName(user.name);
-  }, [user?.name, editName]);
+  useEffect(() => { if (user?.name) setNewName(user.name); }, [user?.name]);
 
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
-  const roleMeta = ROLE_META[user?.role ?? ""] ?? { label: user?.role ?? "—", icon: "user" as IconName, color: WebColors.light.primary };
+  const isCourier = user?.role === "courier";
+  const isAgent = user?.role === "agent";
+  const roleMeta = ROLE_META[user?.role ?? ""] ?? { label: user?.role ?? "—", icon: "user" as IconName };
 
-  const { data: kpis, refetch: refetchKpis } = useQuery({
-    queryKey: ["agentDashboard"],
-    queryFn: getAgentDashboard,
-    enabled: !isSupervisor,
-  });
-  const { refetch: refetchShops } = useQuery({
-    queryKey: ["shops"],
-    queryFn: getMyShops,
-    enabled: !isSupervisor,
-  });
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([refetchKpis(), refetchShops()]);
-    setRefreshing(false);
-  };
+  const { data: kpis, refetch: refetchKpis } = useQuery({ queryKey: ["agentDashboard"], queryFn: getAgentDashboard, enabled: isAgent });
+  const { refetch: refetchShops } = useQuery({ queryKey: ["shops"], queryFn: getMyShops, enabled: isAgent || isSupervisor });
+  const onRefresh = async () => { setRefreshing(true); await Promise.all([refetchKpis(), refetchShops()]); setRefreshing(false); };
 
   const updateMutation = useMutation({
     mutationFn: (data: { name: string }) => updateProfile(data),
-    onSuccess: (_, variables) => {
-      updateUser({ name: variables.name });
-      setEditName(false);
-      notify.success("Имя обновлено");
-    },
+    onSuccess: (_, v) => { updateUser({ name: v.name }); notify.success("Профиль обновлён"); },
     onError: (e: Error) => notify.error(e.message),
   });
 
   const avatarMutation = useMutation({
-    mutationFn: (data: { avatar: string }) => updateProfile(data),
-    onSuccess: (_, variables) => {
-      updateUser({ avatar: variables.avatar });
-      notify.success("Аватар обновлён");
-    },
+    mutationFn: (d: { avatar: string }) => updateProfile(d),
+    onSuccess: (_, v) => { updateUser({ avatar: v.avatar }); notify.success("Аватар обновлён"); },
     onError: (e: Error) => notify.error(e.message),
   });
 
   const handleAvatarPress = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Нужно разрешение", "Для выбора фото предоставьте доступ к галерее");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      avatarMutation.mutate({ avatar: result.assets[0].uri });
-    }
+    if (status !== "granted") { Alert.alert("Нужно разрешение", "Доступ к галерее"); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    if (!result.canceled && result.assets[0]) avatarMutation.mutate({ avatar: result.assets[0].uri });
   }, [avatarMutation]);
 
   const pwdMutation = useMutation({
-    mutationFn: (data: { currentPassword: string; newPassword: string }) => changePassword(data),
-    onSuccess: () => {
-      setEditPwd(false);
-      setCurrentPwd("");
-      setNewPwd("");
-      setConfirmPwd("");
-      notify.success("Пароль изменён");
-    },
+    mutationFn: (d: { currentPassword: string; newPassword: string }) => changePassword(d),
+    onSuccess: () => { setCurrentPwd(""); setNewPwd(""); setConfirmPwd(""); notify.success("Пароль изменён"); },
     onError: (e: Error) => notify.error(e.message),
   });
 
-  const handleLogout = useCallback(() => {
-    Alert.alert("Выход", "Вы уверены, что хотите выйти из аккаунта?", [
-      { text: "Отмена", style: "cancel" },
-      { text: "Выйти", style: "destructive", onPress: logout },
-    ]);
-  }, [logout]);
+  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.canvas }}>
-      {/* ── Header ── */}
-      <View style={{
-        paddingTop: insets.top + WebSpacing.xl,
-        paddingBottom: WebSpacing["3xl"],
-        paddingHorizontal: WebSpacing.xl,
-        backgroundColor: c.canvas,
-      }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: WebSpacing.xl }}>
-          <Text style={{
-            fontFamily: WebTypography.fontFamily,
-            fontSize: WebTypography.size.xxl,
-            fontWeight: FW.bold,
-            color: c.textPrimary,
-          }}>
-            Профиль
-          </Text>
-          <TouchableOpacity
-            onPress={() => setEditName(true)}
-            activeOpacity={0.7}
-          >
-            <View style={{
-              width: 36, height: 36, borderRadius: WebRadii.xl,
-              backgroundColor: c.surface,
-              alignItems: "center", justifyContent: "center",
-              borderWidth: 1, borderColor: c.border,
-            }}>
-              <Feather name="edit-2" size={16} color={c.textPrimary} />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Avatar + info */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: WebSpacing.base }}>
-          <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8}>
-            <View style={styles.avatar}>
-              {user?.avatar ? (
-                <Image source={{ uri: user.avatar }} style={{ width: 80, height: 80, borderRadius: WebRadii.full }} />
-              ) : (
-                <Text style={{
-                  fontFamily: WebTypography.fontFamily,
-                  fontSize: WebTypography.size["2xl"],
-                  fontWeight: FW.bold,
-                  color: c.textPrimary,
-                }}>
-                  {(user?.name ?? "?")[0].toUpperCase()}
-                </Text>
-              )}
-              <View style={{
-                position: "absolute", bottom: 2, right: 2, width: 24, height: 24, borderRadius: WebRadii.full,
-                backgroundColor: c.primary, alignItems: "center", justifyContent: "center",
-                borderWidth: 2, borderColor: c.canvas,
-              }}>
-                <Feather name="camera" size={10} color="#fff" />
-              </View>
-            </View>
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={{
-              fontFamily: WebTypography.fontFamily,
-              fontSize: WebTypography.size.lg,
-              fontWeight: FW.bold,
-              color: c.textPrimary,
-            }}>
-              {user?.name ?? "—"}
-            </Text>
-            <Text style={{
-              fontFamily: WebTypography.fontFamily,
-              fontSize: WebTypography.size.sm,
-              fontWeight: FW.normal,
-              color: c.textSecondary, marginTop: 2,
-            }}>
-              {user?.email ?? ""}
-            </Text>
-            <View style={{
-              marginTop: WebSpacing.sm, flexDirection: "row", alignItems: "center", gap: WebSpacing.xs,
-              backgroundColor: c.primarySubtle, paddingHorizontal: WebSpacing.sm, paddingVertical: WebSpacing.xs,
-              borderRadius: WebRadii.full, alignSelf: "flex-start",
-            }}>
-              <Feather name={roleMeta.icon} size={12} color={c.primary} />
-              <Text style={{
-                fontFamily: WebTypography.fontFamily,
-                fontSize: WebTypography.size.xs,
-                fontWeight: FW.semibold,
-                color: c.primary,
-              }}>
-                {roleMeta.label}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
+    <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       <ScrollView
-        style={{ flex: 1, marginTop: -WebSpacing.lg }}
-        contentContainerStyle={{ paddingHorizontal: WebSpacing.lg, paddingBottom: insets.bottom + WebSpacing.xl }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}>
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.primary} />}
+      >
+        {/* Title */}
+        <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 24, color: colors.text.primary, marginBottom: Spacing.xl }}>Настройки</Text>
 
-        {/* ── Role-specific stats ── */}
-        {!isSupervisor && (
-          <>
-            <SectionHeader title="СТАТИСТИКА" />
-            {kpis ? (
-              <View style={{ flexDirection: "row", gap: WebSpacing.sm }}>
-                <StatCard label="ЗАКАЗЫ" value={kpis?.todayOrders ?? 0} icon="shopping-cart" color={WebColors.light.warning} />
-                <StatCard label="МАГАЗИНЫ" value={kpis?.assignedShops ?? 0} icon="shopping-bag" color={c.primary} />
-                <StatCard
-                  label="ВЫРУЧКА"
-                  value={`${((kpis?.todayRevenue ?? 0)).toLocaleString("ru")} сум`}
-                  icon="trending-up"
-                  color={WebColors.light.success}
-                />
-              </View>
-            ) : (
-              <View style={{ flexDirection: "row", gap: WebSpacing.sm }}>
-                <ShimmerSkeleton height={110} radius={WebRadii.lg} style={{ flex: 1 }} />
-                <ShimmerSkeleton height={110} radius={WebRadii.lg} style={{ flex: 1 }} />
-                <ShimmerSkeleton height={110} radius={WebRadii.lg} style={{ flex: 1 }} />
-              </View>
-            )}
-          </>
-        )}
-
-        {/* ── Personal info ── */}
-        <SectionHeader title="ЛИЧНЫЕ ДАННЫЕ" />
-        <Card isDark={isDark}>
-          {editName ? (
-            <View style={{ padding: WebSpacing.lg, gap: WebSpacing.sm }}>
-              <Text style={{
-                fontFamily: WebTypography.fontFamily,
-                fontSize: WebTypography.size.base,
-                fontWeight: FW.semibold,
-                color: c.textPrimary, marginBottom: WebSpacing.xs,
+        {/* ── Profile Card ── */}
+        <NeoCard colors={colors} isDark={isDark}>
+          {/* Avatar row */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.lg, marginBottom: Spacing.xl }}>
+            <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8}>
+              <View style={{
+                width: 64, height: 64, borderRadius: Radii.lg, overflow: "hidden",
+                backgroundColor: colors.brand.primaryDim, borderWidth: 2, borderColor: colors.border.default,
+                alignItems: "center", justifyContent: "center",
               }}>
-                Изменить имя
-              </Text>
-              <TextInput
-                value={newName}
-                onChangeText={setNewName}
-                style={styles.neoInput}
-                placeholder="Введите имя"
-                placeholderTextColor={c.textTertiary}
-                autoFocus
-              />
-              <View style={{ flexDirection: "row", gap: WebSpacing.sm }}>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    updateMutation.mutate({ name: newName });
-                  }}
-                  disabled={updateMutation.isPending || !newName.trim()}
-                  style={[styles.neoBtnPrimary, {
-                    flex: 1, opacity: updateMutation.isPending || !newName.trim() ? 0.5 : 1,
-                  }]}>
-                  {updateMutation.isPending
-                    ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={{
-                        fontFamily: WebTypography.fontFamily,
-                        fontSize: WebTypography.size.sm,
-                        fontWeight: FW.semibold,
-                        color: "#fff",
-                      }}>Сохранить</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setEditName(false);
-                    setNewName(user?.name ?? "");
-                  }}
-                  style={[styles.neoBtn, { flex: 1 }]}>
-                  <Text style={{
-                    fontFamily: WebTypography.fontFamily,
-                    fontSize: WebTypography.size.sm,
-                    fontWeight: FW.medium,
-                    color: c.textSecondary,
-                  }}>Отмена</Text>
-                </TouchableOpacity>
+                {user?.avatar ? (
+                  <Image source={{ uri: user.avatar }} style={{ width: 64, height: 64 }} />
+                ) : (
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: colors.accent.primary }}>
+                    {(user?.name ?? "?")[0]?.toUpperCase()}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{user?.name ?? "—"}</Text>
+              <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2 }}>{user?.email ?? ""}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, backgroundColor: colors.brand.primaryDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.full, alignSelf: "flex-start" }}>
+                <Feather name={roleMeta.icon} size={11} color={colors.accent.primary} />
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: colors.accent.primary }}>{roleMeta.label}</Text>
               </View>
             </View>
-          ) : (
-            <View style={{ padding: WebSpacing.base }}>
-              <SettingRow icon="user" label={user?.name ?? "—"} sublabel="Имя"
-                onPress={() => { setNewName(user?.name ?? ""); setEditName(true); }} isDark={isDark} />
+          </View>
+
+          {/* ОСНОВНОЕ */}
+          <Label colors={colors}>ОСНОВНОЕ</Label>
+          <View style={{ gap: Spacing.sm, marginBottom: Spacing.lg }}>
+            <View>
+              <Label colors={colors}>ИМЯ</Label>
+              <NeoInput value={newName} onChangeText={setNewName} placeholder="Введите имя" colors={colors} isDark={isDark} />
             </View>
-          )}
-          <Divider isDark={isDark} />
-          <View style={{ padding: WebSpacing.base }}>
-            <SettingRow icon="mail" label={user?.email ?? "—"} sublabel="Email" isDark={isDark} />
+            <View>
+              <Label colors={colors}>EMAIL</Label>
+              <NeoInput value={user?.email ?? ""} onChangeText={() => {}} placeholder="email" keyboardType="email-address" colors={colors} isDark={isDark} style={{ opacity: 0.6 }} />
+            </View>
           </View>
-          <Divider isDark={isDark} />
-          <View style={{ padding: WebSpacing.base }}>
-            <SettingRow icon="shield" label={roleMeta.label} sublabel="Роль в системе" isDark={isDark} />
-          </View>
-          {user?.tenant && (
-            <>
-              <Divider isDark={isDark} />
-              <View style={{ padding: WebSpacing.base }}>
-                <SettingRow icon="briefcase" label={user.tenant.name} sublabel="Компания" isDark={isDark} />
+          {/* Save button (matches web neo-btn-primary) */}
+          <TouchableOpacity
+            onPress={() => updateMutation.mutate({ name: newName })}
+            disabled={updateMutation.isPending || !newName.trim()}
+            activeOpacity={0.85}
+            style={{
+              flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+              backgroundColor: colors.accent.primary,
+              borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20,
+              opacity: updateMutation.isPending || !newName.trim() ? 0.4 : 1,
+              shadowColor: colors.accent.primary, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
+            }}>
+            {updateMutation.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Feather name="save" size={14} color="#fff" />}
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>Сохранить профиль</Text>
+          </TouchableOpacity>
+        </NeoCard>
+
+        {/* ── Password Card ── */}
+        <NeoCard colors={colors} isDark={isDark} style={{ marginTop: Spacing.base }}>
+          <Label colors={colors}>СМЕНА ПАРОЛЯ</Label>
+          <View style={{ gap: Spacing.sm, marginBottom: Spacing.lg }}>
+            {[
+              { label: "ТЕКУЩИЙ ПАРОЛЬ", value: currentPwd, setter: setCurrentPwd },
+              { label: "НОВЫЙ ПАРОЛЬ", value: newPwd, setter: setNewPwd },
+              { label: "ПОДТВЕРДИТЕ НОВЫЙ", value: confirmPwd, setter: setConfirmPwd },
+            ].map((f, i) => (
+              <View key={i}>
+                <Label colors={colors}>{f.label}</Label>
+                <NeoInput value={f.value} onChangeText={f.setter} secureTextEntry placeholder="••••••••" colors={colors} isDark={isDark} />
               </View>
-            </>
-          )}
-        </Card>
-
-        {/* ── Security ── */}
-        <SectionHeader title="БЕЗОПАСНОСТЬ" />
-        <Card isDark={isDark}>
-          {editPwd ? (
-            <View style={{ padding: WebSpacing.lg, gap: WebSpacing.sm }}>
-              <Text style={{
-                fontFamily: WebTypography.fontFamily,
-                fontSize: WebTypography.size.base,
-                fontWeight: FW.semibold,
-                color: c.textPrimary, marginBottom: WebSpacing.xs,
-              }}>
-                Сменить пароль
-              </Text>
-              {[
-                { label: "Текущий пароль", value: currentPwd, setter: setCurrentPwd, key: "current" },
-                { label: "Новый пароль", value: newPwd, setter: setNewPwd, key: "new" },
-                { label: "Повторите пароль", value: confirmPwd, setter: setConfirmPwd, key: "confirm" },
-              ].map((f) => (
-                <TextInput
-                  key={f.key}
-                  value={f.value}
-                  onChangeText={f.setter}
-                  secureTextEntry
-                  style={[styles.neoInput, f.key === "confirm" && confirmPwd && confirmPwd !== newPwd
-                    ? { borderColor: c.danger }
-                    : {}]}
-                  placeholder={f.label}
-                  placeholderTextColor={c.textTertiary}
-                />
-              ))}
-              {confirmPwd && confirmPwd !== newPwd && (
-                <Text style={{
-                  fontFamily: WebTypography.fontFamily,
-                  fontSize: WebTypography.size.sm,
-                  fontWeight: FW.medium,
-                  color: c.danger,
-                }}>
-                  Пароли не совпадают
-                </Text>
-              )}
-              <View style={{ flexDirection: "row", gap: WebSpacing.sm }}>
-                <TouchableOpacity
-                  disabled={pwdMutation.isPending}
-                  onPress={() => {
-                    if (!currentPwd || !newPwd) return notify.error("Заполните все поля");
-                    if (newPwd !== confirmPwd) return notify.error("Пароли не совпадают");
-                    if (newPwd.length < 8) return notify.error("Минимум 8 символов");
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    pwdMutation.mutate({ currentPassword: currentPwd, newPassword: newPwd });
-                  }}
-                  style={[styles.neoBtnPrimary, { flex: 1 }]}>
-                  {pwdMutation.isPending
-                    ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={{
-                        fontFamily: WebTypography.fontFamily,
-                        fontSize: WebTypography.size.sm,
-                        fontWeight: FW.semibold,
-                        color: "#fff",
-                      }}>Изменить</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setEditPwd(false);
-                    setCurrentPwd("");
-                    setNewPwd("");
-                    setConfirmPwd("");
-                  }}
-                  style={[styles.neoBtn, { flex: 1 }]}>
-                  <Text style={{
-                    fontFamily: WebTypography.fontFamily,
-                    fontSize: WebTypography.size.sm,
-                    fontWeight: FW.medium,
-                    color: c.textSecondary,
-                  }}>Отмена</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={{ padding: WebSpacing.base }}>
-              <SettingRow icon="lock" label="Сменить пароль" sublabel="Обновить пароль аккаунта"
-                onPress={() => setEditPwd(true)} isDark={isDark} />
-            </View>
-          )}
-        </Card>
-
-        {/* ── Appearance ── */}
-        <SectionHeader title="ОФОРМЛЕНИЕ" />
-        <Card isDark={isDark}>
-          <View style={{ padding: WebSpacing.base }}>
-            <SettingRow
-              icon={isDark ? "moon" : "sun"}
-              label={isDark ? "Тёмная тема" : "Светлая тема"}
-              sublabel="Переключить оформление"
-              isDark={isDark}
-              right={
-                <Switch
-                  value={isDark}
-                  onValueChange={() => {
-                    Haptics.selectionAsync();
-                    toggleTheme();
-                  }}
-                  trackColor={{ false: c.border, true: c.primary }}
-                  thumbColor={isDark ? c.primary : "#fff"}
-                />
-              }
-            />
+            ))}
           </View>
-        </Card>
+          {/* Change password button (matches web neo-btn) */}
+          <TouchableOpacity
+            onPress={() => {
+              if (!currentPwd || !newPwd) return notify.error("Заполните все поля");
+              if (newPwd !== confirmPwd) return notify.error("Пароли не совпадают");
+              if (newPwd.length < 8) return notify.error("Минимум 8 символов");
+              pwdMutation.mutate({ currentPassword: currentPwd, newPassword: newPwd });
+            }}
+            disabled={pwdMutation.isPending || !currentPwd || !newPwd}
+            activeOpacity={0.85}
+            style={{
+              flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+              backgroundColor: colors.bg.elevated,
+              borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20,
+              borderWidth: 1, borderColor: colors.border.default,
+              opacity: pwdMutation.isPending || !currentPwd || !newPwd ? 0.4 : 1,
+              shadowColor: sc, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity, shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation,
+            }}>
+            {pwdMutation.isPending ? <ActivityIndicator color={colors.text.primary} size="small" /> : <Feather name="lock" size={14} color={colors.text.secondary} />}
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>Изменить пароль</Text>
+          </TouchableOpacity>
+        </NeoCard>
 
-        {/* ── Logout ── */}
-        <SectionHeader title="АККАУНТ" />
-        <Card isDark={isDark}>
-          <View style={{ padding: WebSpacing.base }}>
-            <SettingRow icon="log-out" label="Выйти из аккаунта" danger onPress={handleLogout} isDark={isDark} />
+        {/* ── Appearance Card ── */}
+        <NeoCard colors={colors} isDark={isDark} style={{ marginTop: Spacing.base }}>
+          <Label colors={colors}>ТЕМА</Label>
+          <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+            <TouchableOpacity onPress={toggleTheme} activeOpacity={0.85} style={{
+              flex: 1, paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
+              backgroundColor: !isDark ? colors.accent.primary + "12" : colors.bg.elevated,
+              borderWidth: 1, borderColor: !isDark ? colors.accent.primary + "40" : colors.border.default,
+              shadowColor: !isDark ? colors.accent.primary : sc,
+              shadowOffset: { width: 0, height: 2 }, shadowOpacity: !isDark ? 0.15 : 0.1, shadowRadius: 8, elevation: 2,
+            }}>
+              <Feather name="sun" size={18} color={!isDark ? colors.accent.primary : colors.text.secondary} />
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: !isDark ? colors.accent.primary : colors.text.secondary }}>Светлая</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={toggleTheme} activeOpacity={0.85} style={{
+              flex: 1, paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
+              backgroundColor: isDark ? colors.accent.primary + "12" : colors.bg.elevated,
+              borderWidth: 1, borderColor: isDark ? colors.accent.primary + "40" : colors.border.default,
+              shadowColor: isDark ? colors.accent.primary : sc,
+              shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.15 : 0.1, shadowRadius: 8, elevation: 2,
+            }}>
+              <Feather name="moon" size={18} color={isDark ? colors.accent.primary : colors.text.secondary} />
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: isDark ? colors.accent.primary : colors.text.secondary }}>Тёмная</Text>
+            </TouchableOpacity>
           </View>
-        </Card>
+        </NeoCard>
 
-        {/* ── Version ── */}
-        <View style={{ alignItems: "center", marginTop: WebSpacing.lg, gap: WebSpacing.xs }}>
-          <Text style={{
-            fontFamily: WebTypography.fontFamily,
-            fontSize: WebTypography.size.sm,
-            fontWeight: FW.medium,
-            color: c.textTertiary,
+        {/* ── Logout Card ── */}
+        <TouchableOpacity
+          onPress={() => Alert.alert("Выход", "Вы уверены?", [{ text: "Отмена", style: "cancel" }, { text: "Выйти", style: "destructive", onPress: logout }])}
+          activeOpacity={0.85}
+          style={{
+            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+            backgroundColor: colors.bg.card, borderRadius: Radii.xxl,
+            padding: Spacing.lg, marginTop: Spacing.base,
+            borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+            shadowColor: sc, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity,
+            shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation,
           }}>
-            Warehouse Pro
-          </Text>
-          <Text style={{
-            fontFamily: WebTypography.fontFamily,
-            fontSize: WebTypography.size.xs,
-            fontWeight: FW.normal,
-            color: c.textTertiary,
-          }}>
-            v1.0.0 · {roleMeta.label}
-          </Text>
+          <Feather name="log-out" size={16} color={colors.status.danger} />
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.status.danger }}>Выйти из аккаунта</Text>
+        </TouchableOpacity>
+
+        {/* Version */}
+        <View style={{ alignItems: "center", marginTop: Spacing.xl }}>
+          <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>Warehouse Pro v{Constants.expoConfig?.version ?? "1.0.0"}</Text>
         </View>
       </ScrollView>
     </View>

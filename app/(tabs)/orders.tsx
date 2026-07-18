@@ -1,958 +1,157 @@
-import React, { useMemo, useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  SectionList,
-  RefreshControl,
-  TouchableOpacity,
-} from "react-native";
+// Warehouse Pro — Orders (minimal with date sections)
+import React, { useMemo, useCallback } from "react";
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
-
-import { getMyOrders, Order } from "../../src/api";
-import { useOfflineStore } from "../../src/store/offline";
+import { getMyOrders, deleteOrder, Order } from "../../src/api";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { useAuthStore } from "../../src/store/auth";
+import { Typography, Spacing, Radii } from "../../src/theme";
+import { DarkShadowColor } from "../../src/theme";
 import { notify } from "../../src/store/toast";
-import { useThemeStore } from "../../src/store/theme";
-import { FadeInItem, PressableScale } from "../../src/components/Animated";
-import {
-  WebColors,
-  WebShadows,
-  WebTypography,
-  WebSpacing,
-  WebRadii,
-  createWebStyles,
-} from "../../src/theme-web-match";
+import { Shadows } from "../../src/theme";
 
-type IconName = keyof typeof Feather.glyphMap;
+const BOTTOM_TAB_HEIGHT = 80;
 
-interface OfflineOrderItem {
-  id: string;
-  shopName: string;
-  createdAt: string;
-  input: { items: Array<unknown> };
-  _offline: boolean;
-}
-
-const STATUS_CONFIG: Record<
-  string,
-  {
-    label: string;
-    variant: "success" | "danger" | "warning" | "primary";
-    icon: IconName;
-  }
-> = {
-  new: { label: "Новый", variant: "primary", icon: "circle" },
-  processing: { label: "В обработке", variant: "warning", icon: "loader" },
-  completed: { label: "Выполнен", variant: "success", icon: "check-circle" },
-  cancelled: { label: "Отменён", variant: "danger", icon: "x-circle" },
-};
+type ListItem = { type: "header"; date: string; key: string } | { type: "order"; order: Order; key: string };
 
 function dayLabel(dateStr: string): string {
   try {
     const d = parseISO(dateStr);
     if (isToday(d)) return "Сегодня";
     if (isYesterday(d)) return "Вчера";
-    return format(d, "d MMMM, EEEE", { locale: ru });
-  } catch {
-    return "Без даты";
-  }
+    return format(d, "d MMMM", { locale: ru });
+  } catch { return ""; }
 }
 
 function dayKey(dateStr: string): string {
-  try {
-    return format(parseISO(dateStr), "yyyy-MM-dd");
-  } catch {
-    return "unknown";
-  }
+  try { return format(parseISO(dateStr), "yyyy-MM-dd"); } catch { return "unknown"; }
 }
 
-function groupByDay<T extends { createdAt: string }>(items: T[]) {
-  const map = new Map<string, { key: string; label: string; data: T[] }>();
-  for (const item of items) {
-    const key = dayKey(item.createdAt);
-    if (!map.has(key))
-      map.set(key, { key, label: dayLabel(item.createdAt), data: [] });
-    map.get(key)!.data.push(item);
-  }
-  return Array.from(map.values()).sort((a, b) =>
-    a.key < b.key ? 1 : a.key > b.key ? -1 : 0
-  );
-}
-
-// ── Status Badge (web exact) ──────────────────────────────────────────────────
-function StatusBadge({
-  variant,
-  label,
-  isDark,
-}: {
-  variant: "success" | "danger" | "warning" | "primary";
-  label: string;
-  isDark: boolean;
-}) {
-  const c = isDark ? WebColors.dark : WebColors.light;
-  const dotColor =
-    variant === "success"
-      ? c.success
-      : variant === "danger"
-        ? c.danger
-        : variant === "warning"
-          ? c.warning
-          : c.primary;
-  const bgColor =
-    variant === "success"
-      ? c.successSubtle
-      : variant === "danger"
-        ? c.dangerSubtle
-        : variant === "warning"
-          ? c.warningSubtle
-          : c.primarySubtle;
-
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: WebRadii.full,
-        borderWidth: 1,
-        borderColor: dotColor + "25",
-        backgroundColor: bgColor,
-      }}
-    >
-      <View
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: 3,
-          backgroundColor: dotColor,
-        }}
-      />
-      <Text
-        style={{
-          fontSize: WebTypography.size.xs,
-          fontWeight: WebTypography.weight.medium,
-          fontFamily: WebTypography.family,
-          color: dotColor,
-        }}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-// ── KPI Hero Card (web exact .kpi-hero) ──────────────────────────────────────
-function KpiHeroCard({
-  label,
-  value,
-  icon,
-  iconBg,
-  isDark,
-  delay,
-}: {
-  label: string;
-  value: string;
-  icon: IconName;
-  iconBg: string;
-  isDark: boolean;
-  delay: number;
-}) {
-  const c = isDark ? WebColors.dark : WebColors.light;
-  const s = isDark ? WebShadows.dark : WebShadows.light;
-
-  return (
-    <FadeInItem delay={delay}>
-      <View
-        style={{
-          backgroundColor: c.surface,
-          borderRadius: WebRadii.xl,
-          borderWidth: 1,
-          borderColor: c.border,
-          padding: 20,
-          ...s.sm,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            marginBottom: 16,
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: WebTypography.family,
-              fontSize: WebTypography.size.xs,
-              fontWeight: WebTypography.weight.semibold,
-              color: c.textTertiary,
-              letterSpacing: 0.08,
-              textTransform: "uppercase",
-            }}
-          >
-            {label}
-          </Text>
-          <View
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              backgroundColor: iconBg,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Feather name={icon} size={20} color="#fff" />
-          </View>
-        </View>
-        <Text
-          style={{
-            fontFamily: WebTypography.family,
-            fontSize: 28,
-            fontWeight: WebTypography.weight.bold,
-            color: c.textPrimary,
-            lineHeight: 32,
-            letterSpacing: -0.03,
-          }}
-        >
-          {value}
-        </Text>
-      </View>
-    </FadeInItem>
-  );
-}
-
-// ── Order Card (web mobile card style) ───────────────────────────────────────
-const OrderCard = React.memo(function OrderCard({
-  order,
-  onPress,
-  isDark,
-  index,
-}: {
-  order: Order;
-  onPress: () => void;
-  isDark: boolean;
-  index: number;
-}) {
-  const c = isDark ? WebColors.dark : WebColors.light;
-  const s = isDark ? WebShadows.dark : WebShadows.light;
-  const cfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.new;
-  const time = (() => {
-    try {
-      return format(parseISO(order.createdAt), "HH:mm", { locale: ru });
-    } catch {
-      return "";
-    }
-  })();
-
-  const priceStr = Number(order.total).toLocaleString("ru-RU");
-  const dotColor =
-    cfg.variant === "success"
-      ? c.success
-      : cfg.variant === "danger"
-        ? c.danger
-        : cfg.variant === "warning"
-          ? c.warning
-          : c.primary;
-
-  return (
-    <FadeInItem delay={index * 60}>
-      <PressableScale onPress={onPress} haptic="light" scaleTo={0.98}>
-        <View
-          style={{
-            backgroundColor: c.surface,
-            borderRadius: WebRadii.xl,
-            overflow: "hidden",
-            ...s.sm,
-          }}
-        >
-          <View style={{ flexDirection: "row" }}>
-            {/* Left color bar */}
-            <View
-              style={{
-                width: 4,
-                backgroundColor: dotColor,
-                borderTopLeftRadius: WebRadii.xl,
-                borderBottomLeftRadius: WebRadii.xl,
-              }}
-            />
-            <View style={{ flex: 1, padding: 14 }}>
-              {/* Top row: order number + badge */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 8,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: WebTypography.family,
-                    fontSize: WebTypography.size.md,
-                    fontWeight: WebTypography.weight.semibold,
-                    color: c.textPrimary,
-                    fontVariant: ["tabular-nums"],
-                  }}
-                >
-                  {order.orderNumber}
-                </Text>
-                <StatusBadge
-                  variant={cfg.variant}
-                  label={cfg.label}
-                  isDark={isDark}
-                />
-              </View>
-
-              {/* Bottom row: shop/agent left, price+chevron right */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-end",
-                  justifyContent: "space-between",
-                }}
-              >
-                <View style={{ flexDirection: "column", gap: 2 }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <Feather
-                      name="store"
-                      size={12}
-                      color={c.textSecondary}
-                    />
-                    <Text
-                      style={{
-                        fontSize: WebTypography.size.sm,
-                        color: c.textPrimary,
-                        maxWidth: 160,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {order.shopName ?? "—"}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <Feather
-                      name="user"
-                      size={12}
-                      color={c.textSecondary}
-                    />
-                    <Text
-                      style={{
-                        fontSize: WebTypography.size.xs,
-                        color: c.textSecondary,
-                      }}
-                    >
-                      {time}
-                    </Text>
-                  </View>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: WebTypography.family,
-                      fontSize: WebTypography.size.lg,
-                      fontWeight: WebTypography.weight.bold,
-                      color: c.textPrimary,
-                      fontVariant: ["tabular-nums"],
-                    }}
-                  >
-                    {priceStr}
-                  </Text>
-                  <Feather
-                    name="chevron-right"
-                    size={15}
-                    color={c.textSecondary}
-                  />
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-      </PressableScale>
-    </FadeInItem>
-  );
-});
-
-// ── Offline Order Card (web neo-card style) ──────────────────────────────────
-const OfflineOrderCard = React.memo(function OfflineOrderCard({
-  order,
-  isDark,
-}: {
-  order: OfflineOrderItem;
-  isDark: boolean;
-}) {
-  const c = isDark ? WebColors.dark : WebColors.light;
-  const s = isDark ? WebShadows.dark : WebShadows.light;
-
-  let timeStr = "--:--";
-  try {
-    timeStr = format(parseISO(order.createdAt), "HH:mm", { locale: ru });
-  } catch {
-    /* date parsing failed */
-  }
-
-  return (
-    <View
-      style={{
-        backgroundColor: c.surface,
-        borderRadius: WebRadii.xl,
-        overflow: "hidden",
-        ...s.sm,
-      }}
-    >
-      <View style={{ flexDirection: "row" }}>
-        <View
-          style={{
-            width: 4,
-            backgroundColor: c.warning,
-            borderTopLeftRadius: WebRadii.xl,
-            borderBottomLeftRadius: WebRadii.xl,
-          }}
-        />
-        <View style={{ flex: 1, padding: 14 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 8,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: WebTypography.family,
-                fontSize: WebTypography.size.sm,
-                fontWeight: WebTypography.weight.semibold,
-                color: c.warning,
-                letterSpacing: 0.08,
-                textTransform: "uppercase",
-              }}
-            >
-              ОЖИДАЕТ ОТПРАВКИ
-            </Text>
-            <StatusBadge variant="warning" label="Локально" isDark={isDark} />
-          </View>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: WebTypography.size.sm,
-                color: c.textPrimary,
-              }}
-              numberOfLines={1}
-            >
-              {order.shopName}
-            </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Feather name="clock" size={12} color={c.textTertiary} />
-              <Text
-                style={{
-                  fontSize: WebTypography.size.xs,
-                  color: c.textTertiary,
-                }}
-              >
-                {timeStr}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-});
-
-// ── Empty State ──────────────────────────────────────────────────────────────
-function EmptyState({ isDark }: { isDark: boolean }) {
-  const c = isDark ? WebColors.dark : WebColors.light;
-  const s = isDark ? WebShadows.dark : WebShadows.light;
-
-  return (
-    <View style={{ alignItems: "center", paddingTop: WebSpacing.xxxl }}>
-      <View
-        style={{
-          width: 120,
-          height: 120,
-          borderRadius: WebRadii.full,
-          backgroundColor: c.surface,
-          borderWidth: 1,
-          borderColor: c.border,
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: WebSpacing.xl,
-          ...s.md,
-        }}
-      >
-        <Feather name="clipboard" size={40} color={c.textTertiary} />
-      </View>
-      <Text
-        style={{
-          fontSize: WebTypography.size.lg,
-          fontWeight: WebTypography.weight.semibold,
-          fontFamily: WebTypography.family,
-          color: c.textPrimary,
-          marginBottom: WebSpacing.sm,
-        }}
-      >
-        Заказов пока нет
-      </Text>
-      <Text
-        style={{
-          fontSize: WebTypography.size.sm,
-          color: c.textSecondary,
-          textAlign: "center",
-          paddingHorizontal: WebSpacing.xxxl,
-          fontFamily: WebTypography.family,
-        }}
-      >
-        Создайте первый заказ для одного из ваших магазинов
-      </Text>
-    </View>
-  );
-}
-
-// ── Main Orders Screen ───────────────────────────────────────────────────────
 export default function OrdersScreen() {
   const router = useRouter();
   const { isDark } = useThemeStore();
-  const webStyles = createWebStyles(isDark);
-  const c = isDark ? WebColors.dark : WebColors.light;
-  const s = isDark ? WebShadows.dark : WebShadows.light;
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { orders: offlineOrders, syncAll } = useOfflineStore();
-  const [syncing, setSyncing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<string>("all");
+  const { user } = useAuthStore();
 
-  const {
-    data: orders,
-    isLoading,
-    refetch,
-    isRefetching,
-  } = useQuery({
+  const { data: orders, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["myOrders"],
     queryFn: getMyOrders,
-    retry: false,
-    staleTime: 2 * 60 * 1000,
+    retry: false, staleTime: 2 * 60 * 1000,
+    enabled: user?.role === "agent" || user?.role === "ceo" || user?.role === "operator",
   });
 
-  const pendingOffline = offlineOrders.filter((o) => !o.synced);
-
-  const sections = useMemo(() => {
-    const result: Array<{
-      key: string;
-      label: string;
-      data: Array<Order | OfflineOrderItem>;
-    }> = [];
-
-    if (pendingOffline.length > 0) {
-      result.push({
-        key: "offline",
-        label: "Ожидают отправки",
-        data: pendingOffline.map((o) => ({ ...o, _offline: true })),
-      });
+  const items = useMemo<ListItem[]>(() => {
+    const arr = Array.isArray(orders) ? orders : [];
+    const sorted = [...arr].sort((a, b) => {
+      try { return parseISO(b.createdAt).getTime() - parseISO(a.createdAt).getTime(); }
+      catch { return 0; }
+    });
+    const result: ListItem[] = [];
+    let lastKey = "";
+    for (const order of sorted) {
+      const key = dayKey(order.createdAt);
+      if (key !== lastKey) {
+        result.push({ type: "header", date: order.createdAt, key: `h-${key}` });
+        lastKey = key;
+      }
+      result.push({ type: "order", order, key: `o-${order.id}` });
     }
-
-    const serverOrders = Array.isArray(orders) ? orders : [];
-    const filteredOrders =
-      activeFilter === "all"
-        ? serverOrders
-        : serverOrders.filter((o) => o.status === activeFilter);
-
-    result.push(...groupByDay(filteredOrders));
     return result;
-  }, [orders, pendingOffline, activeFilter]);
-
-  const stats = useMemo(() => {
-    const all = Array.isArray(orders) ? orders : [];
-    const total = all.length;
-    const newCount = all.filter((o) => o.status === "new").length;
-    const processingCount = all.filter((o) => o.status === "processing").length;
-    const completedCount = all.filter((o) => o.status === "completed").length;
-    const cancelledCount = all.filter((o) => o.status === "cancelled").length;
-    const totalRevenue = all.reduce((sum, o) => sum + (o.total ?? 0), 0);
-    return { total, newCount, processingCount, completedCount, cancelledCount, totalRevenue };
   }, [orders]);
 
-  const handleSync = useCallback(async () => {
-    setSyncing(true);
-    const result = await syncAll();
-    await refetch();
-    setSyncing(false);
+  const handleDelete = useCallback((order: Order) => {
+    Alert.alert("Удалить заказ?", `Заказ #${order.orderNumber}`, [
+      { text: "Нет", style: "cancel" },
+      { text: "Да", style: "destructive", onPress: async () => {
+        try { await deleteOrder(order.id); notify.success("Удалён"); refetch(); }
+        catch { notify.error("Не удалось удалить"); }
+      }},
+    ]);
+  }, [refetch]);
 
-    if (result.failed > 0) {
-      notify.error(
-        result.synced > 0
-          ? `Отправлено ${result.synced}, не удалось отправить ${result.failed}.`
-          : `Не удалось отправить ${result.failed} заказ(ов).`
-      );
-    } else if (result.synced > 0) {
-      notify.success(`Отправлено ${result.synced} заказ(ов)`);
-    }
-  }, [syncAll, refetch]);
-
-  const handleOrderPress = useCallback(
-    (order: Order) => {
-      router.push({
-        pathname: "/order/[id]",
-        params: { id: String(order.id) },
-      });
-    },
-    [router]
-  );
-
-  const filters = [
-    { key: "all", label: "Все" },
-    { key: "new", label: "Новые" },
-    { key: "processing", label: "В работе" },
-    { key: "completed", label: "Выполнены" },
-    { key: "cancelled", label: "Отменены" },
-  ];
+  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
+  const orderCount = items.filter(i => i.type === "order").length;
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.canvas }}>
-      {/* Status Bar Area */}
-      <View style={{ paddingTop: insets.top, backgroundColor: c.canvas }} />
-
-      {/* Sync Banner */}
-      {pendingOffline.length > 0 && (
-        <FadeInItem delay={0}>
-          <PressableScale
-            onPress={handleSync}
-            haptic="medium"
-            disabled={syncing}
-            accessibilityLabel="Синхронизировать заказы"
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                backgroundColor: c.warningSubtle,
-                paddingHorizontal: WebSpacing.base,
-                paddingVertical: 12,
-                marginHorizontal: WebSpacing.base,
-                marginTop: WebSpacing.sm,
-                borderRadius: WebRadii.lg,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Feather
-                  name={syncing ? "loader" : "cloud-off"}
-                  size={15}
-                  color={c.warning}
-                />
-                <Text
-                  style={{
-                    fontSize: WebTypography.size.sm,
-                    fontWeight: WebTypography.weight.medium,
-                    fontFamily: WebTypography.family,
-                    color: c.warning,
-                  }}
-                >
-                  {pendingOffline.length} заказ(ов) не синхронизировано
-                </Text>
-              </View>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: WebTypography.size.sm,
-                    fontWeight: WebTypography.weight.semibold,
-                    fontFamily: WebTypography.family,
-                    color: c.warning,
-                  }}
-                >
-                  {syncing ? "Отправка…" : "Отправить"}
-                </Text>
-                {!syncing && (
-                  <Feather
-                    name="arrow-right"
-                    size={14}
-                    color={c.warning}
-                  />
-                )}
-              </View>
-            </View>
-          </PressableScale>
-        </FadeInItem>
-      )}
-
-      {/* KPI Hero Stats */}
-      <View
-        style={{
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: WebSpacing.base,
-          paddingHorizontal: WebSpacing.base,
-          paddingTop: WebSpacing.md,
-        }}
-      >
-        <View style={{ flex: 1, minWidth: 150 }}>
-          <KpiHeroCard
-            label="ВСЕГО ЗАКАЗОВ"
-            value={stats.total.toLocaleString()}
-            icon="shopping-cart"
-            iconBg="linear-gradient(135deg, #4b6cf6, #4b6cf6)" // fallback to primary
-            isDark={isDark}
-            delay={0}
-          />
-        </View>
-        <View style={{ flex: 1, minWidth: 150 }}>
-          <KpiHeroCard
-            label="НОВЫЕ"
-            value={stats.newCount.toLocaleString()}
-            icon="clock"
-            iconBg="#3b82f6"
-            isDark={isDark}
-            delay={0.05}
-          />
-        </View>
-        <View style={{ flex: 1, minWidth: 150 }}>
-          <KpiHeroCard
-            label="В РАБОТЕ"
-            value={stats.processingCount.toLocaleString()}
-            icon="loader"
-            iconBg={c.warning}
-            isDark={isDark}
-            delay={0.1}
-          />
-        </View>
-        <View style={{ flex: 1, minWidth: 150 }}>
-          <KpiHeroCard
-            label="ВЫПОЛНЕНЫ"
-            value={stats.completedCount.toLocaleString()}
-            icon="check-circle"
-            iconBg={c.success}
-            isDark={isDark}
-            delay={0.15}
-          />
-        </View>
-        <View style={{ flex: 1, minWidth: 150 }}>
-          <KpiHeroCard
-            label="ОТМЕНЕНЫ"
-            value={stats.cancelledCount.toLocaleString()}
-            icon="x-circle"
-            iconBg={c.danger}
-            isDark={isDark}
-            delay={0.2}
-          />
-        </View>
+    <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
+      {/* Header */}
+      <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm }}>
+        <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: colors.text.primary }}>Заказы</Text>
+        <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>{orderCount} заказов</Text>
       </View>
 
-      {/* Tab Filters (web style) */}
-      <View
-        style={{
-          paddingHorizontal: WebSpacing.base,
-          paddingTop: WebSpacing.lg,
-          paddingBottom: WebSpacing.sm,
-        }}
-      >
-        <View
-          style={{
-            backgroundColor: c.surface,
-            borderRadius: WebRadii.xl,
-            borderWidth: 1,
-            borderColor: c.border,
-            padding: WebSpacing.base,
-            flexDirection: "row",
-            flexWrap: "wrap",
-            gap: WebSpacing.sm,
-            ...s.sm,
-          }}
-        >
-          {filters.map((f) => {
-            const isActive = activeFilter === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key}
-                onPress={() => setActiveFilter(f.key)}
-                style={{
-                  backgroundColor: isActive ? c.primarySubtle : c.surfaceLight,
-                  borderRadius: WebRadii.md,
-                  borderWidth: 1,
-                  borderColor: isActive ? c.primary + "25" : c.border,
-                  paddingHorizontal: WebSpacing.base,
-                  paddingVertical: WebSpacing.sm,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: WebTypography.size.sm,
-                    fontWeight: isActive
-                      ? WebTypography.weight.semibold
-                      : WebTypography.weight.medium,
-                    fontFamily: WebTypography.family,
-                    color: isActive ? c.primary : c.textSecondary,
-                  }}
-                >
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* Orders List */}
-      <SectionList
-        sections={isLoading ? [] : sections}
-        keyExtractor={(item) => {
-          const isOffline = "_offline" in item && item._offline;
-          return isOffline ? `off-${item.id}` : String(item.id);
-        }}
-        contentContainerStyle={{
-          padding: WebSpacing.base,
-          paddingBottom: 130,
-        }}
+      {/* List */}
+      <FlatList
+        data={items}
+        keyExtractor={item => item.key}
+        contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.lg }}
         showsVerticalScrollIndicator={false}
-        stickySectionHeadersEnabled={false}
-        windowSize={11}
-        maxToRenderPerBatch={10}
-        removeClippedSubviews
-        updateCellsBatchingPeriod={50}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            tintColor={c.primary}
-          />
-        }
-        renderSectionHeader={({ section }) => (
-          <FadeInItem delay={0}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 4,
-                paddingTop: WebSpacing.sm,
-                paddingBottom: 6,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: WebTypography.family,
-                  fontSize: WebTypography.size.xs,
-                  fontWeight: WebTypography.weight.bold,
-                  color: c.textTertiary,
-                  letterSpacing: 1.5,
-                  textTransform: "uppercase",
-                }}
-              >
-                {section.label}
-              </Text>
-              <View
-                style={{
-                  backgroundColor: c.surfaceLight,
-                  borderRadius: WebRadii.sm,
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  borderWidth: 1,
-                  borderColor: c.borderSubtle,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: WebTypography.size.xs,
-                    fontWeight: WebTypography.weight.semibold,
-                    fontFamily: WebTypography.family,
-                    color: c.textSecondary,
-                  }}
-                >
-                  {section.data.length}
-                </Text>
-              </View>
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.accent.primary} />}
+        ListEmptyComponent={!isLoading ? (
+          <View style={{ alignItems: "center", paddingTop: 100 }}>
+            <View style={{ width: 64, height: 64, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center", marginBottom: Spacing.md }}>
+              <Feather name="clipboard" size={28} color={colors.text.muted} />
             </View>
-          </FadeInItem>
-        )}
-        ListEmptyComponent={!isLoading ? <EmptyState isDark={isDark} /> : null}
-        renderItem={({ item, index }) => {
-          const isOffline = "_offline" in item && item._offline;
-          return isOffline ? (
-            <OfflineOrderCard
-              order={item as OfflineOrderItem}
-              isDark={isDark}
-            />
-          ) : (
-            <OrderCard
-              order={item as Order}
-              isDark={isDark}
-              index={index}
-              onPress={() => handleOrderPress(item as Order)}
-            />
+            <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.secondary }}>Заказов пока нет</Text>
+          </View>
+        ) : null}
+        renderItem={({ item }) => {
+          if (item.type === "header") {
+            return (
+              <View style={{ paddingTop: Spacing.md, paddingBottom: Spacing.xs }}>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.muted, letterSpacing: 0.5 }}>{dayLabel(item.date).toUpperCase()}</Text>
+              </View>
+            );
+          }
+          const order = item.order;
+          const time = (() => { try { return format(parseISO(order.createdAt), "HH:mm", { locale: ru }); } catch { return ""; } })();
+          return (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.push({ pathname: "/order/[id]", params: { id: String(order.id) } })}
+              onLongPress={() => handleDelete(order)}
+              style={{
+                flexDirection: "row", alignItems: "center", gap: Spacing.md,
+                backgroundColor: colors.bg.card, borderRadius: Radii.lg,
+                padding: Spacing.base, marginBottom: Spacing.xs,
+                borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+                shadowColor: sc, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity,
+                shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation,
+              }}>
+              <View style={{ width: 36, height: 36, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="clipboard" size={16} color={colors.accent.primary} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{order.orderNumber}</Text>
+                <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>{time}</Text>
+              </View>
+              <Text style={{ fontSize: Typography.size.md, fontFamily: Typography.fontBold, color: colors.text.primary, fontVariant: ["tabular-nums"] }}>
+                {Number(order.total).toLocaleString("ru")}
+              </Text>
+              <Feather name="chevron-right" size={16} color={colors.text.muted} />
+            </TouchableOpacity>
           );
         }}
-        ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
-        SectionSeparatorComponent={() => (
-          <View style={{ height: WebSpacing.sm }} />
-        )}
       />
 
-      {/* FAB (web neo-btn-primary style) */}
-      <PressableScale
+      {/* FAB */}
+      <TouchableOpacity
+        activeOpacity={0.85}
         onPress={() => router.push("/order/new")}
-        haptic="medium"
-        accessibilityLabel="Новый заказ"
         style={{
-          position: "absolute",
-          bottom: insets.bottom + 80,
-          right: 20,
-          width: 58,
-          height: 58,
-          borderRadius: WebRadii.full,
-          backgroundColor: c.primary,
-          alignItems: "center",
-          justifyContent: "center",
-          ...s.sm,
-        }}
-      >
+          position: "absolute", bottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.sm, right: Spacing.xl,
+          width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent.primary,
+          alignItems: "center", justifyContent: "center",
+          shadowColor: colors.accent.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
+        }}>
         <Feather name="plus" size={26} color="#fff" />
-      </PressableScale>
+      </TouchableOpacity>
     </View>
   );
 }

@@ -2,12 +2,18 @@ import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   Switch,
   ScrollView,
-  Animated,
-  Easing,
+  RefreshControl,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  cancelAnimation,
+} from "react-native-reanimated";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,6 +22,8 @@ import { saveLocation } from "../../src/api";
 import { Card, Button } from "../../src/components/ui";
 import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { startBackgroundTracking, stopBackgroundTracking } from "../../src/backgroundLocation";
 
 type GpsState = "idle" | "locating" | "success" | "error";
 
@@ -47,56 +55,91 @@ function AccuracyBar({ accuracy, colors }: { accuracy: number; colors: ThemeColo
   );
 }
 
+const AUTO_TRACK_KEY = "gps_auto_track";
+
 export default function GpsScreen() {
   const colors = useThemeColors();
-  const s = makeStyles(colors);
+  const insets = useSafeAreaInsets();
+  const s = makeStyles(colors, insets.bottom);
   const [state, setState] = useState<GpsState>("idle");
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [error, setError] = useState("");
   const [autoTrack, setAutoTrack] = useState(false);
   const [lastSent, setLastSent] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const spin = useRef(new Animated.Value(0)).current;
+  const isLocating = useRef(false);
+  const spin = useSharedValue(0);
+
+  // Restore auto-track state on mount
+  useEffect(() => {
+    AsyncStorage.getItem(AUTO_TRACK_KEY).then((v) => {
+      if (v === "true") setAutoTrack(true);
+    });
+  }, []);
+
+  // Persist auto-track state
+  useEffect(() => {
+    AsyncStorage.setItem(AUTO_TRACK_KEY, String(autoTrack));
+  }, [autoTrack]);
 
   const locate = async () => {
+    if (isLocating.current) return;
+    isLocating.current = true;
     setState("locating");
     setError("");
 
-    const { status } = await Location.requestForegroundPermissionsAsync();
+    // Check permission first, only request if undetermined
+    let { status } = await Location.getForegroundPermissionsAsync();
+    if (status === "undetermined") {
+      ({ status } = await Location.requestForegroundPermissionsAsync());
+    }
     if (status !== "granted") {
       setError("Доступ к геолокации запрещён. Разрешите в настройках.");
       setState("error");
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      isLocating.current = false;
       return;
     }
 
     try {
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      // Race position acquisition against 15s timeout
+      const pos = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("GPS timeout")), 15_000)
+        ),
+      ]);
       const c = {
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
         accuracy: pos.coords.accuracy ?? 999,
       };
       setCoords(c);
+      await saveLocation(c.lat, c.lng, c.accuracy);
       setState("success");
       setLastSent(new Date());
-      await saveLocation(c.lat, c.lng, c.accuracy);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) {
+    } catch {
       setError("Не удалось определить местоположение. Проверьте GPS.");
       setState("error");
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setLastSent(null);
+    } finally {
+      isLocating.current = false;
     }
   };
 
   useEffect(() => {
     if (autoTrack) {
+      // Start foreground polling
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       locate();
-      intervalRef.current = setInterval(locate, 2 * 60 * 1000);
+      intervalRef.current = setInterval(locate, 5 * 60 * 1000);
+      // Also start background location task
+      startBackgroundTracking().then((ok) => {
+        if (!ok) console.warn("Background location permission not granted");
+      });
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      stopBackgroundTracking();
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -105,16 +148,26 @@ export default function GpsScreen() {
 
   useEffect(() => {
     if (state === "locating") {
-      spin.setValue(0);
-      Animated.loop(
-        Animated.timing(spin, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true })
-      ).start();
+      spin.value = withRepeat(
+        withTiming(1, { duration: 1000 }),
+        -1,
+        false
+      );
     } else {
-      spin.stopAnimation();
+      cancelAnimation(spin);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  const spinDeg = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${spin.value * 360}deg` }],
+  }));
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await locate();
+    setRefreshing(false);
+  };
 
   const statusMeta = {
     idle: { icon: "navigation" as const, gradient: true, text: "Нажмите кнопку, чтобы поделиться геолокацией", color: colors.text.secondary },
@@ -128,12 +181,13 @@ export default function GpsScreen() {
       style={s.container}
       contentContainerStyle={s.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent.primary} />}
     >
       {/* Status card */}
       <Card style={s.statusCard}>
         {statusMeta.gradient ? (
           <LinearGradient colors={Gradients.primarySoft} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.statusIconBox}>
-            <Animated.View style={state === "locating" ? { transform: [{ rotate: spinDeg }] } : undefined}>
+            <Animated.View style={state === "locating" ? spinStyle : undefined}>
               <Feather name={statusMeta.icon} size={32} color={colors.brand.primaryLight} />
             </Animated.View>
           </LinearGradient>
@@ -184,7 +238,7 @@ export default function GpsScreen() {
           </View>
           <Switch
             value={autoTrack}
-            onValueChange={setAutoTrack}
+            onValueChange={(v) => { Haptics.selectionAsync(); setAutoTrack(v); }}
             trackColor={{
               false: colors.bg.elevated,
               true: colors.brand.primary,
@@ -230,10 +284,10 @@ export default function GpsScreen() {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, bottomInset: number = 0) {
   return {
     container: { flex: 1, backgroundColor: colors.bg.primary } as const,
-    content: { padding: Spacing.base, paddingBottom: 120, gap: Spacing.sm },
+    content: { padding: Spacing.base, paddingBottom: bottomInset + 100, gap: Spacing.sm },
 
     statusCard: {
       alignItems: "center" as const,
