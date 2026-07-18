@@ -12,7 +12,7 @@ import { DarkShadowColor } from "../../src/theme";
 import { ScreenHeader } from "../../src/components/ui";
 import { ShimmerSkeleton, PressableScale } from "../../src/components/Animated";
 
-// Conditional MapView import
+// Conditional MapView import — safe for standalone APK
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let MapView: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,12 +20,16 @@ let Marker: any = null;
 let PROVIDER_GOOGLE: string | undefined;
 let PROVIDER_DEFAULT: string | undefined;
 if (Platform.OS !== "web") {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const maps = require("react-native-maps");
-  MapView = maps.default;
-  Marker = maps.Marker;
-  PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
-  PROVIDER_DEFAULT = maps.PROVIDER_DEFAULT;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const maps = require("react-native-maps");
+    MapView = maps.default;
+    Marker = maps.Marker;
+    PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
+    PROVIDER_DEFAULT = maps.PROVIDER_DEFAULT;
+  } catch {
+    // react-native-maps not linked in standalone build
+  }
 }
 
 const ONLINE_WINDOW = 600;
