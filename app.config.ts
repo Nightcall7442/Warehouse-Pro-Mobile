@@ -24,6 +24,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-secure-store",
+    "expo-local-authentication",
+    "expo-location",
+    "expo-camera",
+    "expo-image-picker",
+    "expo-notifications",
+    "react-native-maps",
   ],
   extra: {
     eas: {
