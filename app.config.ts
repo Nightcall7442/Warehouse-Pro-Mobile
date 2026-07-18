@@ -53,7 +53,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-secure-store",
-    // ❌ УДАЛИ "react-native-maps" ОТСЮДА
+    "expo-local-authentication",
+    [
+      "react-native-maps",
+      {
+        locationAlwaysAndWhenInUsePermission:
+          "Allow Warehouse Pro to use your location for visit tracking.",
+      },
+    ],
     [
       "expo-splash-screen",
       {
