@@ -53,48 +53,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-secure-store",
-    "expo-local-authentication",
-    "react-native-maps",
-    [
-      "expo-splash-screen",
-      {
-        image: "./assets/splash.png",
-        resizeMode: "contain",
-        backgroundColor: "#0A0B10",
-      },
-    ],
-    [
-      "expo-location",
-      {
-        locationAlwaysAndWhenInUsePermission:
-          "Allow Warehouse Pro to use your location for visit tracking.",
-        isAndroidBackgroundLocationEnabled: true,
-        isIOSBackgroundLocationEnabled: true,
-      },
-    ],
-    [
-      "expo-camera",
-      {
-        cameraPermission:
-          "Allow Warehouse Pro to access your camera for barcode scanning.",
-      },
-    ],
-    [
-      "expo-image-picker",
-      {
-        photosPermission:
-          "Allow Warehouse Pro to access your photos to add shop and product images.",
-        cameraPermission:
-          "Allow Warehouse Pro to use your camera to take shop and product photos.",
-      },
-    ],
-    [
-      "expo-notifications",
-      {
-        icon: "./assets/notification-icon.png",
-        color: "#6366F1",
-      },
-    ],
+    "expo-location",
+    "expo-camera",
+    "expo-image-picker",
+    "expo-notifications",
   ],
   experiments: {
     typedRoutes: true,
