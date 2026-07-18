@@ -152,6 +152,7 @@ export interface Plan {
   id: number;
   planDate: string;
   status: "planned" | "visited" | "skipped";
+  photoUrl?: string;
   notes?: string;
   shopId?: number;
   shopName?: string;
