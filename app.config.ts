@@ -29,7 +29,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-camera",
     "expo-image-picker",
     "expo-notifications",
-    "react-native-maps",
   ],
   extra: {
     eas: {
