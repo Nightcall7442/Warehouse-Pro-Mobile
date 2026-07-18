@@ -12,6 +12,7 @@ export interface OfflineOrder {
   synced: boolean;
   status?: "pending" | "syncing" | "failed";
   error?: string;
+  retryable?: boolean; // true = network error (retry), false = business error (don't retry)
 }
 
 interface OfflineStore {
@@ -38,6 +39,21 @@ async function writeQueue(orders: OfflineOrder[]) {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
 }
 
+/**
+ * Check if an error is retryable (network) vs business error.
+ */
+function isRetryableError(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  const msg = e.message.toLowerCase();
+  // Network errors are retryable
+  if (msg.includes("network") || msg.includes("timeout") || msg.includes("fetch")) return true;
+  if (msg.includes("econnrefused") || msg.includes("econnreset")) return true;
+  // HTTP 5xx are retryable, 4xx are not
+  if (msg.includes("status 5")) return true;
+  if (msg.includes("status 4")) return false;
+  return false;
+}
+
 export const useOfflineStore = create<OfflineStore>((set, get) => ({
   orders: [],
   loaded: false,
@@ -57,35 +73,45 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     let synced = 0;
     let failed = 0;
 
-    const syncingOrders: OfflineOrder[] = get().orders.map((o) =>
+    // Snapshot orders once to avoid race conditions
+    const currentOrders = get().orders;
+    const pendingOrders = currentOrders.filter(o => !o.synced);
+
+    if (pendingOrders.length === 0) return { synced: 0, failed: 0 };
+
+    // Mark all as syncing
+    const syncingOrders = currentOrders.map(o =>
       o.synced ? o : { ...o, status: "syncing" as const }
     );
     set({ orders: syncingOrders });
     await writeQueue(syncingOrders);
 
-    const remaining: OfflineOrder[] = [];
+    const failedIds: Set<string> = new Set();
 
-    for (const order of get().orders) {
-      if (order.synced) continue;
-
+    for (const order of pendingOrders) {
       try {
         await createOrder(order.input);
         synced++;
       } catch (e) {
-        remaining.push({
-          ...order,
-          status: "failed" as const,
-          error: e instanceof Error ? e.message : "Sync failed",
-        });
+        failedIds.add(order.id);
         failed++;
+        // Update the specific order with error info
+        const idx = syncingOrders.findIndex(o => o.id === order.id);
+        if (idx !== -1) {
+          syncingOrders[idx] = {
+            ...syncingOrders[idx],
+            status: "failed" as const,
+            error: e instanceof Error ? e.message : "Sync failed",
+            retryable: isRetryableError(e),
+          };
+        }
       }
     }
 
-    const finalOrders: OfflineOrder[] = get().orders.map((o) => {
+    // Build final state: synced orders get synced=true, failed keep their status
+    const finalOrders = syncingOrders.map(o => {
       if (o.synced) return o;
-      if (remaining.find((r) => r.id === o.id)) {
-        return remaining.find((r) => r.id === o.id)!;
-      }
+      if (failedIds.has(o.id)) return o; // already updated with error
       return { ...o, synced: true, status: "pending" as const };
     });
 
@@ -127,7 +153,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     } catch (e) {
       const finalOrders = get().orders.map((o) =>
         o.id === id
-          ? { ...o, status: "failed" as const, error: e instanceof Error ? e.message : "Retry failed" }
+          ? { ...o, status: "failed" as const, error: e instanceof Error ? e.message : "Retry failed", retryable: isRetryableError(e) }
           : o
       );
       set({ orders: finalOrders });
