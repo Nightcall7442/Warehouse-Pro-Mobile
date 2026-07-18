@@ -44,7 +44,7 @@ function CustomTabBar(props: BottomTabBarProps) {
   const HIDDEN = ["tracking", "gps", "barcode"];
   const AGENT_ONLY = ["orders"];
   const COURIER_HIDDEN = ["shops", "catalog", "orders"];
-  const MERCH_HIDDEN = ["orders", "plans", "catalog"];
+  const MERCH_HIDDEN = ["orders", "catalog"];
 
   const visibleRoutes = state.routes.filter((route: { name: string }) => {
     if (HIDDEN.includes(route.name)) return false;
