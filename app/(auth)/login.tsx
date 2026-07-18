@@ -68,7 +68,7 @@ export default function LoginScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: Spacing.xl }} keyboardShouldPersistTaps="handled">
 
           {/* Gradient hero header (matches web mobile header) */}

@@ -248,25 +248,25 @@ export default function ProfileScreen() {
         <NeoCard colors={colors} isDark={isDark} style={{ marginTop: Spacing.base }}>
           <Label colors={colors}>ТЕМА</Label>
           <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-            <TouchableOpacity onPress={toggleTheme} activeOpacity={0.85} style={{
+            <TouchableOpacity onPress={() => { if (isDark) toggleTheme(); }} activeOpacity={0.85} style={{
               flex: 1, paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
-              backgroundColor: !isDark ? colors.accent.primary + "12" : colors.bg.elevated,
-              borderWidth: 1, borderColor: !isDark ? colors.accent.primary + "40" : colors.border.default,
+              backgroundColor: !isDark ? colors.accent.primary : colors.bg.elevated,
+              borderWidth: 1.5, borderColor: !isDark ? colors.accent.primary : colors.border.default,
               shadowColor: !isDark ? colors.accent.primary : sc,
-              shadowOffset: { width: 0, height: 2 }, shadowOpacity: !isDark ? 0.15 : 0.1, shadowRadius: 8, elevation: 2,
+              shadowOffset: { width: 0, height: 2 }, shadowOpacity: !isDark ? 0.2 : 0.1, shadowRadius: 8, elevation: 2,
             }}>
-              <Feather name="sun" size={18} color={!isDark ? colors.accent.primary : colors.text.secondary} />
-              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: !isDark ? colors.accent.primary : colors.text.secondary }}>Светлая</Text>
+              <Feather name="sun" size={18} color={!isDark ? "#fff" : colors.text.secondary} />
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: !isDark ? "#fff" : colors.text.secondary }}>Светлая</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={toggleTheme} activeOpacity={0.85} style={{
+            <TouchableOpacity onPress={() => { if (!isDark) toggleTheme(); }} activeOpacity={0.85} style={{
               flex: 1, paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
-              backgroundColor: isDark ? colors.accent.primary + "12" : colors.bg.elevated,
-              borderWidth: 1, borderColor: isDark ? colors.accent.primary + "40" : colors.border.default,
+              backgroundColor: isDark ? colors.accent.primary : colors.bg.elevated,
+              borderWidth: 1.5, borderColor: isDark ? colors.accent.primary : colors.border.default,
               shadowColor: isDark ? colors.accent.primary : sc,
-              shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.15 : 0.1, shadowRadius: 8, elevation: 2,
+              shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.2 : 0.1, shadowRadius: 8, elevation: 2,
             }}>
-              <Feather name="moon" size={18} color={isDark ? colors.accent.primary : colors.text.secondary} />
-              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: isDark ? colors.accent.primary : colors.text.secondary }}>Тёмная</Text>
+              <Feather name="moon" size={18} color={isDark ? "#fff" : colors.text.secondary} />
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: isDark ? "#fff" : colors.text.secondary }}>Тёмная</Text>
             </TouchableOpacity>
           </View>
         </NeoCard>

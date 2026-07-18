@@ -44,10 +44,12 @@ function CustomTabBar(props: BottomTabBarProps) {
   const HIDDEN = ["tracking", "gps", "barcode"];
   const AGENT_ONLY = ["orders"];
   const COURIER_HIDDEN = ["shops", "catalog", "orders"];
+  const MERCH_HIDDEN = ["orders", "plans"];
 
   const visibleRoutes = state.routes.filter((route: { name: string }) => {
     if (HIDDEN.includes(route.name)) return false;
     if (isCourier && COURIER_HIDDEN.includes(route.name)) return false;
+    if (isMerchandiser && MERCH_HIDDEN.includes(route.name)) return false;
     if (isSupervisor && AGENT_ONLY.includes(route.name)) return false;
     if (!isSupervisor && !isCourier && !isMerchandiser && route.name === "plans") return false;
     if (!isCourier && route.name === "deliveries") return false;
@@ -63,7 +65,7 @@ function CustomTabBar(props: BottomTabBarProps) {
         position: "absolute",
         left: Spacing.base,
         right: Spacing.base,
-        bottom: insets.bottom > 0 ? insets.bottom - 14 : 14,
+        bottom: insets.bottom > 0 ? insets.bottom + 8 : 20,
         alignItems: "center",
       }}
     >
