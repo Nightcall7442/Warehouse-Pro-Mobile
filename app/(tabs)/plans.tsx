@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   FlatList,
+  SectionList,
   Modal,
   ScrollView,
   ActivityIndicator,
@@ -240,6 +241,21 @@ function SupervisorPlansView() {
     onError: (e: Error) => notify.error(e.message ?? "Не удалось обновить статус"),
   });
 
+  // Group plans by agent when no filter selected
+  const groupedPlans = useMemo(() => {
+    if (filterAgentId || !plans || plans.length === 0) return null;
+    const groups: Record<string, Plan[]> = {};
+    for (const plan of plans) {
+      const key = plan.agentName ?? `Агент #${plan.agentId}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(plan);
+    }
+    return Object.entries(groups).map(([agentName, items]) => ({
+      title: agentName,
+      data: items,
+    }));
+  }, [plans, filterAgentId]);
+
   const visited = (plans ?? []).filter(p => p.status === "visited").length;
   const total = plans?.length ?? 0;
   const pct = total > 0 ? Math.round((visited / total) * 100) : 0;
@@ -309,14 +325,15 @@ function SupervisorPlansView() {
         )}
 
       {/* Plans list — grouped by agent when no filter, flat when filtered */}
-      {!filterAgentId ? (
-        <FlatList
-          data={plans ?? []}
-          keyExtractor={(p) => String(p.id)}
+      {!filterAgentId && groupedPlans ? (
+        <SectionList
+          sections={groupedPlans}
+          keyExtractor={(item) => String(item.id)}
           contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 100 }}
           windowSize={11}
           maxToRenderPerBatch={10}
           removeClippedSubviews
+          stickySectionHeadersEnabled
           refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent.primary} />}
           ListEmptyComponent={
             !isLoading ? (
@@ -333,6 +350,13 @@ function SupervisorPlansView() {
               </Text>
             ) : null
           }
+          renderSectionHeader={({ section }) => (
+            <View style={{ backgroundColor: colors.bg.primary, paddingVertical: 8, paddingHorizontal: 4, marginTop: 8 }}>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.accent.primary, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                {section.title} · {section.data.length}
+              </Text>
+            </View>
+          )}
           renderItem={({ item: plan, index }) => (
             <Animated.View layout={Layout.springify().damping(20)}>
               <FadeInItem delay={index * 60}>
