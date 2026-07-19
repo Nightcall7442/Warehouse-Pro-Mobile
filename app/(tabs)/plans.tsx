@@ -417,9 +417,13 @@ function SupervisorPlansView() {
         onClose={() => setShowCreate(false)}
         onCreated={(agentId?: number) => {
           setShowCreate(false);
-          if (agentId) setFilterAgentId(agentId);
-          qc.invalidateQueries({ queryKey: ["supervisorPlans"] });
-          qc.invalidateQueries({ queryKey: ["agentPlans"] });
+          if (agentId) {
+            setFilterAgentId(agentId);
+            // Invalidate after state update to ensure query uses new filterAgentId
+            setTimeout(() => {
+              qc.invalidateQueries({ queryKey: ["supervisorPlans"] });
+            }, 100);
+          }
         }}
       />
     </View>
