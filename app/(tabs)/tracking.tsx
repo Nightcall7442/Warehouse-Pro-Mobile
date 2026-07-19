@@ -1,39 +1,18 @@
-// Warehouse Pro — Supervisor Tracking (matches web SupervisorTracking.tsx)
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, FlatList, useWindowDimensions, Platform, RefreshControl } from "react-native";
+import { View, Text, TouchableOpacity, FlatList, useWindowDimensions, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getAgentLocations, AgentLocation, API_BASE } from "../../src/api";
 import { SecureStore } from "../../src/storage";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Radii, Shadows, ThemeColors } from "../../src/theme";
+import { Typography, Radii, Shadows } from "../../src/theme";
 import { DarkShadowColor } from "../../src/theme";
 import { ScreenHeader } from "../../src/components/ui";
 import { ShimmerSkeleton, PressableScale } from "../../src/components/Animated";
-
-// Conditional MapView import — safe for standalone APK
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let MapView: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let Marker: any = null;
-let PROVIDER_GOOGLE: string | undefined;
-let PROVIDER_DEFAULT: string | undefined;
-if (Platform.OS !== "web") {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const maps = require("react-native-maps");
-    MapView = maps.default;
-    Marker = maps.Marker;
-    PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
-    PROVIDER_DEFAULT = maps.PROVIDER_DEFAULT;
-  } catch {
-    // react-native-maps not linked in standalone build
-  }
-}
+import YandexMapView from "../../src/components/YandexMapView";
 
 const ONLINE_WINDOW = 600;
-const DEFAULT_REGION = { latitude: 41.2995, longitude: 69.2401, latitudeDelta: 0.3, longitudeDelta: 0.3 };
 
 function isOnline(createdAt: string | undefined): boolean {
   if (!createdAt) return false;
@@ -49,31 +28,6 @@ function timeAgo(createdAt: string | undefined): string {
   return new Date(createdAt).toLocaleDateString("ru");
 }
 
-// ── Agent Marker ─────────────────────────────────────────────────────────────
-const AgentMarker = React.memo(function AgentMarker({ isSelected, online, agentName, agentId, colors }: {
-  isSelected: boolean; online: boolean; agentName?: string; agentId: number; colors: ThemeColors;
-}) {
-  return (
-    <View style={{
-      width: isSelected ? 44 : 34, height: isSelected ? 44 : 34, borderRadius: isSelected ? 22 : 17,
-      backgroundColor: online ? colors.status.success : colors.text.tertiary,
-      borderWidth: 3, borderColor: isSelected ? colors.accent.primary : "#fff",
-      alignItems: "center", justifyContent: "center",
-      shadowColor: isSelected ? colors.accent.primary : "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: isSelected ? 0.4 : 0.2, shadowRadius: 8, elevation: isSelected ? 6 : 3,
-    }}>
-      <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: isSelected ? Typography.size.md : Typography.size.sm }}>
-        {(agentName ?? "A")[0].toUpperCase()}
-      </Text>
-      {isSelected && (
-        <View style={{ position: "absolute", bottom: -20, backgroundColor: "rgba(0,0,0,0.75)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.sm }}>
-          <Text style={{ color: "#fff", fontSize: Typography.size.xs, fontFamily: Typography.fontMedium }}>{agentName ?? `Agent #${agentId}`}</Text>
-        </View>
-      )}
-    </View>
-  );
-});
-
-// ── Main ─────────────────────────────────────────────────────────────────────
 export default function TrackingScreen() {
   const { width: SCREEN_W } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -81,10 +35,8 @@ export default function TrackingScreen() {
   const { isDark } = useThemeStore();
   const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [mapReady, setMapReady] = useState(false);
   const [locations, setLocations] = useState<AgentLocation[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const wsFailures = useRef(0);
@@ -113,7 +65,7 @@ export default function TrackingScreen() {
           if (msg.type === "agent_location") {
             setLocations(prev => {
               const idx = prev.findIndex(l => l.agentId === msg.agentId);
-              const updated: AgentLocation = { id: msg.agentId, agentId: msg.agentId, agentName: msg.agentName, lat: String(msg.lat), lng: String(msg.lng), accuracy: msg.accuracy != null ? String(msg.accuracy) : undefined, createdAt: new Date().toISOString() };
+              const updated: AgentLocation = { id: msg.agentId, agentId: msg.agentId, agentName: msg.agentName, lat: String(msg.lat), lng: String(msg.lng), accuracy: msg.accuracy != null ? String(msg.accuracy) : undefined, batteryLevel: msg.batteryLevel, createdAt: new Date().toISOString() };
               if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
               return [...prev, updated];
             });
@@ -131,28 +83,37 @@ export default function TrackingScreen() {
   const onlineCount = locations.filter(l => isOnline(l.createdAt)).length;
   const offlineCount = locations.length - onlineCount;
 
-  const initialRegion = useMemo(() => {
-    const valid = locations.filter(l => { const lat = Number(l.lat), lng = Number(l.lng); return lat !== 0 && lng !== 0 && !isNaN(lat) && !isNaN(lng); });
-    if (valid.length === 0) return DEFAULT_REGION;
-    const lats = valid.map(l => Number(l.lat)), lngs = valid.map(l => Number(l.lng));
-    return { latitude: (Math.min(...lats) + Math.max(...lats)) / 2, longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2, latitudeDelta: Math.max(0.02, (Math.max(...lats) - Math.min(...lats)) * 1.6), longitudeDelta: Math.max(0.02, (Math.max(...lngs) - Math.min(...lngs)) * 1.6) };
-  }, [locations]);
+  const mapMarkers = useMemo(() =>
+    locations
+      .filter(l => Number(l.lat) && Number(l.lng))
+      .map(l => ({
+        id: l.agentId,
+        lat: Number(l.lat),
+        lng: Number(l.lng),
+        label: l.agentName ?? `Agent #${l.agentId}`,
+        color: isOnline(l.createdAt) ? "#34c473" : "#98a0b8",
+      })),
+    [locations]
+  );
+
+  const center = useMemo(() => {
+    if (mapMarkers.length === 0) return { lat: 41.2995, lng: 69.2401 };
+    return {
+      lat: mapMarkers.reduce((s, m) => s + m.lat, 0) / mapMarkers.length,
+      lng: mapMarkers.reduce((s, m) => s + m.lng, 0) / mapMarkers.length,
+    };
+  }, [mapMarkers]);
 
   const focusAgent = useCallback((loc: AgentLocation) => {
     setSelectedId(loc.agentId);
     const lat = Number(loc.lat), lng = Number(loc.lng);
-    if (!lat || !lng || !mapRef.current || !mapReady) return;
-    mapRef.current.animateToRegion({ latitude: lat, longitude: lng, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 500);
-  }, [mapReady]);
+    if (!lat || !lng) return;
+    mapRef.current?.injectJavaScript(`centerOn(${lat}, ${lng}, 15);`);
+  }, []);
 
   const fitAll = useCallback(() => {
-    if (!mapRef.current || !mapReady) return;
-    const valid = locations.filter(l => Number(l.lat) && Number(l.lng));
-    if (valid.length === 0) return;
-    mapRef.current.fitToCoordinates(valid.map(l => ({ latitude: Number(l.lat), longitude: Number(l.lng) })), { edgePadding: { top: 50, right: 50, bottom: 50, left: 50 }, animated: true });
-  }, [mapReady, locations]);
-
-  const mapProvider = (Platform.OS === "android" && process.env.GOOGLE_MAPS_ANDROID_API_KEY) ? PROVIDER_GOOGLE : PROVIDER_DEFAULT;
+    mapRef.current?.injectJavaScript(`fitAll();`);
+  }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
@@ -179,7 +140,7 @@ export default function TrackingScreen() {
         ))}
       </View>
 
-      {/* Map */}
+      {/* Yandex Map */}
       <View style={{ height: SCREEN_W * 0.75, backgroundColor: colors.bg.elevated, position: "relative" }}>
         {isError ? (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
@@ -191,26 +152,17 @@ export default function TrackingScreen() {
               </View>
             </PressableScale>
           </View>
-        ) : MapView ? (
-          <MapView ref={mapRef} style={{ flex: 1 }} provider={mapProvider} initialRegion={initialRegion}
-            onMapReady={() => setMapReady(true)} onMapLoaded={() => setMapReady(true)}
-            showsUserLocation={false} showsMyLocationButton={false} showsCompass={true}
-            loadingEnabled={true} loadingIndicatorColor={colors.accent.primary} loadingBackgroundColor={colors.bg.elevated}>
-            {locations.filter(loc => Number(loc.lat) && Number(loc.lng)).map(loc => (
-              <Marker key={loc.id} coordinate={{ latitude: Number(loc.lat), longitude: Number(loc.lng) }}
-                onPress={() => focusAgent(loc)} tracksViewChanges={false}>
-                <AgentMarker isSelected={selectedId === loc.agentId} online={isOnline(loc.createdAt)} agentName={loc.agentName} agentId={loc.agentId} colors={colors} />
-              </Marker>
-            ))}
-          </MapView>
         ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <Feather name="map" size={28} color={colors.text.muted} />
-            <Text style={{ fontFamily: Typography.fontMedium, color: colors.text.secondary, marginTop: 8 }}>Карта недоступна</Text>
-          </View>
+          <YandexMapView
+            ref={mapRef}
+            markers={mapMarkers}
+            center={center}
+            zoom={mapMarkers.length > 1 ? 11 : 14}
+            style={{ flex: 1 }}
+          />
         )}
         {/* Center button */}
-        <TouchableOpacity onPress={fitAll} style={{ position: "absolute", bottom: 16, right: 16, backgroundColor: colors.bg.card, borderRadius: Radii.full, padding: 12, borderWidth: 1, borderColor: colors.border.default, shadowColor: sc, shadowOffset: Shadows.md.shadowOffset, shadowOpacity: Shadows.md.shadowOpacity, shadowRadius: Shadows.md.shadowRadius, elevation: Shadows.md.elevation }}>
+        <TouchableOpacity onPress={fitAll} style={{ position: "absolute", bottom: 16, right: 16, backgroundColor: colors.bg.card, borderRadius: 999, padding: 12, borderWidth: 1, borderColor: colors.border.default, shadowColor: sc, shadowOffset: Shadows.md.shadowOffset, shadowOpacity: Shadows.md.shadowOpacity, shadowRadius: Shadows.md.shadowRadius, elevation: Shadows.md.elevation }}>
           <Feather name="crosshair" size={20} color={colors.accent.primary} />
         </TouchableOpacity>
       </View>
