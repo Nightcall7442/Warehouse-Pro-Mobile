@@ -6,7 +6,7 @@ describe('Theme', () => {
   });
 
   it('LightColors should have primary background', () => {
-    expect(LightColors.bg.primary).toBe('#f2f0ec');
+    expect(LightColors.bg.primary).toBe('#e8e6e1');
   });
 
   it('Typography should define font sizes', () => {
@@ -23,7 +23,7 @@ describe('Theme', () => {
 
   it('Radii should define border radius values', () => {
     expect(Radii.sm).toBe(10);
-    expect(Radii.md).toBe(14);
+    expect(Radii.md).toBe(12);
     expect(Radii.full).toBe(999);
   });
 
