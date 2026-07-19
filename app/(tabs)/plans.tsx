@@ -418,7 +418,8 @@ function SupervisorPlansView() {
         onCreated={(agentId?: number) => {
           setShowCreate(false);
           if (agentId) setFilterAgentId(agentId);
-          refetch();
+          qc.invalidateQueries({ queryKey: ["supervisorPlans"] });
+          qc.invalidateQueries({ queryKey: ["agentPlans"] });
         }}
       />
     </View>
