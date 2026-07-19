@@ -15,6 +15,7 @@ import Animated, {
 } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
+import * as Battery from "expo-battery";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
@@ -103,11 +104,14 @@ export default function GpsScreen() {
 
     try {
       // Race position acquisition against 15s timeout
-      const pos = await Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("GPS timeout")), 15_000)
-        ),
+      const [pos, battery] = await Promise.all([
+        Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("GPS timeout")), 15_000)
+          ),
+        ]),
+        Battery.getBatteryLevelAsync().catch(() => null),
       ]);
       const c = {
         lat: pos.coords.latitude,
@@ -115,7 +119,8 @@ export default function GpsScreen() {
         accuracy: pos.coords.accuracy ?? 999,
       };
       setCoords(c);
-      await saveLocation(c.lat, c.lng, c.accuracy);
+      const batteryPct = battery !== null ? Math.round(battery * 100) : undefined;
+      await saveLocation(c.lat, c.lng, c.accuracy, batteryPct);
       setState("success");
       setLastSent(new Date());
     } catch {

@@ -302,12 +302,14 @@ export async function updatePlanStatus(
 export async function saveLocation(
   lat: number,
   lng: number,
-  accuracy?: number
+  accuracy?: number,
+  batteryLevel?: number
 ): Promise<void> {
   await trpcMutation("agent.saveLocation", {
     lat: String(lat),
     lng: String(lng),
     accuracy: accuracy !== undefined ? String(accuracy) : undefined,
+    batteryLevel,
   });
 }
 

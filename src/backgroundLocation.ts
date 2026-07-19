@@ -1,5 +1,6 @@
 import * as TaskManager from "expo-task-manager";
 import * as Location from "expo-location";
+import * as Battery from "expo-battery";
 import { saveLocation } from "./api";
 
 const BACKGROUND_LOCATION_TASK = "background-location-task";
@@ -10,13 +11,18 @@ const MAX_BACKOFF_MS = 300_000; // 5 minutes max backoff
 
 TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async () => {
   try {
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+    const [location, battery] = await Promise.all([
+      Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      }),
+      Battery.getBatteryLevelAsync().catch(() => null),
+    ]);
+    const batteryPct = battery !== null ? Math.round(battery * 100) : undefined;
     await saveLocation(
       location.coords.latitude,
       location.coords.longitude,
-      location.coords.accuracy ?? 999
+      location.coords.accuracy ?? 999,
+      batteryPct
     );
     consecutiveErrors = 0; // Reset on success
   } catch (e) {
