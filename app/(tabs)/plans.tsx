@@ -232,7 +232,6 @@ function SupervisorPlansView() {
     queryKey: ["supervisorPlans", dateStr, filterAgentId],
     queryFn: () => getPlans(filterAgentId ?? undefined, dateStr),
     refetchInterval: 60_000,
-    enabled: !!filterAgentId,
   });
 
   const updateMutation = useMutation({
@@ -309,17 +308,51 @@ function SupervisorPlansView() {
           </View>
         )}
 
-      {/* Plans list or empty state */}
+      {/* Plans list — grouped by agent when no filter, flat when filtered */}
       {!filterAgentId ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 32 }}>
-          <Feather name="user" size={32} color={colors.text.tertiary} />
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.md, color: colors.text.secondary, textAlign: "center" }}>
-            Выберите агента для просмотра планов
-          </Text>
-          <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary, textAlign: "center" }}>
-            Нажмите на фильтр выше, чтобы выбрать агента
-          </Text>
-        </View>
+        <FlatList
+          data={plans ?? []}
+          keyExtractor={(p) => String(p.id)}
+          contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 100 }}
+          windowSize={11}
+          maxToRenderPerBatch={10}
+          removeClippedSubviews
+          refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent.primary} />}
+          ListEmptyComponent={
+            !isLoading ? (
+              <View style={{ alignItems: "center", paddingTop: 50, gap: 10 }}>
+                <Feather name="calendar" size={32} color={colors.text.tertiary} />
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.secondary }}>На этот день планов нет</Text>
+              </View>
+            ) : null
+          }
+          ListHeaderComponent={
+            plans && plans.length > 0 ? (
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.tertiary, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
+                Все планы · {plans.length}
+              </Text>
+            ) : null
+          }
+          renderItem={({ item: plan, index }) => (
+            <Animated.View layout={Layout.springify().damping(20)}>
+              <FadeInItem delay={index * 60}>
+                <PlanCard
+                  plan={plan}
+                  showCity
+                  onVisit={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    updateMutation.mutate({ planId: plan.id, status: "visited" });
+                  }}
+                  onSkip={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    updateMutation.mutate({ planId: plan.id, status: "skipped" });
+                  }}
+                  loading={updateMutation.isPending}
+                />
+              </FadeInItem>
+            </Animated.View>
+          )}
+        />
       ) : (
         <FlatList
           data={plans ?? []}
