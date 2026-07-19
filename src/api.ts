@@ -514,6 +514,10 @@ export async function markDelivered(orderId: number, cashAmount?: string): Promi
   await trpcMutation("courier.markDelivered", { orderId, cashAmount });
 }
 
+export async function markFailed(orderId: number, reason?: string): Promise<void> {
+  await trpcMutation("courier.markFailed", { orderId, reason });
+}
+
 // ── Merchandiser / Visit Reports ──────────────────────────────────────────────
 
 export interface VisitReport {

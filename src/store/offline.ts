@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { CreateOrderInput, createOrder } from "../api";
+import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed } from "../api";
 
 const STORAGE_KEY = "pending_orders";
+const DELIVERY_ACTIONS_KEY = "pending_delivery_actions";
 
 export interface OfflineOrder {
   id: string;
@@ -15,12 +16,30 @@ export interface OfflineOrder {
   retryable?: boolean; // true = network error (retry), false = business error (don't retry)
 }
 
+export type DeliveryAction =
+  | { type: "markOutForDelivery"; orderId: number }
+  | { type: "markDelivered"; orderId: number; cashAmount?: string }
+  | { type: "markFailed"; orderId: number; reason?: string };
+
+export interface OfflineDeliveryAction {
+  id: string;
+  action: DeliveryAction;
+  createdAt: string;
+  synced: boolean;
+  status?: "pending" | "syncing" | "failed";
+  error?: string;
+  retryable?: boolean;
+}
+
 interface OfflineStore {
   orders: OfflineOrder[];
+  deliveryActions: OfflineDeliveryAction[];
   loaded: boolean;
   load: () => Promise<void>;
   addOrder: (order: OfflineOrder) => Promise<void>;
+  addDeliveryAction: (action: OfflineDeliveryAction) => Promise<void>;
   syncAll: () => Promise<{ synced: number; failed: number }>;
+  syncDeliveryActions: () => Promise<{ synced: number; failed: number }>;
   remove: (id: string) => Promise<void>;
   clear: () => Promise<void>;
   retry: (id: string) => Promise<boolean>;
@@ -37,6 +56,19 @@ async function readQueue(): Promise<OfflineOrder[]> {
 
 async function writeQueue(orders: OfflineOrder[]) {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+}
+
+async function readDeliveryActionsQueue(): Promise<OfflineDeliveryAction[]> {
+  try {
+    const raw = await AsyncStorage.getItem(DELIVERY_ACTIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeDeliveryActionsQueue(actions: OfflineDeliveryAction[]) {
+  await AsyncStorage.setItem(DELIVERY_ACTIONS_KEY, JSON.stringify(actions));
 }
 
 /**
@@ -56,17 +88,78 @@ function isRetryableError(e: unknown): boolean {
 
 export const useOfflineStore = create<OfflineStore>((set, get) => ({
   orders: [],
+  deliveryActions: [],
   loaded: false,
 
   load: async () => {
-    const orders = await readQueue();
-    set({ orders, loaded: true });
+    const [orders, deliveryActions] = await Promise.all([readQueue(), readDeliveryActionsQueue()]);
+    set({ orders, deliveryActions, loaded: true });
   },
 
   addOrder: async (order) => {
     const orders = [...get().orders, { ...order, status: "pending" as const }];
     set({ orders });
     await writeQueue(orders);
+  },
+
+  addDeliveryAction: async (action) => {
+    const deliveryActions = [...get().deliveryActions, { ...action, status: "pending" as const }];
+    set({ deliveryActions });
+    await writeDeliveryActionsQueue(deliveryActions);
+  },
+
+  syncDeliveryActions: async () => {
+    let synced = 0;
+    let failed = 0;
+
+    const currentActions = get().deliveryActions;
+    const pendingActions = currentActions.filter(a => !a.synced);
+
+    if (pendingActions.length === 0) return { synced: 0, failed: 0 };
+
+    const syncingActions = currentActions.map(a =>
+      a.synced ? a : { ...a, status: "syncing" as const }
+    );
+    set({ deliveryActions: syncingActions });
+    await writeDeliveryActionsQueue(syncingActions);
+
+    const failedIds: Set<string> = new Set();
+
+    for (const entry of pendingActions) {
+      try {
+        const { action } = entry;
+        if (action.type === "markOutForDelivery") {
+          await markOutForDelivery(action.orderId);
+        } else if (action.type === "markDelivered") {
+          await markDelivered(action.orderId, action.cashAmount);
+        } else if (action.type === "markFailed") {
+          await markFailed(action.orderId, action.reason);
+        }
+        synced++;
+      } catch (e) {
+        failedIds.add(entry.id);
+        failed++;
+        const idx = syncingActions.findIndex(a => a.id === entry.id);
+        if (idx !== -1) {
+          syncingActions[idx] = {
+            ...syncingActions[idx],
+            status: "failed" as const,
+            error: e instanceof Error ? e.message : "Sync failed",
+            retryable: isRetryableError(e),
+          };
+        }
+      }
+    }
+
+    const finalActions = syncingActions.map(a => {
+      if (a.synced) return a;
+      if (failedIds.has(a.id)) return a;
+      return { ...a, synced: true, status: "pending" as const };
+    });
+
+    set({ deliveryActions: finalActions });
+    await writeDeliveryActionsQueue(finalActions);
+    return { synced, failed };
   },
 
   syncAll: async () => {

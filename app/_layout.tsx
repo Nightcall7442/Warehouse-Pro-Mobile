@@ -24,7 +24,7 @@ const queryClient = new QueryClient({
 });
 
 function AutoSync() {
-  const { syncAll, orders } = useOfflineStore();
+  const { syncAll, syncDeliveryActions, orders, deliveryActions } = useOfflineStore();
   const qc = useQueryClient();
   const wasOffline = useRef(false);
 
@@ -33,10 +33,17 @@ function AutoSync() {
       const online = state.isConnected ?? false;
 
       if (online && wasOffline.current) {
-        const pending = orders.filter((o) => !o.synced);
-        if (pending.length > 0) {
+        const pendingOrders = orders.filter((o) => !o.synced);
+        const pendingActions = deliveryActions.filter((a) => !a.synced);
+
+        if (pendingOrders.length > 0) {
           syncAll().then(({ synced }) => {
             if (synced > 0) qc.invalidateQueries({ queryKey: ["myOrders"] });
+          });
+        }
+        if (pendingActions.length > 0) {
+          syncDeliveryActions().then(({ synced }) => {
+            if (synced > 0) qc.invalidateQueries({ queryKey: ["myDeliveries"] });
           });
         }
       }
@@ -45,7 +52,7 @@ function AutoSync() {
     });
 
     return unsub;
-  }, [orders, syncAll, qc]);
+  }, [orders, deliveryActions, syncAll, syncDeliveryActions, qc]);
 
   return null;
 }

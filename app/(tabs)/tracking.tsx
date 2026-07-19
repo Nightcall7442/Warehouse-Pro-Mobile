@@ -3,8 +3,7 @@ import { View, Text, TouchableOpacity, FlatList, useWindowDimensions, RefreshCon
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getAgentLocations, AgentLocation, API_BASE } from "../../src/api";
-import { SecureStore } from "../../src/storage";
+import { getAgentLocations, AgentLocation } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Radii, Shadows } from "../../src/theme";
 import { DarkShadowColor } from "../../src/theme";
@@ -44,47 +43,12 @@ export default function TrackingScreen() {
   const webViewRef = useRef<any>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [locations, setLocations] = useState<AgentLocation[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
-  const wsFailures = useRef(0);
-  const [wsConnected, setWsConnected] = useState(false);
 
   const { data: polledLocations, isLoading, isError, refetch, isRefetching } = useQuery({
-    queryKey: ["agentLocations"], queryFn: getAgentLocations, refetchInterval: wsConnected ? false : 15_000, retry: 2,
+    queryKey: ["agentLocations"], queryFn: getAgentLocations, refetchInterval: 15_000, retry: 2,
   });
 
   useEffect(() => { if (polledLocations) setLocations(polledLocations); }, [polledLocations]);
-
-  // WebSocket
-  useEffect(() => {
-    let mounted = true;
-    let reconnectTimeout: ReturnType<typeof setTimeout>;
-    async function connect() {
-      const token = await SecureStore.getItemAsync("session_token");
-      if (!token || !mounted) return;
-      const wsHost = API_BASE.replace(/^https?:\/\//, "").replace(/\/$/, "");
-      const protocol = API_BASE.startsWith("https") ? "wss" : "ws";
-      const ws = new WebSocket(`${protocol}://${wsHost}/ws`);
-      ws.onopen = () => { wsFailures.current = 0; setWsConnected(true); ws.send(JSON.stringify({ type: "auth", token })); };
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === "agent_location") {
-            setLocations(prev => {
-              const idx = prev.findIndex(l => l.agentId === msg.agentId);
-              const updated: AgentLocation = { id: msg.agentId, agentId: msg.agentId, agentName: msg.agentName, lat: String(msg.lat), lng: String(msg.lng), accuracy: msg.accuracy != null ? String(msg.accuracy) : undefined, batteryLevel: msg.batteryLevel, createdAt: new Date().toISOString() };
-              if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
-              return [...prev, updated];
-            });
-          }
-        } catch { /* parse error */ }
-      };
-      ws.onerror = () => { wsFailures.current++; };
-      ws.onclose = () => { if (!mounted) return; setWsConnected(false); wsRef.current = null; reconnectTimeout = setTimeout(connect, Math.min(1000 * 2 ** wsFailures.current, 30_000)); };
-      wsRef.current = ws;
-    }
-    connect();
-    return () => { mounted = false; clearTimeout(reconnectTimeout); wsRef.current?.close(); wsRef.current = null; };
-  }, []);
 
   const onlineCount = locations.filter(l => isOnline(l.createdAt)).length;
   const offlineCount = locations.length - onlineCount;

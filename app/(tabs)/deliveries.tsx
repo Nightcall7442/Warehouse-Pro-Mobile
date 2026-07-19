@@ -10,9 +10,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { Card, Button, Badge, SectionHeader, EmptyState } from "../../src/components/ui";
-import { listMyDeliveries, markOutForDelivery, markDelivered, type Delivery } from "../../src/api";
+import { listMyDeliveries, type Delivery } from "../../src/api";
+import { useOfflineStore } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
 import * as Haptics from "expo-haptics";
+import * as Network from "expo-network";
 
 const STATUS_CONFIG: Record<string, { icon: keyof typeof Feather.glyphMap; variant: "info" | "warning" | "success" | "danger"; label: string }> = {
   assigned:         { icon: "package",  variant: "info",    label: "Назначен" },
@@ -32,9 +34,29 @@ export default function DeliveriesScreen() {
     queryFn: () => listMyDeliveries(),
   });
 
+  const { addDeliveryAction } = useOfflineStore();
+
   const markOut = useMutation({
-    mutationFn: (orderId: number) => markOutForDelivery(orderId),
-    onSuccess: () => {
+    mutationFn: async (orderId: number) => {
+      const net = await Network.getNetworkStateAsync();
+      if (!net.isConnected) {
+        await addDeliveryAction({
+          id: `markOut-${orderId}-${Date.now()}`,
+          action: { type: "markOutForDelivery", orderId },
+          createdAt: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true };
+      }
+      const { markOutForDelivery } = await import("../../src/api");
+      return markOutForDelivery(orderId);
+    },
+    onSuccess: (result: any) => {
+      if (result?.offline) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notify.info("Нет подключения. Действие сохранено офлайн.");
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       notify.success("Взято в доставку");
@@ -43,12 +65,57 @@ export default function DeliveriesScreen() {
   });
 
   const markDel = useMutation({
-    mutationFn: ({ orderId, cashAmount }: { orderId: number; cashAmount?: string }) =>
-      markDelivered(orderId, cashAmount),
-    onSuccess: () => {
+    mutationFn: async ({ orderId, cashAmount }: { orderId: number; cashAmount?: string }) => {
+      const net = await Network.getNetworkStateAsync();
+      if (!net.isConnected) {
+        await addDeliveryAction({
+          id: `markDel-${orderId}-${Date.now()}`,
+          action: { type: "markDelivered", orderId, cashAmount },
+          createdAt: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true };
+      }
+      const { markDelivered } = await import("../../src/api");
+      return markDelivered(orderId, cashAmount);
+    },
+    onSuccess: (result: any) => {
+      if (result?.offline) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notify.info("Нет подключения. Действие сохранено офлайн.");
+        return;
+      }
       qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       notify.success("Доставлено!");
+    },
+    onError: (e: Error) => notify.error(e.message),
+  });
+
+  const markFail = useMutation({
+    mutationFn: async ({ orderId, reason }: { orderId: number; reason?: string }) => {
+      const net = await Network.getNetworkStateAsync();
+      if (!net.isConnected) {
+        await addDeliveryAction({
+          id: `markFail-${orderId}-${Date.now()}`,
+          action: { type: "markFailed", orderId, reason },
+          createdAt: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true };
+      }
+      const { markFailed } = await import("../../src/api");
+      return markFailed(orderId, reason);
+    },
+    onSuccess: (result: any) => {
+      if (result?.offline) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notify.info("Нет подключения. Действие сохранено офлайн.");
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["myDeliveries"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      notify.success("Отмечено как недоставлено");
     },
     onError: (e: Error) => notify.error(e.message),
   });
@@ -57,7 +124,7 @@ export default function DeliveriesScreen() {
   const inTransit = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "out_for_delivery");
 
   const openMap = (address: string) => {
-    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    const url = `https://yandex.ru/maps/?text=${encodeURIComponent(address)}`;
     Linking.openURL(url);
   };
 
@@ -133,6 +200,16 @@ export default function DeliveriesScreen() {
                           cashAmount: cashInputs[order.id] || undefined,
                         }),
                       },
+                    ]
+                  );
+                }}
+                onFail={() => {
+                  Alert.alert(
+                    "Не доставлено?",
+                    `Заказ ${order.orderNumber} → ${order.shopName}`,
+                    [
+                      { text: "Отмена", style: "cancel" },
+                      { text: "Да", onPress: () => markFail.mutate({ orderId: order.id }) },
                     ]
                   );
                 }}
@@ -217,6 +294,7 @@ function DeliveryCard({
   onCashChange: (v: string) => void;
   onOpenMap: () => void;
   onDeliver: () => void;
+  onFail: () => void;
   isPending: boolean;
 }) {
   const config = STATUS_CONFIG[order.deliveryStatus] ?? STATUS_CONFIG.assigned;
@@ -278,6 +356,11 @@ function DeliveryCard({
           <Button variant="success" icon="check-circle" onPress={onDeliver} loading={isPending}>
             Доставлено
           </Button>
+          <View style={{ marginTop: 8 }}>
+            <Button variant="danger" icon="x-circle" onPress={onFail}>
+              Не доставлено
+            </Button>
+          </View>
         </View>
       </Card>
     </Animated.View>
