@@ -246,6 +246,11 @@ export default function TrackingScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 }}>
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: online ? colors.status.success : colors.status.warning }} />
                     <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{online ? "Онлайн" : timeAgo(loc.createdAt)}</Text>
+                    {loc.batteryLevel != null && (
+                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: loc.batteryLevel < 20 ? colors.status.danger : colors.text.tertiary }}>
+                        🔋 {loc.batteryLevel}%
+                      </Text>
+                    )}
                   </View>
                 </View>
                 <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
