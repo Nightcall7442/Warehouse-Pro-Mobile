@@ -337,6 +337,7 @@ export interface AgentLocation {
   lat: string;
   lng: string;
   accuracy?: string;
+  batteryLevel?: number;
   createdAt: string;
 }
 

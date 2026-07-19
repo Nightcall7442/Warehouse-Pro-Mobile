@@ -28,6 +28,12 @@ function timeAgo(createdAt: string | undefined): string {
   return new Date(createdAt).toLocaleDateString("ru");
 }
 
+function batteryColor(level: number): string {
+  if (level >= 50) return "#34c473";
+  if (level >= 20) return "#d4973a";
+  return "#d45050";
+}
+
 export default function TrackingScreen() {
   const { width: SCREEN_W } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -35,7 +41,7 @@ export default function TrackingScreen() {
   const { isDark } = useThemeStore();
   const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
 
-  const mapRef = useRef<any>(null);
+  const webViewRef = useRef<any>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [locations, setLocations] = useState<AgentLocation[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
@@ -48,7 +54,7 @@ export default function TrackingScreen() {
 
   useEffect(() => { if (polledLocations) setLocations(polledLocations); }, [polledLocations]);
 
-  // WebSocket for real-time updates
+  // WebSocket
   useEffect(() => {
     let mounted = true;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
@@ -108,12 +114,14 @@ export default function TrackingScreen() {
     setSelectedId(loc.agentId);
     const lat = Number(loc.lat), lng = Number(loc.lng);
     if (!lat || !lng) return;
-    mapRef.current?.injectJavaScript(`centerOn(${lat}, ${lng}, 15);`);
+    webViewRef.current?.injectJavaScript(`centerOn(${lat}, ${lng}, 15);`);
   }, []);
 
   const fitAll = useCallback(() => {
-    mapRef.current?.injectJavaScript(`fitAll();`);
+    webViewRef.current?.injectJavaScript(`fitAll();`);
   }, []);
+
+  const selectedLoc = locations.find(l => l.agentId === selectedId);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
@@ -140,8 +148,8 @@ export default function TrackingScreen() {
         ))}
       </View>
 
-      {/* Yandex Map */}
-      <View style={{ height: SCREEN_W * 0.75, backgroundColor: colors.bg.elevated, position: "relative" }}>
+      {/* Map */}
+      <View style={{ height: SCREEN_W * 0.7, backgroundColor: colors.bg.elevated, marginHorizontal: 16, marginTop: 12, borderRadius: Radii.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border.default, shadowColor: sc, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity, shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation }}>
         {isError ? (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
             <Feather name="wifi-off" size={28} color={colors.text.muted} />
@@ -154,22 +162,47 @@ export default function TrackingScreen() {
           </View>
         ) : (
           <YandexMapView
-            ref={mapRef}
+            ref={webViewRef}
             markers={mapMarkers}
             center={center}
             zoom={mapMarkers.length > 1 ? 11 : 14}
-            style={{ flex: 1 }}
+            style={{ width: "100%", height: "100%" }}
           />
         )}
         {/* Center button */}
-        <TouchableOpacity onPress={fitAll} style={{ position: "absolute", bottom: 16, right: 16, backgroundColor: colors.bg.card, borderRadius: 999, padding: 12, borderWidth: 1, borderColor: colors.border.default, shadowColor: sc, shadowOffset: Shadows.md.shadowOffset, shadowOpacity: Shadows.md.shadowOpacity, shadowRadius: Shadows.md.shadowRadius, elevation: Shadows.md.elevation }}>
-          <Feather name="crosshair" size={20} color={colors.accent.primary} />
+        <TouchableOpacity onPress={fitAll} style={{ position: "absolute", bottom: 12, right: 12, backgroundColor: colors.bg.card, borderRadius: 999, padding: 10, borderWidth: 1, borderColor: colors.border.default, shadowColor: sc, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity, shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation }}>
+          <Feather name="crosshair" size={18} color={colors.accent.primary} />
         </TouchableOpacity>
       </View>
 
+      {/* Selected agent info */}
+      {selectedLoc && (
+        <View style={{ marginHorizontal: 16, marginTop: 10, backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.accent.primary + "40", padding: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: isOnline(selectedLoc.createdAt) ? colors.status.success : colors.text.tertiary, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.xs }}>{(selectedLoc.agentName ?? "A")[0].toUpperCase()}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>{selectedLoc.agentName ?? `Агент #${selectedLoc.agentId}`}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isOnline(selectedLoc.createdAt) ? colors.status.success : colors.status.warning }} />
+              <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{isOnline(selectedLoc.createdAt) ? "Онлайн" : timeAgo(selectedLoc.createdAt)}</Text>
+              {selectedLoc.batteryLevel != null && (
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: batteryColor(selectedLoc.batteryLevel) }}>🔋 {selectedLoc.batteryLevel}%</Text>
+              )}
+              {selectedLoc.accuracy && (
+                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>±{Math.round(Number(selectedLoc.accuracy))}м</Text>
+              )}
+            </View>
+          </View>
+          <TouchableOpacity onPress={() => setSelectedId(null)} style={{ padding: 4 }}>
+            <Feather name="x" size={16} color={colors.text.tertiary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Agent list */}
       <FlatList data={locations} keyExtractor={l => String(l.id)}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24, flexGrow: 1 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.accent.primary} colors={[colors.accent.primary]} />}
         ListEmptyComponent={!isLoading ? (
           <View style={{ alignItems: "center", paddingTop: 40, gap: 8 }}>
@@ -199,13 +232,11 @@ export default function TrackingScreen() {
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: online ? colors.status.success : colors.status.warning }} />
                     <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{online ? "Онлайн" : timeAgo(loc.createdAt)}</Text>
                     {loc.batteryLevel != null && (
-                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: loc.batteryLevel < 20 ? colors.status.danger : colors.text.tertiary }}>
-                        🔋 {loc.batteryLevel}%
-                      </Text>
+                      <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: batteryColor(loc.batteryLevel) }}>🔋 {loc.batteryLevel}%</Text>
                     )}
                   </View>
                 </View>
-                <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+                <Feather name={selected ? "chevron-down" : "chevron-right"} size={16} color={colors.text.tertiary} />
               </View>
             </PressableScale>
           );
