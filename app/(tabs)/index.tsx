@@ -16,7 +16,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 import { LinearGradient } from "expo-linear-gradient";
-import { DarkShadowColor } from "../../src/theme";
 
 type IconName = keyof typeof Feather.glyphMap;
 
@@ -35,7 +34,7 @@ function CardDots() {
 function KpiCard({ label, value, icon, color, colors, isDark }: {
   label: string; value: string | number; icon: IconName; color: string; colors: ThemeColors; isDark: boolean;
 }) {
-  const shadowColor = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
+  const shadowColor = isDark ? "#000" : Shadows.sm.shadowColor;
   return (
     <View style={{
       flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.xl,
@@ -67,7 +66,7 @@ function PlanRow({ plan, onDone, onSkip, colors, isDark, index }: {
   };
   const cfg = STATUS_META[plan.status] ?? STATUS_META.planned;
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
-  const shadowColor = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
+  const shadowColor = isDark ? "#000" : Shadows.xs.shadowColor;
 
   return (
     <FadeInItem delay={index * 60}>

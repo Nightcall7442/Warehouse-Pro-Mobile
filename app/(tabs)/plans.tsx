@@ -32,7 +32,7 @@ import {
 import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { Typography, Spacing, Radii, Shadows, ThemeColors, DarkShadowColor, KpiColors } from "../../src/theme";
+import { Typography, Spacing, Radii, Shadows, ThemeColors, KpiColors } from "../../src/theme";
 import { ScreenHeader, Button, EmptyState } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
@@ -90,7 +90,7 @@ function PlanRow({
   loading?: boolean;
 }) {
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
-  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
+  const sc = isDark ? "#000" : Shadows.sm.shadowColor;
   const meta = getStatusMeta(plan.status, colors);
   const canAct = plan.status === "planned" && (onVisit || onSkip);
 
@@ -353,7 +353,7 @@ function SelectRow({
   isDark: boolean;
   onPress: () => void;
 }) {
-  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
+  const sc = isDark ? "#000" : Shadows.sm.shadowColor;
   return (
     <PressableScale onPress={onPress} haptic="selection" style={{ marginBottom: Spacing.sm }}>
       <View
