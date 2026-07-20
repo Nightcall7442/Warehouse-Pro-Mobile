@@ -627,3 +627,71 @@ export async function getCommissions(filters?: { periodType?: string; userId?: n
 export async function setCommissionRate(userId: number, commissionRate: number): Promise<{ success: boolean }> {
   return trpcMutation<{ success: boolean }>("commission.setRate", { userId, commissionRate });
 }
+
+// ── Returns ───────────────────────────────────────────────────────────────────
+export interface Return {
+  id: number;
+  returnNumber: string;
+  orderId?: number;
+  shopId: number;
+  shopName?: string;
+  agentId?: number;
+  agentName?: string;
+  status: "pending" | "approved" | "rejected" | "completed";
+  reason: "defect" | "wrong_item" | "expired" | "damaged" | "other";
+  notes?: string;
+  totalAmount: string;
+  createdAt: string;
+}
+
+export interface ReturnItem {
+  id: number;
+  productId: number;
+  productName?: string;
+  productCode?: string;
+  quantity: string;
+  unitPrice: string;
+  subtotal: string;
+  reason?: string;
+  condition?: string;
+}
+
+export async function getReturns(filters?: { status?: string; shopId?: number }): Promise<{ data: Return[]; total: number }> {
+  return trpcQuery("returns.list", filters);
+}
+
+export async function getReturnById(id: number): Promise<(Return & { items: ReturnItem[] }) | null> {
+  return trpcQuery("returns.getById", { id });
+}
+
+export async function createReturn(input: {
+  orderId?: number;
+  shopId: number;
+  reason: "defect" | "wrong_item" | "expired" | "damaged" | "other";
+  notes?: string;
+  items: Array<{ productId: number; quantity: number; unitPrice: number; reason?: string; condition?: string }>;
+}): Promise<{ id: number; returnNumber: string }> {
+  return trpcMutation("returns.create", input);
+}
+
+export async function getReturnsSummary(): Promise<Array<{ reason: string; count: number; totalAmount: string }>> {
+  return trpcQuery("returns.summary");
+}
+
+// ── Reorder alerts ────────────────────────────────────────────────────────────
+export interface ReorderAlert {
+  productId: number;
+  productName: string;
+  productCode?: string;
+  category?: string;
+  currentStock: string;
+  reorderPoint: string;
+  dailyVelocity: string;
+  daysUntilStockout: number;
+  dynamicReorderPoint: number;
+  alertLevel: "ok" | "warning" | "critical";
+}
+
+export async function getReorderAlerts(days?: number): Promise<ReorderAlert[]> {
+  return trpcQuery<ReorderAlert[]>("warehouseReports.reorderAlerts", { days: days ?? 30 });
+}
