@@ -1,4 +1,4 @@
-// Warehouse Pro — Orders (matches web Orders.tsx — KPI cards + list)
+// Warehouse Pro — Orders v2 (cold palette, ProgressRing donuts)
 import React, { useMemo, useCallback, useState } from "react";
 import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
@@ -11,9 +11,9 @@ import { getMyOrders, deleteOrder, Order, createOrder } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors } from "../../src/theme";
-import { DarkShadowColor } from "../../src/theme";
 import { notify } from "../../src/store/toast";
 import { Card, Badge } from "../../src/components/ui";
+import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale } from "../../src/components/Animated";
 import { LinearGradient } from "expo-linear-gradient";
 import { Gradients } from "../../src/theme";
@@ -78,7 +78,6 @@ export default function OrdersScreen() {
     ]);
   }, [refetch]);
 
-  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
   const orderCount = items.filter(i => i.type === "order").length;
 
   const stats = useMemo(() => {
@@ -111,32 +110,48 @@ export default function OrdersScreen() {
         </View>
       </View>
 
-      {/* KPI Cards — matches web Orders.tsx */}
+      {/* KPI row — rings like Dashboard */}
       <FadeInItem delay={0}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, paddingHorizontal: Spacing.base, marginBottom: Spacing.base }}>
-          <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, padding: Spacing.md, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
-            <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: KpiColors.orange + "18", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
-              <Feather name="clipboard" size={14} color={KpiColors.orange} />
-            </View>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{stats.total}</Text>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Всего</Text>
-          </View>
-          <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, padding: Spacing.md, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
-            <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: KpiColors.blue + "18", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
-              <Feather name="clock" size={14} color={KpiColors.blue} />
-            </View>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{stats.newCount}</Text>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Новые</Text>
-          </View>
-          <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, padding: Spacing.md, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
-            <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: KpiColors.green + "18", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
-              <Feather name="check-circle" size={14} color={KpiColors.green} />
-            </View>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{stats.completedCount}</Text>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Выполнены</Text>
-          </View>
+          {isLoading ? (
+            <>
+              <View style={{ flex: 1 }}><View style={{ height: 120, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated }} /></View>
+              <View style={{ flex: 1 }}><View style={{ height: 120, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated }} /></View>
+              <View style={{ flex: 1 }}><View style={{ height: 120, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated }} /></View>
+            </>
+          ) : (
+            <>
+              {/* Total ring */}
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
+                <ProgressRing value={stats.total > 0 ? 100 : 0} size={56} strokeWidth={6} color={KpiColors.blue} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{stats.total}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Всего</Text>
+              </Card>
+              {/* New ring */}
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
+                <ProgressRing value={stats.total > 0 ? Math.round(stats.newCount / Math.max(stats.total, 1) * 100) : 0} size={56} strokeWidth={6} color={KpiColors.teal} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{stats.newCount}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Новые</Text>
+              </Card>
+              {/* Completed ring */}
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
+                <ProgressRing value={stats.total > 0 ? Math.round(stats.completedCount / Math.max(stats.total, 1) * 100) : 0} size={56} strokeWidth={6} color={KpiColors.green} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{stats.completedCount}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Выполнены</Text>
+              </Card>
+            </>
+          )}
         </View>
       </FadeInItem>
+
+      {/* Progress bar */}
+      {stats.total > 0 && (
+        <FadeInItem delay={40}>
+          <View style={{ paddingHorizontal: Spacing.base, marginBottom: Spacing.base }}>
+            <NeumorphicProgressBar value={stats.total > 0 ? Math.round(stats.completedCount / Math.max(stats.total, 1) * 100) : 0} height={6} color={KpiColors.green} />
+          </View>
+        </FadeInItem>
+      )}
 
       {/* List */}
       <FlatList
@@ -164,30 +179,27 @@ export default function OrdersScreen() {
           const order = item.order;
           const time = (() => { try { return format(parseISO(order.createdAt), "HH:mm", { locale: ru }); } catch { return ""; } })();
           return (
-            <TouchableOpacity
-              activeOpacity={0.7}
+            <PressableScale
               onPress={() => router.push({ pathname: "/order/[id]", params: { id: String(order.id) } })}
-              onLongPress={() => handleDelete(order)}
-              style={{
-                flexDirection: "row", alignItems: "center", gap: Spacing.md,
-                backgroundColor: colors.bg.card, borderRadius: Radii.lg,
-                padding: Spacing.base, marginBottom: Spacing.xs,
-                borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
-                shadowColor: sc, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity,
-                shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation,
-              }}>
-              <View style={{ width: 36, height: 36, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="clipboard" size={16} color={colors.accent.primary} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{order.orderNumber}</Text>
-                <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>{time}</Text>
-              </View>
-              <Text style={{ fontSize: Typography.size.md, fontFamily: Typography.fontBold, color: colors.text.primary, fontVariant: ["tabular-nums"] }}>
-                {Number(order.total).toLocaleString("ru")}
-              </Text>
-              <Feather name="chevron-right" size={16} color={colors.text.muted} />
-            </TouchableOpacity>
+              haptic="light"
+              style={{ marginBottom: Spacing.xs }}
+            >
+              <Card>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+                  <View style={{ width: 36, height: 36, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="clipboard" size={16} color={colors.accent.primary} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{order.orderNumber}</Text>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>{time}</Text>
+                  </View>
+                  <Text style={{ fontSize: Typography.size.md, fontFamily: Typography.fontBold, color: colors.text.primary, fontVariant: ["tabular-nums"] }}>
+                    {Number(order.total).toLocaleString("ru")}
+                  </Text>
+                  <Feather name="chevron-right" size={16} color={colors.text.muted} />
+                </View>
+              </Card>
+            </PressableScale>
           );
         }}
       />
@@ -200,7 +212,6 @@ export default function OrdersScreen() {
           position: "absolute", bottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.sm, right: Spacing.xl,
           width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent.primary,
           alignItems: "center", justifyContent: "center",
-          shadowColor: colors.accent.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
         }}>
         <Feather name="plus" size={26} color="#fff" />
       </TouchableOpacity>
