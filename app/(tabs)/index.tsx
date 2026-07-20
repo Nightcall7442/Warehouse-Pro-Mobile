@@ -159,21 +159,28 @@ function AgentHome() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
-      {/* Header */}
+      {/* Header — matches web Dashboard.tsx */}
       <FadeInItem delay={0}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.lg }}>
-          <View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: Spacing.lg }}>
+          <View style={{ flex: 1 }}>
             <CardDots />
             <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
-            <Text style={{ fontSize: Typography.size.xl, fontFamily: Typography.fontBold, color: colors.text.primary, marginTop: 2 }}>Мой день</Text>
+            <Text style={{ fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, color: colors.text.primary, marginTop: 2 }}>Мой день</Text>
             <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBody, color: colors.text.tertiary, marginTop: 2, textTransform: "capitalize" }}>
               {format(new Date(), "EEEE, d MMMM", { locale: ru })}
             </Text>
           </View>
+          <PressableScale onPress={() => router.push("/order/new")} haptic="light">
+            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radii.md }}>
+              <Feather name="plus" size={14} color="#fff" />
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff" }}>Новый заказ</Text>
+            </LinearGradient>
+          </PressableScale>
         </View>
       </FadeInItem>
 
-      {/* KPI row */}
+      {/* KPI row — 3 cards like web */}
       <FadeInItem delay={80}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           {kpisLoading ? (
