@@ -1,4 +1,4 @@
-// Warehouse Pro — Catalog (hero images for client demos)
+// Warehouse Pro — Catalog v2 (cold palette, Card from ui.tsx)
 import React, { useState, useCallback, useMemo } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, TextInput, Modal, Pressable,
@@ -11,8 +11,8 @@ import { getProducts, getCategories, createOrder, getMyShops, Product, Shop } fr
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
-import { Typography, Spacing, Radii, Shadows, ThemeColors } from "../../src/theme";
-import { DarkShadowColor } from "../../src/theme";
+import { Typography, Spacing, Radii, Shadows, ThemeColors, KpiColors } from "../../src/theme";
+import { ScreenHeader, SearchInput, Card } from "../../src/components/ui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ── Hero Product Card ────────────────────────────────────────────────────────
@@ -20,50 +20,44 @@ function ProductCard({ product, colors, isDark, onPress, onAdd, fmt, cardWidth }
   product: Product; colors: ThemeColors; isDark: boolean; onPress: () => void; onAdd: () => void;
   fmt: (v: number | string | null | undefined) => string; cardWidth: number;
 }) {
-  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
   const hasPhoto = !!product.photoUrl && product.photoUrl.startsWith("http");
   const inStock = Number(product.available) > 0;
   const imgHeight = cardWidth * 0.7;
 
   return (
-    <TouchableOpacity activeOpacity={0.9} onPress={onPress}
-      style={{
-        width: cardWidth, borderRadius: Radii.xl, overflow: "hidden", marginBottom: Spacing.base,
-        backgroundColor: colors.bg.card, borderWidth: 1,
-        borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
-        shadowColor: sc, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity,
-        shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation,
-      }}>
-      {/* Big photo */}
-      <View style={{ width: "100%", height: imgHeight, backgroundColor: colors.bg.elevated }}>
-        {hasPhoto ? (
-          <Image source={{ uri: product.photoUrl ?? undefined }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-        ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <Feather name="package" size={40} color={colors.text.muted} />
+    <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={{ width: cardWidth, marginBottom: Spacing.base }}>
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        {/* Big photo */}
+        <View style={{ width: "100%", height: imgHeight, backgroundColor: colors.bg.elevated }}>
+          {hasPhoto ? (
+            <Image source={{ uri: product.photoUrl ?? undefined }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+          ) : (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="package" size={40} color={colors.text.muted} />
+            </View>
+          )}
+          {/* Stock badge */}
+          <View style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, backgroundColor: inStock ? colors.status.successDim : colors.status.dangerDim, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: inStock ? colors.status.success + "30" : colors.status.danger + "30" }}>
+            <Text style={{ color: inStock ? colors.status.success : colors.status.danger, fontSize: 11, fontFamily: Typography.fontSemibold }}>{inStock ? "В наличии" : "Нет"}</Text>
           </View>
-        )}
-        {/* Stock badge */}
-        <View style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, backgroundColor: inStock ? "rgba(34,197,94,0.9)" : "rgba(239,68,68,0.9)", borderRadius: Radii.sm, paddingHorizontal: 8, paddingVertical: 4 }}>
-          <Text style={{ color: "#fff", fontSize: 11, fontFamily: Typography.fontSemibold }}>{inStock ? "В наличии" : "Нет в наличии"}</Text>
+          {/* Add button */}
+          {inStock && (
+            <TouchableOpacity onPress={(e) => { e.stopPropagation(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAdd(); }}
+              style={{ position: "absolute", bottom: Spacing.sm, right: Spacing.sm, width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="shopping-cart" size={16} color="#fff" />
+            </TouchableOpacity>
+          )}
         </View>
-        {/* Add button */}
-        {inStock && (
-          <TouchableOpacity onPress={(e) => { e.stopPropagation(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAdd(); }}
-            style={{ position: "absolute", bottom: Spacing.sm, right: Spacing.sm, width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center", shadowColor: colors.accent.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 }}>
-            <Feather name="shopping-cart" size={16} color="#fff" />
-          </TouchableOpacity>
-        )}
-      </View>
-      {/* Info */}
-      <View style={{ padding: Spacing.md }}>
-        <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, marginBottom: 4 }} numberOfLines={2}>{product.name}</Text>
-        {product.code && <Text style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMono, marginBottom: 6 }}>Артикул: {product.code}</Text>}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}</Text>
-          {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{product.available} {product.unit || "шт"}</Text>}
+        {/* Info */}
+        <View style={{ padding: Spacing.md }}>
+          <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, marginBottom: 4 }} numberOfLines={2}>{product.name}</Text>
+          {product.code && <Text style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMono, marginBottom: 6 }}>Артикул: {product.code}</Text>}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}</Text>
+            {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{product.available} {product.unit || "шт"}</Text>}
+          </View>
         </View>
-      </View>
+      </Card>
     </TouchableOpacity>
   );
 }
@@ -291,28 +285,7 @@ export default function CatalogScreen() {
       {/* Header */}
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
         <Text style={{ color: colors.text.primary, fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, marginBottom: Spacing.md }}>Каталог</Text>
-        {/* Search */}
-        <View style={{
-          flexDirection: "row", alignItems: "center", gap: Spacing.sm,
-          backgroundColor: colors.bg.input, borderRadius: Radii.lg,
-          paddingHorizontal: Spacing.md, paddingVertical: 10,
-          borderWidth: 1, borderColor: colors.border.default,
-        }}>
-          <Feather name="search" size={16} color={colors.text.muted} />
-          <TextInput
-            style={{ flex: 1, fontSize: Typography.size.base, color: colors.text.primary, fontFamily: Typography.fontBody }}
-            placeholder="Поиск товаров..."
-            placeholderTextColor={colors.text.muted}
-            value={search}
-            onChangeText={setSearch}
-            autoCapitalize="none"
-          />
-          {!!search && (
-            <TouchableOpacity onPress={() => setSearch("")}>
-              <Feather name="x" size={15} color={colors.text.muted} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск товаров..." />
       </View>
 
       {/* Category chips */}
