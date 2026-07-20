@@ -1,4 +1,4 @@
-// Warehouse Pro — Agent Dashboard (matches web AgentDashboard.tsx)
+// Warehouse Pro — Agent Dashboard v2 (cold palette + rings/sparklines)
 import React, { useEffect, useMemo, useCallback } from "react";
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
@@ -9,6 +9,7 @@ import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
 import { getAgentDashboard, getSupervisorDashboard, getPlans, updatePlanStatus, Plan } from "../../src/api";
 import { Card, SectionHeader, Badge } from "../../src/components/ui";
+import { ProgressRing, Sparkline, NeumorphicProgressBar } from "../../src/components/Charts";
 import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors, Gradients } from "../../src/theme";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,17 +17,16 @@ import * as Haptics from "expo-haptics";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 import { LinearGradient } from "expo-linear-gradient";
 import { DarkShadowColor } from "../../src/theme";
-import { PageContainer } from "../../src/components/Layout";
 
 type IconName = keyof typeof Feather.glyphMap;
 
-// ── CardDots — 3 colored dots signature (matches web) ────────────────────────
+// ── CardDots — 3 colored dots (cold palette) ──────────────────────────────────
 function CardDots() {
   return (
     <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f06895" }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f5a825" }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#2ec4b0" }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: KpiColors.coral }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: KpiColors.amber }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: KpiColors.teal }} />
     </View>
   );
 }
@@ -159,7 +159,7 @@ function AgentHome() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
-      {/* Header — matches web Dashboard.tsx */}
+      {/* Header — cold palette, avatar style */}
       <FadeInItem delay={0}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: Spacing.lg }}>
           <View style={{ flex: 1 }}>
@@ -180,14 +180,13 @@ function AgentHome() {
         </View>
       </FadeInItem>
 
-      {/* KPI row — 3 cards like web */}
+      {/* KPI rings — 2 donuts + revenue sparkline card */}
       <FadeInItem delay={80}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           {kpisLoading ? (
             <>
-              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
             </>
           ) : kpisError ? (
             <PressableScale onPress={() => refetchKpis()} haptic="light" style={{ flex: 1 }}>
@@ -198,15 +197,40 @@ function AgentHome() {
             </PressableScale>
           ) : (
             <>
-              <KpiCard label="ЗАКАЗОВ" value={kpis?.todayOrders ?? 0} icon="clipboard" color={KpiColors.orange} colors={colors} isDark={isDark} />
-              <KpiCard label="ВЫРУЧКА" value={(kpis?.todayRevenue ?? 0).toLocaleString("ru")} icon="trending-up" color={KpiColors.green} colors={colors} isDark={isDark} />
-              <KpiCard label="МАГАЗИНОВ" value={kpis?.assignedShops ?? 0} icon="shopping-bag" color={KpiColors.purple} colors={colors} isDark={isDark} />
+              {/* Orders ring */}
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
+                <ProgressRing value={kpis?.todayOrders ? Math.min(kpis.todayOrders * 10, 100) : 0} size={70} strokeWidth={7} color={KpiColors.blue} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 8 }}>{kpis?.todayOrders ?? 0}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Заказов</Text>
+              </Card>
+              {/* Shops ring */}
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
+                <ProgressRing value={kpis?.assignedShops ? Math.min(kpis.assignedShops * 10, 100) : 0} size={70} strokeWidth={7} color={KpiColors.teal} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 8 }}>{kpis?.assignedShops ?? 0}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Магазинов</Text>
+              </Card>
             </>
           )}
         </View>
       </FadeInItem>
 
-      {/* Progress card */}
+      {/* Revenue card with sparkline */}
+      <FadeInItem delay={120}>
+        <Card style={{ marginBottom: Spacing.base }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <View>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Выручка сегодня</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xxl, color: colors.text.primary, marginTop: 4, fontVariant: ["tabular-nums"] }}>
+                {(kpis?.todayRevenue ?? 0).toLocaleString("ru")} сум
+              </Text>
+            </View>
+            <ProgressRing value={kpis?.todayRevenue ? Math.min((kpis.todayRevenue / 1000000) * 100, 100) : 0} size={56} strokeWidth={6} color={KpiColors.green} />
+          </View>
+          <Sparkline data={[12, 19, 8, 15, 22, 18, 25]} color={KpiColors.blue} width={280} height={40} />
+        </Card>
+      </FadeInItem>
+
+      {/* Progress card — inset progress bar */}
       <FadeInItem delay={160}>
         <Card style={{ marginBottom: Spacing.base }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -215,9 +239,7 @@ function AgentHome() {
               {visited}/{total} · {pct}%
             </Text>
           </View>
-          <View style={{ height: 6, backgroundColor: colors.bg.elevated, borderRadius: 3, overflow: "hidden" }}>
-            <View style={{ height: "100%", borderRadius: 3, width: `${pct}%`, backgroundColor: pct >= 80 ? colors.status.success : pct >= 40 ? colors.status.warning : colors.accent.primary }} />
-          </View>
+          <NeumorphicProgressBar value={pct} height={8} color={pct >= 80 ? colors.status.success : pct >= 40 ? colors.status.warning : colors.brand.primary} />
           <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 8 }}>
             {total === 0 ? "На сегодня визитов нет" : pct === 100 ? "Все визиты выполнены!" : `Осталось ${total - visited}`}
           </Text>
@@ -225,7 +247,7 @@ function AgentHome() {
       </FadeInItem>
 
       {/* Quick actions — 2x2 grid */}
-      <FadeInItem delay={240}>
+      <FadeInItem delay={200}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           <PressableScale onPress={() => router.push("/order/new")} haptic="light" style={{ flex: 1 }}>
             <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
