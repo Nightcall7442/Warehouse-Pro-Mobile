@@ -37,7 +37,7 @@ function ProductCard({ product, colors, isDark, onPress, onAdd, fmt, cardWidth }
       {/* Big photo */}
       <View style={{ width: "100%", height: imgHeight, backgroundColor: colors.bg.elevated }}>
         {hasPhoto ? (
-          <Image source={{ uri: product.photoUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+          <Image source={{ uri: product.photoUrl ?? undefined }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
         ) : (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
             <Feather name="package" size={40} color={colors.text.muted} />
@@ -91,7 +91,7 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark, fmt }
           {/* Big photo */}
           <View style={{ width: "100%", height: SCREEN_W * 0.6, backgroundColor: colors.bg.elevated }}>
             {product.photoUrl ? (
-              <Image source={{ uri: product.photoUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+              <Image source={{ uri: product.photoUrl ?? undefined }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             ) : (
               <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="package" size={56} color={colors.text.muted} />
@@ -182,14 +182,14 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
 
 // ── Payment Picker Modal ─────────────────────────────────────────────────────
 function PaymentPicker({ visible, onSelect, onClose, colors }: {
-  visible: boolean; onSelect: (method: string) => void; onClose: () => void; colors: ThemeColors;
+  visible: boolean; onSelect: (method: "cash" | "card" | "transfer" | "debt") => void; onClose: () => void; colors: ThemeColors;
 }) {
-  const [selected, setSelected] = useState<string>("cash");
-  const options = [
-    { key: "cash", label: "Наличные", icon: "dollar-sign" as const },
-    { key: "card", label: "Карта", icon: "credit-card" as const },
-    { key: "transfer", label: "Перевод", icon: "send" as const },
-    { key: "debt", label: "Долг", icon: "alert-circle" as const },
+  const [selected, setSelected] = useState<"cash" | "card" | "transfer" | "debt">("cash");
+  const options: Array<{ key: "cash" | "card" | "transfer" | "debt"; label: string; icon: "dollar-sign" | "credit-card" | "send" | "alert-circle" }> = [
+    { key: "cash", label: "Наличные", icon: "dollar-sign" },
+    { key: "card", label: "Карта", icon: "credit-card" },
+    { key: "transfer", label: "Перевод", icon: "send" },
+    { key: "debt", label: "Долг", icon: "alert-circle" },
   ];
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -272,7 +272,7 @@ export default function CatalogScreen() {
   }, []);
 
   const createOrderMutation = useMutation({
-    mutationFn: (input: { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[]; paymentMethod?: string }) => createOrder(input),
+    mutationFn: (input: { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[]; paymentMethod?: "cash" | "card" | "transfer" | "debt" }) => createOrder(input),
     onSuccess: () => { notify.success("Заказ создан!"); setShowShopPicker(false); setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null); queryClient.invalidateQueries({ queryKey: ["myOrders"] }); },
     onError: (e: Error) => notify.error(e.message || "Ошибка"),
   });

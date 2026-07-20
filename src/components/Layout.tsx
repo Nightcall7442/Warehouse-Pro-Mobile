@@ -19,7 +19,7 @@ interface PageContainerProps {
   children: React.ReactNode;
   style?: ViewStyle;
   scrollable?: boolean;
-  refreshControl?: React.ReactElement;
+  refreshControl?: React.ReactElement<React.ComponentProps<typeof import("react-native").RefreshControl>>;
   contentPadding?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;

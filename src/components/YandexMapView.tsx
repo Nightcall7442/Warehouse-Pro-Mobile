@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useCallback } from "react";
-import { Platform } from "react-native";
+import React, { useEffect, useRef, useCallback, useImperativeHandle } from "react";
 import { WebView } from "react-native-webview";
 
 const YANDEX_API_KEY = "dd072e98-24e7-4b2e-b328-2989bd981fa5";
@@ -10,6 +9,8 @@ export interface MapMarker {
   lng: number;
   label: string;
   color: string;
+  online?: boolean;
+  batteryLevel?: number | null;
 }
 
 interface YandexMapViewProps {
@@ -20,8 +21,41 @@ interface YandexMapViewProps {
   style?: object;
 }
 
-function buildHtml(markers: MapMarker[], center: { lat: number; lng: number }, zoom: number): string {
-  const markersJson = JSON.stringify(markers);
+function batteryDotColor(level: number): string {
+  if (level < 20) return "#d45050";
+  if (level < 50) return "#d4973a";
+  return "#34c473";
+}
+
+function buildMarkerSvg(m: MapMarker): string {
+  const initial = m.label.charAt(0).toUpperCase();
+  const pulse = m.online
+    ? `<circle cx="20" cy="20" r="16" fill="none" stroke="${m.color}" stroke-width="1.5" opacity="0.5">
+         <animate attributeName="r" from="16" to="23" dur="1.8s" repeatCount="indefinite"/>
+         <animate attributeName="opacity" from="0.5" to="0" dur="1.8s" repeatCount="indefinite"/>
+       </circle>`
+    : "";
+  const batteryBadge =
+    m.batteryLevel != null && m.batteryLevel < 20
+      ? `<circle cx="32" cy="8" r="6" fill="${batteryDotColor(m.batteryLevel)}" stroke="white" stroke-width="1.5"/>`
+      : "";
+
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">` +
+    pulse +
+    `<circle cx="20" cy="20" r="16" fill="${m.color}" stroke="white" stroke-width="3"/>` +
+    `<text x="20" y="25" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="700" font-size="15">${initial}</text>` +
+    batteryBadge +
+    `</svg>`
+  );
+}
+
+function buildHtml(
+  markers: MapMarker[],
+  center: { lat: number; lng: number },
+  zoom: number
+): string {
+  const markersJson = JSON.stringify(markers.map(m => ({ ...m, svg: buildMarkerSvg(m) })));
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -45,17 +79,13 @@ function buildHtml(markers: MapMarker[], center: { lat: number; lng: number }, z
       markers.forEach(function(m) {
         var placemark = new ymaps.Placemark([m.lat, m.lng], {
           balloonContentHeader: '<b>' + m.label + '</b>',
+          balloonContentBody: m.batteryLevel != null ? ('🔋 ' + m.batteryLevel + '%') : '',
           hintContent: m.label,
         }, {
           iconLayout: "default#imageWithContent",
-          iconImageHref: "data:image/svg+xml," + encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">' +
-            '<circle cx="18" cy="18" r="16" fill="' + m.color + '" stroke="white" stroke-width="3"/>' +
-            '<text x="18" y="23" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="700" font-size="14">' +
-            m.label.charAt(0).toUpperCase() + '</text></svg>'
-          ),
-          iconImageSize: [36, 36],
-          iconImageOffset: [-18, -18],
+          iconImageHref: "data:image/svg+xml," + encodeURIComponent(m.svg),
+          iconImageSize: [40, 40],
+          iconImageOffset: [-20, -20],
           balloonPanelMaxMapArea: 0,
         });
 
@@ -90,27 +120,41 @@ function buildHtml(markers: MapMarker[], center: { lat: number; lng: number }, z
 </html>`;
 }
 
-export default function YandexMapView({ markers, center, zoom = 11, onMarkerPress, style }: YandexMapViewProps) {
+const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function YandexMapView(
+  { markers, center, zoom = 11, onMarkerPress, style },
+  ref
+) {
   const webRef = useRef<WebView>(null);
-  const centerRef = useRef(center);
+  useImperativeHandle(ref, () => webRef.current as WebView);
 
+  const centerRef = useRef(center);
   useEffect(() => {
     centerRef.current = center;
   }, [center]);
 
-  const handleMessage = useCallback((event: any) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === "markerClick" && onMarkerPress) {
-        onMarkerPress(data.id);
+  const handleMessage = useCallback(
+    (event: any) => {
+      try {
+        const data = JSON.parse(event.nativeEvent.data);
+        if (data.type === "markerClick" && onMarkerPress) {
+          onMarkerPress(data.id);
+        }
+      } catch {
+        /* ignore */
       }
-    } catch { /* ignore */ }
-  }, [onMarkerPress]);
+    },
+    [onMarkerPress]
+  );
 
   const html = React.useMemo(() => {
-    const c = center || (markers.length > 0
-      ? { lat: markers.reduce((s, m) => s + m.lat, 0) / markers.length, lng: markers.reduce((s, m) => s + m.lng, 0) / markers.length }
-      : { lat: 41.2995, lng: 69.2401 });
+    const c =
+      center ||
+      (markers.length > 0
+        ? {
+            lat: markers.reduce((s, m) => s + m.lat, 0) / markers.length,
+            lng: markers.reduce((s, m) => s + m.lng, 0) / markers.length,
+          }
+        : { lat: 41.2995, lng: 69.2401 });
     return buildHtml(markers, c, zoom);
   }, [markers, center, zoom]);
 
@@ -126,7 +170,9 @@ export default function YandexMapView({ markers, center, zoom = 11, onMarkerPres
       originWhitelist={["*"]}
     />
   );
-}
+});
+
+export default YandexMapView;
 
 export function centerOnAgent(webRef: React.RefObject<WebView | null>, lat: number, lng: number) {
   webRef.current?.injectJavaScript(`centerOn(${lat}, ${lng}, 15);`);
