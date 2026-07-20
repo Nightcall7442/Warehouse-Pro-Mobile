@@ -1,5 +1,6 @@
-// Warehouse Pro — Neumorphic UI Kit
-// Minimal components matching web index.css
+// Warehouse Pro — Neumorphic UI Kit v2
+// Cold palette (#e7ebf1 / #3b6fe0), dual-tone shadows
+// All colors from theme.ts — no hardcoded hex in components.
 import React from "react";
 import { View, Text, TouchableOpacity, TouchableOpacityProps, ActivityIndicator, TextInput, ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,7 +11,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 
 // ── Card ──────────────────────────────────────────────────────────────────────
-// Matches web .neo-card: surface bg, neumorphic shadow, top highlight line
+// Neumorphic card: bg.card bg, dual shadow, top highlight line.
+// Matches reference design — cards are "sunk" into the canvas, not white plates.
 interface CardProps {
   children: React.ReactNode;
   style?: ViewStyle | ViewStyle[];
@@ -22,19 +24,19 @@ interface CardProps {
 export function Card({ children, style, onPress, variant = "default", haptic = true }: CardProps) {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const shadowColor = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
+  const shadowColor = isDark ? DarkShadowColor : Shadows.card.shadowColor;
 
   const cardStyle: ViewStyle = {
     backgroundColor: variant === "accent" ? colors.brand.primaryDim : colors.bg.card,
     borderRadius: Radii.xxl,
     padding: Spacing.base,
     borderWidth: 1,
-    borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+    borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.6)",
     shadowColor,
-    shadowOffset: Shadows.sm.shadowOffset,
-    shadowOpacity: Shadows.sm.shadowOpacity,
-    shadowRadius: Shadows.sm.shadowRadius,
-    elevation: Shadows.sm.elevation,
+    shadowOffset: Shadows.card.shadowOffset,
+    shadowOpacity: Shadows.card.shadowOpacity,
+    shadowRadius: Shadows.card.shadowRadius,
+    elevation: Shadows.card.elevation,
     ...(variant === "flat" ? { shadowOpacity: 0, elevation: 0, borderColor: "transparent" } : null),
   };
 
@@ -67,6 +69,7 @@ export function Card({ children, style, onPress, variant = "default", haptic = t
 }
 
 // ── Button ────────────────────────────────────────────────────────────────────
+// Blue gradient primary, neumorphic secondary/danger.
 interface ButtonProps extends TouchableOpacityProps {
   children: React.ReactNode;
   variant?: "primary" | "secondary" | "danger" | "ghost" | "success";
@@ -197,7 +200,7 @@ interface SearchInputProps {
 export function SearchInput({ value, onChangeText, placeholder = "Поиск…", autoFocus }: SearchInputProps) {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const shadowColor = isDark ? DarkShadowColor : "#a0988c";
+  const shadowColor = isDark ? DarkShadowColor : "#a3b1c6";
   return (
     <View style={{
       flexDirection: "row", alignItems: "center", gap: 10,
@@ -237,7 +240,7 @@ export function ScreenHeader({ title, subtitle, right, style }: {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const shadowColor = isDark ? DarkShadowColor : "#a0988c";
+  const shadowColor = isDark ? DarkShadowColor : "#a3b1c6";
   return (
     <View style={[{
       paddingTop: insets.top + 8, paddingBottom: 12, paddingHorizontal: 16,
