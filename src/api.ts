@@ -695,3 +695,53 @@ export interface ReorderAlert {
 export async function getReorderAlerts(days?: number): Promise<ReorderAlert[]> {
   return trpcQuery<ReorderAlert[]>("warehouseReports.reorderAlerts", { days: days ?? 30 });
 }
+
+// ── Price lists ───────────────────────────────────────────────────────────────
+export interface PriceList {
+  id: number;
+  name: string;
+  description?: string;
+  type: "shop" | "tier" | "volume";
+  isActive: boolean;
+  priority: number;
+  itemCount: number;
+  shopCount: number;
+  createdAt: string;
+}
+
+export interface PriceListItem {
+  id: number;
+  productId: number;
+  productName?: string;
+  productCode?: string;
+  price: string;
+  minQuantity: string;
+  unitPrice?: string;
+}
+
+export async function getPriceLists(): Promise<PriceList[]> {
+  return trpcQuery<PriceList[]>("priceList.list");
+}
+
+export async function getPriceListById(id: number): Promise<(PriceList & { items: PriceListItem[]; assignments: Array<{ id: number; shopId: number; shopName?: string }> }) | null> {
+  return trpcQuery("priceList.getById", { id });
+}
+
+export async function getPriceForProduct(productId: number, shopId: number, quantity?: number): Promise<{ price: string; source: string }> {
+  return trpcQuery("priceList.getPrice", { productId, shopId, quantity: quantity ?? 1 });
+}
+
+// ── Route optimization ────────────────────────────────────────────────────────
+export interface OptimizedRoute {
+  id: number;
+  shopId: number;
+  shopName?: string;
+  shopAddress?: string;
+  shopCity?: string;
+  shopDebt?: string;
+  distance: number;
+}
+
+export async function getOptimizedRoute(currentLat: number, currentLng: number, date?: string): Promise<{ plans: OptimizedRoute[]; totalDistance: number; totalStops: number }> {
+  return trpcQuery("agent.getOptimizedRoute", { currentLat, currentLng, date });
+}
