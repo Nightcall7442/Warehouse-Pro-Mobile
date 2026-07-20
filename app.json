@@ -28,7 +28,8 @@
     "extra": {
       "eas": {
         "projectId": "6ae2aa12-a019-46d5-a6d8-99c9ac55620f"
-      }
+      },
+      "yandexMapsApiKey": "YOUR_YANDEX_MAPS_API_KEY_HERE"
     }
   }
 }

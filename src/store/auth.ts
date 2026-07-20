@@ -31,7 +31,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (e) {
       console.error('Session hydration failed:', e);
-      await SecureStore.deleteItemAsync("session_token").catch(() => {});
+      await SecureStore.deleteItemAsync("session_token").catch((err: unknown) => console.warn("Failed to clear invalid token:", err));
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },
@@ -54,14 +54,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       const user = await getMe();
       set({ user, isAuthenticated: true });
       return true;
-    } catch {
-      await SecureStore.deleteItemAsync("session_token").catch(() => {});
+    } catch (e) {
+      console.warn("Biometric auth failed:", e);
+      await SecureStore.deleteItemAsync("session_token").catch((err: unknown) => console.warn("Failed to clear invalid token:", err));
       return false;
     }
   },
 
   logout: async () => {
-    try { await apiLogout(); } catch {}
+    try { await apiLogout(); }
+    catch (e) { console.warn("Logout API call failed (non-blocking):", e); }
     set({ user: null, isAuthenticated: false });
   },
 

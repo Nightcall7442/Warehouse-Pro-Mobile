@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useCallback, useImperativeHandle } from "react";
 import { WebView } from "react-native-webview";
+import Constants from "expo-constants";
 
-const YANDEX_API_KEY = "dd072e98-24e7-4b2e-b328-2989bd981fa5";
+const YANDEX_API_KEY = Constants.expoConfig?.extra?.yandexMapsApiKey ?? process.env.EXPO_PUBLIC_YANDEX_MAPS_API_KEY ?? "";
 
 export interface MapMarker {
   id: number;
