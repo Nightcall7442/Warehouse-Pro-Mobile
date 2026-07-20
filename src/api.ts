@@ -577,3 +577,53 @@ export async function registerPushToken(pushToken: string): Promise<{ success: b
 export async function removePushToken(): Promise<{ success: boolean }> {
   return trpcMutation<{ success: boolean }>("user.removePushToken", {});
 }
+
+// ── Sales targets ─────────────────────────────────────────────────────────────
+export interface SalesTarget {
+  id: number;
+  userId: number;
+  userName: string;
+  shopId?: number;
+  periodType: "daily" | "weekly" | "monthly";
+  periodStart: string;
+  periodEnd: string;
+  targetAmount: string;
+  actualAmount: string;
+  notes?: string;
+}
+
+export async function getSalesTargets(filters?: { periodType?: string; userId?: number }): Promise<SalesTarget[]> {
+  return trpcQuery<SalesTarget[]>("salesTarget.list", filters);
+}
+
+export async function getSalesTargetSummary(): Promise<Array<{
+  userId: number;
+  userName: string;
+  targetAmount: string;
+  actualAmount: string;
+  completion: number;
+}>> {
+  return trpcQuery("salesTarget.summary");
+}
+
+// ── Commissions ───────────────────────────────────────────────────────────────
+export interface Commission {
+  id: number;
+  userId: number;
+  userName: string;
+  commissionRate: string;
+  periodType: "monthly" | "quarterly";
+  periodStart: string;
+  periodEnd: string;
+  salesAmount: string;
+  commissionAmount: string;
+  status: "pending" | "approved" | "paid";
+}
+
+export async function getCommissions(filters?: { periodType?: string; userId?: number; status?: string }): Promise<Commission[]> {
+  return trpcQuery<Commission[]>("commission.list", filters);
+}
+
+export async function setCommissionRate(userId: number, commissionRate: number): Promise<{ success: boolean }> {
+  return trpcMutation<{ success: boolean }>("commission.setRate", { userId, commissionRate });
+}

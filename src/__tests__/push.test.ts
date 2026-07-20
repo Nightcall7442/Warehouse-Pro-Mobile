@@ -29,7 +29,7 @@ describe("Push Notifications", () => {
     const Notifications = await import("expo-notifications");
     const api = await import("../api");
 
-    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: "granted" });
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: "granted" } as any);
     vi.mocked(Notifications.getExpoPushTokenAsync).mockResolvedValue({ data: "ExponentPushToken[xxx]" } as any);
     vi.mocked(api.registerPushToken).mockResolvedValue({ success: true });
 
@@ -55,8 +55,8 @@ describe("Push Notifications", () => {
   it("handles permission denied gracefully", async () => {
     const Notifications = await import("expo-notifications");
 
-    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: "denied" });
-    vi.mocked(Notifications.requestPermissionsAsync).mockResolvedValue({ status: "denied" });
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: "denied" } as any);
+    vi.mocked(Notifications.requestPermissionsAsync).mockResolvedValue({ status: "denied" } as any);
 
     const { status } = await Notifications.getPermissionsAsync();
     expect(status).toBe("denied");
