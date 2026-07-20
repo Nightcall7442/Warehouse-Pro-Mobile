@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { DarkColors, LightColors, Typography, Spacing, Radii, Timing } from '../theme';
 
 describe('Theme', () => {
@@ -6,7 +7,7 @@ describe('Theme', () => {
   });
 
   it('LightColors should have primary background', () => {
-    expect(LightColors.bg.primary).toBe('#e8e6e1');
+    expect(LightColors.bg.primary).toBe('#e7ebf1');
   });
 
   it('Typography should define font sizes', () => {
