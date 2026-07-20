@@ -2,11 +2,7 @@ import axios from "axios";
 import { SecureStore } from "./storage";
 
 export const API_BASE =
-  process.env.EXPO_PUBLIC_API_URL ?? (__DEV__ ? "http://localhost:3000" : "https://www.warehouse-pro.uz");
-
-if (__DEV__ && !process.env.EXPO_PUBLIC_API_URL) {
-  console.warn("[API] EXPO_PUBLIC_API_URL not set. Using localhost. Set it in .env for production.");
-}
+  process.env.EXPO_PUBLIC_API_URL ?? "https://www.warehouse-pro.uz";
 
 const api = axios.create({
   baseURL: `${API_BASE}/api/trpc`,
