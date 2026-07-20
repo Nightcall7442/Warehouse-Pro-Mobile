@@ -76,6 +76,7 @@ function PlanRow({
   showCity,
   colors,
   isDark,
+  onPress,
   onVisit,
   onSkip,
   loading,
@@ -85,6 +86,7 @@ function PlanRow({
   showCity?: boolean;
   colors: ThemeColors;
   isDark: boolean;
+  onPress?: () => void;
   onVisit?: () => void;
   onSkip?: () => void;
   loading?: boolean;
@@ -95,6 +97,7 @@ function PlanRow({
   const canAct = plan.status === "planned" && (onVisit || onSkip);
 
   return (
+    <PressableScale onPress={onPress} haptic="light">
     <View
       style={{
         backgroundColor: colors.bg.card,
@@ -252,6 +255,7 @@ function PlanRow({
         </View>
       )}
     </View>
+    </PressableScale>
   );
 }
 
@@ -1230,6 +1234,7 @@ function AgentPlansView() {
                 plan={plan}
                 colors={colors}
                 isDark={isDark}
+                onPress={() => plan.shopId && router.push({ pathname: "/shop/[id]", params: { id: String(plan.shopId) } })}
                 onVisit={() => handleVisitDone(plan.id, plan.shopName ?? "Магазин", plan.shopId)}
                 onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
                 loading={updateMutation.isPending || photoMutation.isPending}

@@ -31,8 +31,8 @@ function CardDots() {
 }
 
 // ── Plan card (matches web PlanCard) ─────────────────────────────────────────
-function PlanRow({ plan, onDone, onSkip, colors, isDark, index }: {
-  plan: Plan; onDone: () => void; onSkip: () => void; colors: ThemeColors; isDark: boolean; index: number;
+function PlanRow({ plan, onDone, onSkip, onPress, colors, isDark, index }: {
+  plan: Plan; onDone: () => void; onSkip: () => void; onPress?: () => void; colors: ThemeColors; isDark: boolean; index: number;
 }) {
   const STATUS_META: Record<string, { icon: IconName; color: string; bg: string; label: string }> = {
     visited: { icon: "check-circle", color: colors.status.success, bg: colors.status.successDim, label: "Посещён" },
@@ -45,14 +45,15 @@ function PlanRow({ plan, onDone, onSkip, colors, isDark, index }: {
 
   return (
     <FadeInItem delay={index * 60}>
-      <View style={{
-        flexDirection: "row", alignItems: "center",
-        backgroundColor: colors.bg.card, borderRadius: Radii.lg,
-        padding: 12, marginBottom: 8, borderWidth: 1,
-        borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
-        shadowColor, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation,
-        opacity: plan.status === "visited" ? 0.6 : 1,
-      }}>
+      <PressableScale onPress={onPress} haptic="light">
+        <View style={{
+          flexDirection: "row", alignItems: "center",
+          backgroundColor: colors.bg.card, borderRadius: Radii.lg,
+          padding: 12, marginBottom: 8, borderWidth: 1,
+          borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+          shadowColor, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation,
+          opacity: plan.status === "visited" ? 0.6 : 1,
+        }}>
         <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: cfg.bg, alignItems: "center", justifyContent: "center" }}>
           <Feather name={cfg.icon} size={14} color={cfg.color} />
         </View>
@@ -87,6 +88,7 @@ function PlanRow({ plan, onDone, onSkip, colors, isDark, index }: {
           )}
         </View>
       </View>
+      </PressableScale>
     </FadeInItem>
   );
 }
@@ -289,6 +291,7 @@ function AgentHome() {
               <PlanRow plan={plan} colors={colors} isDark={isDark} index={idx}
                 onDone={() => updateMutation.mutate({ planId: plan.id, status: "visited" })}
                 onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
+                onPress={() => plan.shopId && router.push({ pathname: "/shop/[id]", params: { id: String(plan.shopId) } })}
               />
               {idx < plans.length - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 54 }} />}
             </View>
