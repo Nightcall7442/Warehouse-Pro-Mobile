@@ -1,19 +1,19 @@
 // Warehouse Pro — New Order (matches web NewOrder.tsx — 3-step wizard)
 import { useState, useMemo } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, Image, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as Network from "expo-network";
 import { Feather } from "@expo/vector-icons";
-import { getMyShops, getProducts, createOrder, Product, Shop } from "../../src/api";
+import { getMyShops, getProducts, createOrder, Shop } from "../../src/api";
 import { useOfflineStore } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
-import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Shadows, ThemeColors } from "../../src/theme";
-import { DarkShadowColor } from "../../src/theme";
+import { useThemeColors } from "../../src/store/theme";
+import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { SearchInput, Skeleton } from "../../src/components/ui";
+import { Card, SearchInput, Skeleton } from "../../src/components/ui";
+import { PressableScale, FadeInItem } from "../../src/components/Animated";
 
 interface OrderLine {
   productId: number;
@@ -26,9 +26,8 @@ interface OrderLine {
 }
 
 // ── Step Indicator (matches web Steps) ───────────────────────────────────────
-function StepIndicator({ step, total, colors, isDark }: { step: number; total: number; colors: ThemeColors; isDark: boolean }) {
+function StepIndicator({ step, total, colors }: { step: number; total: number; colors: ThemeColors }) {
   const labels = ["Магазин", "Товары", "Итог"];
-  const sc = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
   return (
     <View style={{ backgroundColor: colors.bg.secondary, paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, borderBottomWidth: 1, borderBottomColor: colors.border.default }}>
       {/* Progress track */}
@@ -56,10 +55,9 @@ function StepIndicator({ step, total, colors, isDark }: { step: number; total: n
 }
 
 // ── Step 1: Shop Picker ──────────────────────────────────────────────────────
-function ShopPicker({ selectedId, onSelect, colors, isDark }: { selectedId: number; onSelect: (s: Shop) => void; colors: ThemeColors; isDark: boolean }) {
+function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSelect: (s: Shop) => void; colors: ThemeColors }) {
   const [search, setSearch] = useState("");
   const { data: shops, isLoading } = useQuery({ queryKey: ["myShops"], queryFn: getMyShops });
-  const sc = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
 
   const filtered = useMemo(() =>
     (shops ?? []).filter(s => !search || s.name?.toLowerCase().includes(search.toLowerCase()) || s.ownerName?.toLowerCase().includes(search.toLowerCase())),
@@ -82,31 +80,27 @@ function ShopPicker({ selectedId, onSelect, colors, isDark }: { selectedId: numb
             const selected = shop.id === selectedId;
             const hasDebt = Number(shop.debt ?? 0) > 0;
             return (
-              <TouchableOpacity onPress={() => { onSelect(shop); }} activeOpacity={0.7}
-                style={{
-                  flexDirection: "row", alignItems: "center", gap: 12, padding: 14, marginBottom: 8,
-                  backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1.5,
-                  borderColor: selected ? colors.accent.primary : colors.border.default,
-                  shadowColor: sc, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation,
-                }}>
-                <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: selected ? colors.accent.primary + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="shopping-bag" size={18} color={selected ? colors.accent.primary : colors.text.muted} />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: selected ? colors.accent.primary : colors.text.primary }}>{shop.name}</Text>
-                  <Text style={{ fontSize: Typography.size.sm, color: colors.text.tertiary }} numberOfLines={1}>
-                    {[shop.ownerName, shop.city].filter(Boolean).join(" · ") || "—"}
-                  </Text>
-                  {hasDebt && <Text style={{ fontSize: Typography.size.xs, color: colors.status.danger, fontFamily: Typography.fontMedium, marginTop: 2 }}>Долг: {Number(shop.debt).toLocaleString("ru")} сум</Text>}
-                </View>
-                {selected ? (
-                  <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-                    <Feather name="check" size={14} color="#fff" />
+              <PressableScale onPress={() => { onSelect(shop); }} haptic="light" style={{ marginBottom: 8 }}>
+                <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderWidth: selected ? 1.5 : 1, borderColor: selected ? colors.accent.primary : colors.border.default }}>
+                  <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: selected ? colors.accent.primary + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="shopping-bag" size={18} color={selected ? colors.accent.primary : colors.text.muted} />
                   </View>
-                ) : (
-                  <View style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: colors.border.default }} />
-                )}
-              </TouchableOpacity>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: selected ? colors.accent.primary : colors.text.primary }}>{shop.name}</Text>
+                    <Text style={{ fontSize: Typography.size.sm, color: colors.text.tertiary }} numberOfLines={1}>
+                      {[shop.ownerName, shop.city].filter(Boolean).join(" · ") || "—"}
+                    </Text>
+                    {hasDebt && <Text style={{ fontSize: Typography.size.xs, color: colors.status.danger, fontFamily: Typography.fontMedium, marginTop: 2 }}>Долг: {Number(shop.debt).toLocaleString("ru")} сум</Text>}
+                  </View>
+                  {selected ? (
+                    <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                      <Feather name="check" size={14} color="#fff" />
+                    </View>
+                  ) : (
+                    <View style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: colors.border.default }} />
+                  )}
+                </Card>
+              </PressableScale>
             );
           }}
         />
@@ -116,23 +110,23 @@ function ShopPicker({ selectedId, onSelect, colors, isDark }: { selectedId: numb
 }
 
 // ── Step 2: Product Picker + Cart ────────────────────────────────────────────
-function ProductStep({ lines, onChange, colors, isDark }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors; isDark: boolean }) {
+function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors }) {
   const [showPicker, setShowPicker] = useState(false);
-  const sc = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
 
   const lineTotal = (l: OrderLine) => l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100);
 
   return (
     <View style={{ padding: Spacing.base, gap: Spacing.sm }}>
       {/* Add product button */}
-      <TouchableOpacity onPress={() => setShowPicker(true)} activeOpacity={0.8}
-        style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.default, padding: 16, flexDirection: "row", alignItems: "center", gap: 12, shadowColor: sc, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation }}>
-        <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent.primary + "20", alignItems: "center", justifyContent: "center" }}>
-          <Feather name="plus" size={18} color={colors.accent.primary} />
-        </View>
-        <Text style={{ flex: 1, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.accent.primary }}>Добавить товар</Text>
-        <Feather name="chevron-right" size={16} color={colors.accent.primary} />
-      </TouchableOpacity>
+      <PressableScale onPress={() => setShowPicker(true)} haptic="light">
+        <Card style={{ padding: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent.primary + "20", alignItems: "center", justifyContent: "center" }}>
+            <Feather name="plus" size={18} color={colors.accent.primary} />
+          </View>
+          <Text style={{ flex: 1, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.accent.primary }}>Добавить товар</Text>
+          <Feather name="chevron-right" size={16} color={colors.accent.primary} />
+        </Card>
+      </PressableScale>
 
       {/* Empty state */}
       {lines.length === 0 && (
@@ -149,7 +143,7 @@ function ProductStep({ lines, onChange, colors, isDark }: { lines: OrderLine[]; 
       {lines.map((line, idx) => {
         const total = lineTotal(line);
         return (
-          <View key={line.productId} style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, gap: 8, shadowColor: sc, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation }}>
+          <Card key={line.productId} style={{ padding: Spacing.base, gap: 8 }}>
             {/* Header */}
             <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
               <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.accent.primary + "20", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
@@ -193,23 +187,22 @@ function ProductStep({ lines, onChange, colors, isDark }: { lines: OrderLine[]; 
                 </View>
               </View>
             </View>
-          </View>
+          </Card>
         );
       })}
 
       {/* Product picker modal */}
-      <ProductPicker visible={showPicker} onClose={() => setShowPicker(false)} lines={lines} onChange={onChange} colors={colors} isDark={isDark} />
+      <ProductPicker visible={showPicker} onClose={() => setShowPicker(false)} lines={lines} onChange={onChange} colors={colors} />
     </View>
   );
 }
 
 // ── Product Picker Modal ─────────────────────────────────────────────────────
-function ProductPicker({ visible, onClose, lines, onChange, colors, isDark }: {
-  visible: boolean; onClose: () => void; lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors; isDark: boolean;
+function ProductPicker({ visible, onClose, lines, onChange, colors }: {
+  visible: boolean; onClose: () => void; lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors;
 }) {
   const [search, setSearch] = useState("");
   const { data: products, isLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
-  const sc = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
 
   const filtered = useMemo(() => {
     const list = (products ?? []).filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.code ?? "").toLowerCase().includes(search.toLowerCase()));
@@ -249,30 +242,31 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, isDark }: {
               renderItem={({ item: p }) => {
                 const added = already.has(p.id);
                 return (
-                  <TouchableOpacity onPress={() => {
+                  <PressableScale onPress={() => {
                     if (added) return;
                     onChange([...lines, { productId: p.id, name: p.name, unitPrice: Number(p.unitPrice), quantity: "1", discount: "0", available: Number(p.available), unit: p.unit }]);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }} activeOpacity={0.7}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 4, borderRadius: Radii.md, backgroundColor: added ? colors.status.success + "0D" : colors.bg.card, borderWidth: 1, borderColor: added ? colors.status.success : colors.border.default }}>
-                    <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: added ? colors.status.success + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
-                      <Feather name={added ? "check" : "package"} size={16} color={added ? colors.status.success : colors.text.muted} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: added ? colors.text.secondary : colors.text.primary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }} numberOfLines={1}>{p.name}</Text>
-                      <View style={{ flexDirection: "row", gap: 6, marginTop: 2 }}>
-                        {p.code && <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, backgroundColor: colors.bg.elevated, paddingHorizontal: 4, borderRadius: 4 }}>{p.code}</Text>}
-                        <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontMedium }}>{Number(p.unitPrice).toLocaleString("ru")} сум</Text>
+                  }} haptic="light">
+                    <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 4, borderWidth: 1, borderColor: added ? colors.status.success : colors.border.default, backgroundColor: added ? colors.status.success + "0D" : colors.bg.card }}>
+                      <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: added ? colors.status.success + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+                        <Feather name={added ? "check" : "package"} size={16} color={added ? colors.status.success : colors.text.muted} />
                       </View>
-                    </View>
-                    {added ? (
-                      <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontSemibold }}>В корзине</Text>
-                    ) : (
-                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-                        <Feather name="plus" size={14} color="#fff" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: added ? colors.text.secondary : colors.text.primary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }} numberOfLines={1}>{p.name}</Text>
+                        <View style={{ flexDirection: "row", gap: 6, marginTop: 2 }}>
+                          {p.code && <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, backgroundColor: colors.bg.elevated, paddingHorizontal: 4, borderRadius: 4 }}>{p.code}</Text>}
+                          <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontMedium }}>{Number(p.unitPrice).toLocaleString("ru")} сум</Text>
+                        </View>
                       </View>
-                    )}
-                  </TouchableOpacity>
+                      {added ? (
+                        <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontSemibold }}>В корзине</Text>
+                      ) : (
+                        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                          <Feather name="plus" size={14} color="#fff" />
+                        </View>
+                      )}
+                    </Card>
+                  </PressableScale>
                 );
               }}
             />
@@ -284,11 +278,10 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, isDark }: {
 }
 
 // ── Step 3: Review ───────────────────────────────────────────────────────────
-function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPaymentChange, colors, isDark }: {
+function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPaymentChange, colors }: {
   shopName: string; lines: OrderLine[]; notes: string; onNotesChange: (v: string) => void;
-  paymentMethod: string; onPaymentChange: (v: string) => void; colors: ThemeColors; isDark: boolean;
+  paymentMethod: string; onPaymentChange: (v: string) => void; colors: ThemeColors;
 }) {
-  const sc = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
   const { subtotal, totalQty } = useMemo(() => {
     let sub = 0, qty = 0;
     for (const l of lines) { sub += l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100); qty += Number(l.quantity || 0); }
@@ -305,7 +298,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
   return (
     <View style={{ padding: Spacing.base, gap: Spacing.sm }}>
       {/* Shop card */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.default, padding: 16, shadowColor: sc, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation }}>
+      <Card style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }}>
         <View style={{ width: 42, height: 42, borderRadius: Radii.lg, backgroundColor: colors.accent.primary + "20", alignItems: "center", justifyContent: "center" }}>
           <Feather name="shopping-bag" size={20} color={colors.accent.primary} />
         </View>
@@ -313,31 +306,32 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
           <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 1 }}>МАГАЗИН</Text>
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.text.primary, marginTop: 2 }}>{shopName}</Text>
         </View>
-      </View>
+      </Card>
 
       {/* Payment method */}
-      <View style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, shadowColor: sc, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation }}>
+      <Card style={{ padding: Spacing.base }}>
         <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 1, marginBottom: Spacing.md }}>СПОСОБ ОПЛАТЫ</Text>
         <View style={{ flexDirection: "row", gap: Spacing.sm }}>
           {PAYMENT_OPTIONS.map(opt => {
             const active = paymentMethod === opt.key;
             return (
-              <TouchableOpacity key={opt.key} onPress={() => onPaymentChange(opt.key)} activeOpacity={0.8}
-                style={{
+              <PressableScale key={opt.key} onPress={() => onPaymentChange(opt.key)} haptic="light">
+                <View style={{
                   flex: 1, alignItems: "center", gap: 6, paddingVertical: 12,
                   borderRadius: Radii.md, borderWidth: 1.5,
                   backgroundColor: active ? colors.accent.primary + "12" : colors.bg.elevated,
                   borderColor: active ? colors.accent.primary : colors.border.default,
                 }}>
-                <Feather name={opt.icon} size={18} color={active ? colors.accent.primary : colors.text.secondary} />
-                <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontSemibold, color: active ? colors.accent.primary : colors.text.secondary }}>{opt.label}</Text>
-              </TouchableOpacity>
+                  <Feather name={opt.icon} size={18} color={active ? colors.accent.primary : colors.text.secondary} />
+                  <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontSemibold, color: active ? colors.accent.primary : colors.text.secondary }}>{opt.label}</Text>
+                </View>
+              </PressableScale>
             );
           })}
         </View>
-      </View>
+      </Card>
       {/* Items table */}
-      <View style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.default, overflow: "hidden", shadowColor: sc, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation }}>
+      <Card style={{ padding: 0, overflow: "hidden" }}>
         {/* Header */}
         <View style={{ flexDirection: "row", paddingHorizontal: Spacing.base, paddingVertical: 10, backgroundColor: colors.bg.elevated, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
           <Text style={{ flex: 3, fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5 }}>ТОВАР</Text>
@@ -362,17 +356,17 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
           <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.secondary, letterSpacing: 0.5 }}>ИТОГО — {lines.length} поз., {totalQty} кг</Text>
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{subtotal.toLocaleString("ru")} сум</Text>
         </View>
-      </View>
+      </Card>
       {/* Notes */}
-      <View style={{ gap: 8 }}>
+      <Card style={{ gap: 8, padding: Spacing.base }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Feather name="edit-3" size={14} color={colors.text.tertiary} />
           <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.secondary }}>Примечания</Text>
           <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>необязательно</Text>
         </View>
         <TextInput value={notes} onChangeText={onNotesChange} placeholder="Комментарий к заказу…" placeholderTextColor={colors.text.tertiary} multiline numberOfLines={3} textAlignVertical="top"
-          style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary, minHeight: 80 }} />
-      </View>
+          style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary, minHeight: 80 }} />
+      </Card>
     </View>
   );
 }
@@ -381,7 +375,6 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
 export default function NewOrderScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string }>();
   const { addOrder } = useOfflineStore();
@@ -443,31 +436,33 @@ export default function NewOrderScreen() {
       </View>
 
       {/* Step indicator */}
-      <StepIndicator step={step} total={3} colors={colors} isDark={isDark} />
+      <StepIndicator step={step} total={3} colors={colors} />
 
       {/* Content */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); }} colors={colors} isDark={isDark} />}
-        {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} isDark={isDark} />}
-        {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} colors={colors} isDark={isDark} />}
+        {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); }} colors={colors} />}
+        {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} />}
+        {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} colors={colors} />}
       </ScrollView>
 
       {/* Bottom CTA */}
       <View style={{ padding: Spacing.base, paddingBottom: insets.bottom + Spacing.lg, borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
         {step < 3 ? (
-          <TouchableOpacity onPress={() => { setStep(s => s + 1); }} disabled={!canNext}
-            style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: canNext ? 1 : 0.45 }}>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>Продолжить →</Text>
-          </TouchableOpacity>
+          <PressableScale onPress={() => { setStep(s => s + 1); }} disabled={!canNext} haptic="medium">
+            <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: canNext ? 1 : 0.45 }}>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>Продолжить →</Text>
+            </View>
+          </PressableScale>
         ) : (
-          <TouchableOpacity onPress={handleSubmit} disabled={createMutation.isPending}
-            style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: createMutation.isPending ? 0.6 : 1 }}>
-            {createMutation.isPending ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>Подтвердить заказ</Text>
-            )}
-          </TouchableOpacity>
+          <PressableScale onPress={handleSubmit} disabled={createMutation.isPending} haptic="medium">
+            <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: createMutation.isPending ? 0.6 : 1 }}>
+              {createMutation.isPending ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>Подтвердить заказ</Text>
+              )}
+            </View>
+          </PressableScale>
         )}
       </View>
     </View>

@@ -35,13 +35,12 @@ import {
   Typography,
   Spacing,
   Radii,
-  Shadows,
   ThemeColors,
 } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
-import { Card, IconCircle } from "../../src/components/ui";
+import { Card, IconCircle, Badge } from "../../src/components/ui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { PressableScale } from "../../src/components/Animated";
+import { PressableScale, FadeInItem } from "../../src/components/Animated";
 
 // ── Status config ─────────────────────────────────────────────────────────────
 type IconName = keyof typeof Feather.glyphMap;
@@ -133,54 +132,55 @@ function LoadingState({ colors }: { colors: ThemeColors }) {
 
 /** Pipeline tracker — shows progress or cancelled */
 function PipelineBanner({ status, colors }: { status: string; colors: ThemeColors }) {
-  const styles = makeStyles(colors);
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.new;
   if (status === "cancelled") {
     return (
-      <View style={[styles.heroBanner, { backgroundColor: colors.bg.card, borderColor: colors.status.danger + "30", borderWidth: 1 }]}>
-        <View style={[styles.heroIcon, { backgroundColor: colors.status.dangerDim }]}>
+      <Card style={{ flexDirection: "row", alignItems: "center", gap: 16, padding: Spacing.lg, marginTop: Spacing.base, marginBottom: Spacing.base, borderColor: colors.status.danger + "30", borderWidth: 1 }}>
+        <View style={{ width: 56, height: 56, borderRadius: Radii.lg, backgroundColor: colors.status.dangerDim, alignItems: "center", justifyContent: "center" }}>
           <Feather name="x-circle" size={28} color={colors.status.danger} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.heroTitle, { color: colors.text.primary }]}>Заказ отменён</Text>
-          <Text style={[styles.heroSub, { color: colors.text.muted }]}>Этот заказ был отменён и не обрабатывается</Text>
+          <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary, marginBottom: 10 }}>Заказ отменён</Text>
+          <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>Этот заказ был отменён и не обрабатывается</Text>
         </View>
-      </View>
+      </Card>
     );
   }
   return (
-    <View style={[styles.heroBanner, { backgroundColor: colors.bg.card, borderColor: colors.status[cfg.badgeVariant] + "20", borderWidth: 1 }]}>
+    <Card style={{ flexDirection: "row", alignItems: "center", gap: 16, padding: Spacing.lg, marginTop: Spacing.base, marginBottom: Spacing.base, borderColor: colors.status[cfg.badgeVariant] + "20", borderWidth: 1 }}>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.heroTitle, { color: colors.text.primary }]}>{cfg.label}</Text>
-        <View style={styles.pipeline}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary }}>{cfg.label}</Text>
+          <Badge variant={cfg.badgeVariant}>{cfg.label}</Badge>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
           {PIPELINE_STEPS.map((step, i) => {
             const done = i <= cfg.step;
             const active = i === cfg.step;
             return (
-              <View key={step} style={styles.pipelineItem}>
-                <View
-                  style={[
-                    styles.pipelineDot,
-                    done && [styles.pipelineDotDone, { backgroundColor: colors.brand.primary }],
-                    active && [styles.pipelineDotActive, { borderColor: colors.brand.primary }],
-                  ]}
-                >
+              <View key={step} style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={{
+                  width: 18, height: 18, borderRadius: Radii.full,
+                  backgroundColor: done ? colors.accent.primary : colors.border.subtle,
+                  alignItems: "center", justifyContent: "center",
+                  borderWidth: active ? 2 : 0, borderColor: active ? colors.accent.primary : "transparent",
+                }}>
                   {done && !active && <Feather name="check" size={9} color="#fff" />}
-                  {active && <View style={[styles.pipelineDotInner, { backgroundColor: colors.brand.primaryLight }]} />}
+                  {active && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent.primary + "40" }} />}
                 </View>
-                <Text style={[styles.pipelineLabel, done && [styles.pipelineLabelDone, { color: colors.text.primary }]]}>{step}</Text>
+                <Text style={{ fontSize: Typography.size.xs, color: done ? colors.text.primary : colors.text.muted, marginHorizontal: 4, fontFamily: Typography.fontMedium }}>{step}</Text>
                 {i < PIPELINE_STEPS.length - 1 && (
-                  <View style={[styles.pipelineLine, done && i < cfg.step && [styles.pipelineLineDone, { backgroundColor: colors.brand.primary }]]} />
+                  <View style={{ width: 16, height: 2, backgroundColor: done && i < cfg.step ? colors.accent.primary : colors.border.subtle, borderRadius: 1 }} />
                 )}
               </View>
             );
           })}
         </View>
       </View>
-      <View style={[styles.heroIcon, { backgroundColor: colors.status[cfg.badgeVariant] + "12" }]}>
+      <View style={{ width: 56, height: 56, borderRadius: Radii.lg, backgroundColor: colors.status[cfg.badgeVariant] + "12", alignItems: "center", justifyContent: "center" }}>
         <Feather name={cfg.icon} size={32} color={colors.status[cfg.badgeVariant]} />
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -382,101 +382,107 @@ export default function OrderDetailScreen() {
         <PipelineBanner status={order.status} colors={colors} />
 
         {/* ── Summary card ── */}
-        <Card style={styles.card}>
-          <View style={styles.cardHeader}>
-            <IconCircle name="info" size={15} variant="brand" />
-            <Text style={styles.cardTitle}>Информация</Text>
-          </View>
-          <View style={styles.divider} />
-          <InfoRow icon="hash"        label="Номер заказа"  value={`#${order.orderNumber}`} colors={colors} />
-          <InfoRow icon="calendar"    label="Дата создания" value={fmt(order.createdAt)} colors={colors} />
-          <InfoRow icon="shopping-bag" label="Магазин"      value={order.shopName ?? "Не указан"} colors={colors} />
-          {order.agentName && <InfoRow icon="user"          label="Агент"        value={order.agentName} colors={colors} />}
-          {order.address   && <InfoRow icon="map-pin"       label="Адрес"        value={order.address} colors={colors} />}
-          {order.notes     && <InfoRow icon="file-text"     label="Заметки"      value={order.notes} colors={colors} />}
-        </Card>
+        <FadeInItem delay={0}>
+          <Card style={{ marginBottom: Spacing.sm, padding: 0, overflow: "hidden" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: Spacing.base, paddingBottom: 12 }}>
+              <IconCircle name="info" size={15} variant="brand" />
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Информация</Text>
+            </View>
+            <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />
+            <InfoRow icon="hash"        label="Номер заказа"  value={`#${order.orderNumber}`} colors={colors} />
+            <InfoRow icon="calendar"    label="Дата создания" value={fmt(order.createdAt)} colors={colors} />
+            <InfoRow icon="shopping-bag" label="Магазин"      value={order.shopName ?? "Не указан"} colors={colors} />
+            {order.agentName && <InfoRow icon="user"          label="Агент"        value={order.agentName} colors={colors} />}
+            {order.address   && <InfoRow icon="map-pin"       label="Адрес"        value={order.address} colors={colors} />}
+            {order.notes     && <InfoRow icon="file-text"     label="Заметки"      value={order.notes} colors={colors} />}
+          </Card>
+        </FadeInItem>
 
         {/* ── Items list ── */}
-        {order.items && order.items.length > 0 ? (
-          <Card style={styles.card}>
-            <View style={styles.cardHeader}>
-              <IconCircle name="package" size={15} variant="brand" />
-              <Text style={styles.cardTitle}>Товары ({order.items.length})</Text>
-            </View>
-            <View style={styles.divider} />
-            {order.items.map((item, idx) => (
-              <View key={item.id ?? idx}>
-                <ItemRow
-                  name={item.productName}
-                  code={item.productCode}
-                  qty={item.quantity}
-                  price={Number(item.unitPrice) || 0}
-                  discount={item.discount}
-                  total={Number(item.total) || 0}
-                  colors={colors}
-                />
-                {idx < order.items.length - 1 && <View style={styles.itemDivider} />}
+        <FadeInItem delay={40}>
+          {order.items && order.items.length > 0 ? (
+            <Card style={{ marginBottom: Spacing.sm, padding: 0, overflow: "hidden" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: Spacing.base, paddingBottom: 12 }}>
+                <IconCircle name="package" size={15} variant="brand" />
+                <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Товары ({order.items.length})</Text>
               </View>
-            ))}
-          </Card>
-        ) : (
-          <Card style={[styles.card, styles.emptyItemsCard]}>
-            <Feather name="package" size={28} color={colors.text.muted} />
-            <Text style={styles.emptyItemsText}>Список товаров недоступен</Text>
-          </Card>
-        )}
+              <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />
+              {order.items.map((item, idx) => (
+                <View key={item.id ?? idx}>
+                  <ItemRow
+                    name={item.productName}
+                    code={item.productCode}
+                    qty={item.quantity}
+                    price={Number(item.unitPrice) || 0}
+                    discount={item.discount}
+                    total={Number(item.total) || 0}
+                    colors={colors}
+                  />
+                  {idx < order.items.length - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />}
+                </View>
+              ))}
+            </Card>
+          ) : (
+            <Card style={{ marginBottom: Spacing.sm, alignItems: "center", paddingVertical: 32, gap: 10 }}>
+              <Feather name="package" size={28} color={colors.text.muted} />
+              <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>Список товаров недоступен</Text>
+            </Card>
+          )}
+        </FadeInItem>
 
         {/* ── Financial summary ── */}
-        <Card style={styles.card}>
-          <View style={styles.cardHeader}>
-            <IconCircle name="dollar-sign" size={15} variant="brand" />
-            <Text style={styles.cardTitle}>Итог</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.finRow}>
-            <Text style={styles.finLabel}>Сумма товаров</Text>
-            <Text style={styles.finValue}>{money(subtotal)}</Text>
-          </View>
-          {discount > 0 && (
-            <View style={styles.finRow}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Feather name="tag" size={13} color={colors.status.success} />
-                <Text style={[styles.finLabel, { color: colors.status.success }]}>Скидка</Text>
+        <FadeInItem delay={80}>
+          <Card style={{ marginBottom: Spacing.sm, padding: 0, overflow: "hidden" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: Spacing.base, paddingBottom: 12 }}>
+              <IconCircle name="dollar-sign" size={15} variant="brand" />
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Итог</Text>
+            </View>
+            <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingVertical: 10 }}>
+              <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary }}>Сумма товаров</Text>
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.text.primary }}>{money(subtotal)}</Text>
+            </View>
+            {discount > 0 && (
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingVertical: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Feather name="tag" size={13} color={colors.status.success} />
+                  <Text style={{ fontSize: Typography.size.sm, color: colors.status.success }}>Скидка</Text>
+                </View>
+                <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.status.success }}>−{discount}%</Text>
               </View>
-              <Text style={[styles.finValue, { color: colors.status.success }]}>−{discount}%</Text>
+            )}
+            <View style={{ height: 1, backgroundColor: colors.border.default, marginHorizontal: Spacing.base, marginVertical: 4 }} />
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, paddingTop: 10 }}>
+              <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.text.primary }}>Итого</Text>
+              <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: "#fff" }}>{money(order.total)}</Text>
+              </View>
             </View>
-          )}
-          <View style={styles.finDivider} />
-          <View style={styles.finRowTotal}>
-            <Text style={styles.finLabelTotal}>Итого</Text>
-            <View style={[styles.finTotalChip, { backgroundColor: colors.brand.primary }]}>
-              <Text style={styles.finTotalText}>{money(order.total)}</Text>
-            </View>
-          </View>
-        </Card>
+          </Card>
+        </FadeInItem>
 
         {/* ── Actions ── */}
-        <View style={styles.actions}>
-          <PressableScale onPress={handleEditOpen} haptic="light" style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden", ...Shadows.sm }}>
-            <View style={[styles.actionBtnGradient, { backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default }]}>
-              <Feather name="edit-2" size={18} color={colors.text.primary} />
-              <Text style={[styles.actionBtnTextPrimary, { color: colors.text.primary }]}>Изменить</Text>
-            </View>
-          </PressableScale>
-          {canCancel && (
-          <PressableScale
-            onPress={handleCancel}
-            haptic="medium"
-            style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "40", ...Shadows.sm }}
-          >
-              {cancelMutation.isPending
-                ? <ActivityIndicator size="small" color={colors.status.danger} />
-                : <Feather name="x" size={18} color={colors.status.danger} />
-              }
-              <Text style={styles.actionBtnTextDanger}>Отменить заказ</Text>
+        <FadeInItem delay={120}>
+          <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
+            <PressableScale onPress={handleEditOpen} haptic="light" style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden" }}>
+              <Card style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default }}>
+                <Feather name="edit-2" size={18} color={colors.text.primary} />
+                <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Изменить</Text>
+              </Card>
             </PressableScale>
-          )}
-        </View>
+            {canCancel && (
+              <PressableScale onPress={handleCancel} haptic="medium" style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden" }}>
+                <Card style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "40" }}>
+                  {cancelMutation.isPending
+                    ? <ActivityIndicator size="small" color={colors.status.danger} />
+                    : <Feather name="x" size={18} color={colors.status.danger} />
+                  }
+                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.status.danger }}>Отменить заказ</Text>
+                </Card>
+              </PressableScale>
+            )}
+          </View>
+        </FadeInItem>
 
         <View style={{ height: 32 }} />
         </ScrollView>
@@ -547,7 +553,7 @@ function makeStyles(colors: ThemeColors, topInset: number = 56) {
       alignItems: "center" as const, justifyContent: "center" as const,
     },
 
-    // Hero banner
+    // Hero banner (used by LoadingState)
     heroBanner: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
@@ -556,7 +562,6 @@ function makeStyles(colors: ThemeColors, topInset: number = 56) {
       padding: Spacing.lg,
       marginTop: Spacing.base,
       marginBottom: Spacing.base,
-      ...Shadows.sm,
     },
     heroIcon: {
       width: 56,
@@ -568,29 +573,7 @@ function makeStyles(colors: ThemeColors, topInset: number = 56) {
     heroTitle: { fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: 10 },
     heroSub: { fontSize: Typography.size.sm },
 
-    // Pipeline
-    pipeline: { flexDirection: "row" as const, alignItems: "center" as const },
-    pipelineItem: { flexDirection: "row" as const, alignItems: "center" as const },
-    pipelineDot: {
-      width: 18, height: 18, borderRadius: Radii.full,
-      backgroundColor: colors.border.subtle,
-      alignItems: "center" as const, justifyContent: "center" as const,
-    },
-    pipelineDotDone: {},
-    pipelineDotActive: { borderWidth: 2 },
-    pipelineDotInner: { width: 6, height: 6, borderRadius: 3 },
-    pipelineLabel: { fontSize: Typography.size.xs, color: colors.text.muted, marginHorizontal: 4, fontFamily: Typography.fontMedium },
-    pipelineLabelDone: {},
-    pipelineLine: { width: 16, height: 2, backgroundColor: colors.border.subtle, borderRadius: 1 },
-    pipelineLineDone: {},
-
-    // Card
-    card: { marginBottom: Spacing.sm, padding: 0, overflow: "hidden" as const, backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.subtle, ...Shadows.sm },
-    cardHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: 10, padding: Spacing.base, paddingBottom: 12 },
-    cardTitle: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary },
-    divider: { height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base },
-
-    // Info rows
+    // Info rows (used by InfoRow component)
     infoRow: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 12, paddingHorizontal: Spacing.base, paddingVertical: 10 },
     infoIcon: {
       width: 28, height: 28, borderRadius: Radii.sm,
@@ -600,9 +583,9 @@ function makeStyles(colors: ThemeColors, topInset: number = 56) {
     },
     infoLabel: { fontSize: Typography.size.xs, color: colors.text.muted, marginBottom: 3 },
     infoValue: { fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.text.primary },
-    infoValueAccent: { color: colors.brand.primary },
+    infoValueAccent: { color: colors.accent.primary },
 
-    // Items
+    // Items (used by ItemRow component)
     itemRow: { flexDirection: "row" as const, alignItems: "flex-start" as const, paddingHorizontal: Spacing.base, paddingVertical: 12 },
     itemLeft: { flex: 1, marginRight: 12 },
     itemRight: { alignItems: "flex-end" as const },
@@ -624,48 +607,19 @@ function makeStyles(colors: ThemeColors, topInset: number = 56) {
     emptyItemsCard: { alignItems: "center" as const, paddingVertical: 32, gap: 10 },
     emptyItemsText: { fontSize: Typography.size.sm, color: colors.text.muted },
 
-    // Financials
-    finRow: { flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const, paddingHorizontal: Spacing.base, paddingVertical: 10 },
-    finLabel: { fontSize: Typography.size.sm, color: colors.text.secondary },
-    finValue: { fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.text.primary },
-    finDivider: { height: 1, backgroundColor: colors.border.default, marginHorizontal: Spacing.base, marginVertical: 4 },
-    finRowTotal: { flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const, paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, paddingTop: 10 },
-    finLabelTotal: { fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.text.primary },
-    finTotalChip: { borderRadius: Radii.md, paddingHorizontal: 14, paddingVertical: 7 },
-    finTotalText: { fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: "#fff" },
-
-    // Actions
-    actions: { flexDirection: "row" as const, gap: 12, marginTop: 8 },
-    actionBtn: { flex: 1, borderRadius: Radii.xl, overflow: "hidden" as const },
-    actionBtnDanger: {
-      flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8,
-      paddingVertical: 14, paddingHorizontal: 16,
-      backgroundColor: colors.status.dangerDim,
-      borderWidth: 1, borderColor: colors.status.danger + "40",
-    },
-    actionBtnPrimary: {},
-    actionBtnGradient: {
-      flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8,
-      paddingVertical: 14, paddingHorizontal: 16,
-      borderRadius: Radii.xl,
-    },
-    actionBtnTextDanger: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.status.danger },
-    actionBtnTextPrimary: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: "#fff" },
-
     // Skeleton header
     skeletonHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: 12, paddingVertical: 20 },
 
     // Centered error
     centered: { flex: 1, justifyContent: "center" as const, alignItems: "center" as const, padding: Spacing.xl, gap: 14 },
-    errorIcon: { width: 64, height: 64, borderRadius: 32, alignItems: "center" as const, justifyContent: "center" as const, ...Shadows.sm },
+    errorIcon: { width: 64, height: 64, borderRadius: 32, alignItems: "center" as const, justifyContent: "center" as const },
     errorTitle: { fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary },
     errorSub: { fontSize: Typography.size.sm, color: colors.text.muted, textAlign: "center" as const },
     errorBtn: {
       flexDirection: "row" as const, alignItems: "center" as const, gap: 8,
-      backgroundColor: colors.brand.primary,
+      backgroundColor: colors.accent.primary,
       paddingHorizontal: 20, paddingVertical: 12,
       borderRadius: Radii.xl, marginTop: 8,
-      ...Shadows.sm,
     },
     errorBtnText: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: "#fff" },
   };
