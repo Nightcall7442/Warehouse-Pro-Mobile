@@ -8,8 +8,9 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii, ThemeColors, KpiColors } from "../../src/theme";
 import { Card, Button, Badge, SectionHeader, EmptyState } from "../../src/components/ui";
+import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { listMyDeliveries, type Delivery } from "../../src/api";
 import { useOfflineStore } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
@@ -122,6 +123,8 @@ export default function DeliveriesScreen() {
 
   const assigned = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "assigned");
   const inTransit = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "out_for_delivery");
+  const delivered = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "delivered");
+  const totalDeliveries = (deliveries ?? []).length;
 
   const openMap = (address: string) => {
     const url = `https://yandex.ru/maps/?text=${encodeURIComponent(address)}`;
@@ -170,55 +173,20 @@ export default function DeliveriesScreen() {
           />
         }
       >
-        {/* Stats */}
-        <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
-          <Card style={{ flex: 1, padding: 16 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <Feather name="package" size={16} color={colors.text.muted} />
-              <Text
-                style={{
-                  fontFamily: Typography.fontRegular,
-                  fontSize: Typography.size.sm,
-                  color: colors.text.muted,
-                }}
-              >
-                Ожидают
-              </Text>
-            </View>
-            <Text
-              style={{
-                fontFamily: Typography.fontBold,
-                fontSize: Typography.size.xl,
-                color: colors.text.primary,
-              }}
-            >
-              {assigned.length}
-            </Text>
+        {/* Stats — rings + progress bar */}
+        <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
+          <Card style={{ flex: 1, padding: 16, alignItems: "center" }}>
+            <ProgressRing value={totalDeliveries > 0 ? Math.round(assigned.length / Math.max(totalDeliveries, 1) * 100) : 0} size={56} strokeWidth={6} color={KpiColors.blue} />
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{assigned.length}</Text>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Ожидают</Text>
           </Card>
-          <Card style={{ flex: 1, padding: 16 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <Feather name="truck" size={16} color={colors.status.warning} />
-              <Text
-                style={{
-                  fontFamily: Typography.fontRegular,
-                  fontSize: Typography.size.sm,
-                  color: colors.text.muted,
-                }}
-              >
-                В пути
-              </Text>
-            </View>
-            <Text
-              style={{
-                fontFamily: Typography.fontBold,
-                fontSize: Typography.size.xl,
-                color: colors.status.warning,
-              }}
-            >
-              {inTransit.length}
-            </Text>
+          <Card style={{ flex: 1, padding: 16, alignItems: "center" }}>
+            <ProgressRing value={totalDeliveries > 0 ? Math.round(inTransit.length / Math.max(totalDeliveries, 1) * 100) : 0} size={56} strokeWidth={6} color={KpiColors.amber} />
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.status.warning, marginTop: 6 }}>{inTransit.length}</Text>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>В пути</Text>
           </Card>
         </View>
+        <NeumorphicProgressBar value={totalDeliveries > 0 ? Math.round(delivered.length / Math.max(totalDeliveries, 1) * 100) : 0} height={6} color={KpiColors.green} />
 
         {/* In Transit */}
         {inTransit.length > 0 && (
