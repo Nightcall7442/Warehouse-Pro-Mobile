@@ -112,7 +112,15 @@ export function Button({
       ) : (
         <>
           {icon && <Feather name={icon} size={size === "sm" ? 15 : 17} color={textColor} style={{ marginRight: 7 }} />}
-          <Text style={{ fontFamily: Typography.fontSemibold, letterSpacing: 0.2, color: textColor, fontSize: size === "sm" ? Typography.size.sm : size === "lg" ? Typography.size.md : Typography.size.base }}>
+          <Text style={{
+            fontFamily: Typography.fontSemibold,
+            letterSpacing: 0.2,
+            color: textColor,
+            fontSize: size === "sm" ? Typography.size.sm : size === "lg" ? Typography.size.md : Typography.size.base,
+            textShadowColor: "rgba(0,0,0,0.2)",
+            textShadowOffset: { width: 0, height: 1 },
+            textShadowRadius: 1,
+          }}>
             {children}
           </Text>
         </>
