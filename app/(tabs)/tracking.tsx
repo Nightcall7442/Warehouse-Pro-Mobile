@@ -1,3 +1,4 @@
+// Warehouse Pro — Tracking v2 (cold palette, Card component)
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   View,
@@ -11,11 +12,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getAgentLocations, AgentLocation } from "../../src/api";
-import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Radii, Shadows } from "../../src/theme";
-import { DarkShadowColor } from "../../src/theme";
-import { ScreenHeader } from "../../src/components/ui";
-import { ShimmerSkeleton, PressableScale } from "../../src/components/Animated";
+import { useThemeColors } from "../../src/store/theme";
+import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
+import { Card, ScreenHeader, Badge } from "../../src/components/ui";
+import { ShimmerSkeleton, PressableScale, FadeInItem } from "../../src/components/Animated";
 import YandexMapView, { centerOnAgent, fitAllMarkers } from "../../src/components/YandexMapView";
 import type { WebView } from "react-native-webview";
 
@@ -36,17 +36,15 @@ function timeAgo(createdAt: string | undefined): string {
 }
 
 function batteryColor(level: number): string {
-  if (level >= 50) return "#34c473";
-  if (level >= 20) return "#d4973a";
-  return "#d45050";
+  if (level >= 50) return KpiColors.teal;
+  if (level >= 20) return KpiColors.amber;
+  return KpiColors.red;
 }
 
 export default function TrackingScreen() {
   const { width: SCREEN_W } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
-  const { isDark } = useThemeStore();
-  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
 
   const webViewRef = useRef<WebView>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -81,7 +79,7 @@ export default function TrackingScreen() {
           lat: Number(l.lat),
           lng: Number(l.lng),
           label: l.agentName ?? `Agent #${l.agentId}`,
-          color: isOnline(l.createdAt) ? "#34c473" : "#98a0b8",
+          color: isOnline(l.createdAt) ? KpiColors.teal : "#98a0b8",
           online: isOnline(l.createdAt),
           batteryLevel: l.batteryLevel ?? null,
         })),
@@ -120,277 +118,104 @@ export default function TrackingScreen() {
         title="Трекинг"
         right={
           <PressableScale onPress={fitAll} haptic="light">
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                backgroundColor: colors.bg.elevated,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: Radii.full,
-                borderWidth: 1,
-                borderColor: colors.border.default,
-              }}
-            >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.bg.elevated, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radii.full, borderWidth: 1, borderColor: colors.border.default }}>
               <Feather name="maximize-2" size={13} color={colors.text.secondary} />
-              <Text
-                style={{
-                  fontFamily: Typography.fontMedium,
-                  fontSize: Typography.size.sm,
-                  color: colors.text.secondary,
-                }}
-              >
-                Все
-              </Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>Все</Text>
             </View>
           </PressableScale>
         }
       />
 
       {/* Stats */}
-      <View style={{ flexDirection: "row", gap: 8, marginHorizontal: 16, marginTop: 12 }}>
-        {[
-          { label: "ОНЛАЙН", value: onlineCount, color: colors.status.success },
-          { label: "НЕ В СЕТИ", value: offlineCount, color: colors.status.warning },
-          { label: "ВСЕГО", value: locations.length, color: colors.accent.primary },
-        ].map(k => (
-          <View
-            key={k.label}
-            style={{
-              flex: 1,
-              backgroundColor: colors.bg.card,
-              borderRadius: Radii.md,
-              borderWidth: 1,
-              borderColor: colors.border.default,
-              padding: 10,
-              shadowColor: sc,
-              shadowOffset: Shadows.xs.shadowOffset,
-              shadowOpacity: Shadows.xs.shadowOpacity,
-              shadowRadius: Shadows.xs.shadowRadius,
-              elevation: Shadows.xs.elevation,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: Typography.fontBold,
-                fontSize: Typography.size.xl,
-                color: k.color,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {k.value}
-            </Text>
-            <Text
-              style={{
-                fontFamily: Typography.fontMedium,
-                fontSize: Typography.size.xs,
-                color: colors.text.tertiary,
-                letterSpacing: 0.5,
-                marginTop: 2,
-              }}
-            >
-              {k.label}
-            </Text>
-          </View>
-        ))}
-      </View>
+      <FadeInItem delay={0}>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, marginHorizontal: Spacing.lg, marginTop: Spacing.md }}>
+          {[
+            { label: "ОНЛАЙН", value: onlineCount, color: colors.status.success },
+            { label: "НЕ В СЕТИ", value: offlineCount, color: colors.status.warning },
+            { label: "ВСЕГО", value: locations.length, color: colors.accent.primary },
+          ].map(k => (
+            <Card key={k.label} style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xl, color: k.color, fontVariant: ["tabular-nums"] }}>{k.value}</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 0.5, marginTop: 2 }}>{k.label}</Text>
+            </Card>
+          ))}
+        </View>
+      </FadeInItem>
 
       {/* Map */}
-      <View
-        style={{
-          height: SCREEN_W * 0.7,
-          backgroundColor: colors.bg.elevated,
-          marginHorizontal: 16,
-          marginTop: 12,
-          borderRadius: Radii.lg,
-          overflow: "hidden",
-          borderWidth: 1,
-          borderColor: colors.border.default,
-          shadowColor: sc,
-          shadowOffset: Shadows.sm.shadowOffset,
-          shadowOpacity: Shadows.sm.shadowOpacity,
-          shadowRadius: Shadows.sm.shadowRadius,
-          elevation: Shadows.sm.elevation,
-        }}
-      >
-        {isError ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <Feather name="wifi-off" size={28} color={colors.text.muted} />
-            <Text style={{ fontFamily: Typography.fontMedium, color: colors.text.secondary }}>
-              Ошибка загрузки
-            </Text>
-            <PressableScale onPress={() => refetch()} haptic="light">
-              <View
-                style={{
-                  marginTop: 8,
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  backgroundColor: colors.accent.primary,
-                  borderRadius: Radii.md,
-                }}
-              >
-                <Text style={{ color: "#fff", fontFamily: Typography.fontMedium }}>Повторить</Text>
-              </View>
-            </PressableScale>
-          </View>
-        ) : (
-          <YandexMapView
-            ref={webViewRef}
-            markers={mapMarkers}
-            center={center}
-            zoom={mapMarkers.length > 1 ? 11 : 14}
-            onMarkerPress={onMarkerPress}
-            style={{ width: "100%", height: "100%" }}
-          />
-        )}
-        {/* Center button */}
-        <TouchableOpacity
-          onPress={fitAll}
-          style={{
-            position: "absolute",
-            bottom: 12,
-            right: 12,
-            backgroundColor: colors.bg.card,
-            borderRadius: 999,
-            padding: 10,
-            borderWidth: 1,
-            borderColor: colors.border.default,
-            shadowColor: sc,
-            shadowOffset: Shadows.sm.shadowOffset,
-            shadowOpacity: Shadows.sm.shadowOpacity,
-            shadowRadius: Shadows.sm.shadowRadius,
-            elevation: Shadows.sm.elevation,
-          }}
-        >
-          <Feather name="crosshair" size={18} color={colors.accent.primary} />
-        </TouchableOpacity>
-      </View>
+      <FadeInItem delay={40}>
+        <View style={{ height: SCREEN_W * 0.7, backgroundColor: colors.bg.elevated, marginHorizontal: Spacing.lg, marginTop: Spacing.md, borderRadius: Radii.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border.default }}>
+          {isError ? (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <Feather name="wifi-off" size={28} color={colors.text.muted} />
+              <Text style={{ fontFamily: Typography.fontMedium, color: colors.text.secondary }}>Ошибка загрузки</Text>
+              <PressableScale onPress={() => refetch()} haptic="light">
+                <View style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.accent.primary, borderRadius: Radii.md }}>
+                  <Text style={{ color: "#fff", fontFamily: Typography.fontMedium }}>Повторить</Text>
+                </View>
+              </PressableScale>
+            </View>
+          ) : (
+            <YandexMapView
+              ref={webViewRef}
+              markers={mapMarkers}
+              center={center}
+              zoom={mapMarkers.length > 1 ? 11 : 14}
+              onMarkerPress={onMarkerPress}
+              style={{ width: "100%", height: "100%" }}
+            />
+          )}
+          {/* Center button */}
+          <TouchableOpacity
+            onPress={fitAll}
+            style={{ position: "absolute", bottom: 12, right: 12, backgroundColor: colors.bg.card, borderRadius: Radii.full, padding: 10, borderWidth: 1, borderColor: colors.border.default }}
+          >
+            <Feather name="crosshair" size={18} color={colors.accent.primary} />
+          </TouchableOpacity>
+        </View>
+      </FadeInItem>
 
       {/* Selected agent info */}
       {selectedLoc && (
-        <View
-          style={{
-            marginHorizontal: 16,
-            marginTop: 10,
-            backgroundColor: colors.bg.card,
-            borderRadius: Radii.md,
-            borderWidth: 1,
-            borderColor: colors.accent.primary + "40",
-            padding: 12,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: isOnline(selectedLoc.createdAt)
-                ? colors.status.success
-                : colors.text.tertiary,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              style={{
-                color: "#fff",
-                fontFamily: Typography.fontBold,
-                fontSize: Typography.size.xs,
-              }}
-            >
-              {(selectedLoc.agentName ?? "A")[0].toUpperCase()}
-            </Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontFamily: Typography.fontSemibold,
-                fontSize: Typography.size.sm,
-                color: colors.text.primary,
-              }}
-            >
-              {selectedLoc.agentName ?? `Агент #${selectedLoc.agentId}`}
-            </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-              <View
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: isOnline(selectedLoc.createdAt)
-                    ? colors.status.success
-                    : colors.status.warning,
-                }}
-              />
-              <Text
-                style={{
-                  fontFamily: Typography.fontRegular,
-                  fontSize: Typography.size.xs,
-                  color: colors.text.tertiary,
-                }}
-              >
-                {isOnline(selectedLoc.createdAt) ? "Онлайн" : timeAgo(selectedLoc.createdAt)}
-              </Text>
-              {selectedLoc.batteryLevel != null && (
-                <Text
-                  style={{
-                    fontFamily: Typography.fontMedium,
-                    fontSize: Typography.size.xs,
-                    color: batteryColor(selectedLoc.batteryLevel),
-                  }}
-                >
-                  🔋 {selectedLoc.batteryLevel}%
-                </Text>
-              )}
-              {selectedLoc.accuracy && (
-                <Text
-                  style={{
-                    fontFamily: Typography.fontRegular,
-                    fontSize: Typography.size.xs,
-                    color: colors.text.tertiary,
-                  }}
-                >
-                  ±{Math.round(Number(selectedLoc.accuracy))}м
-                </Text>
-              )}
+        <FadeInItem delay={60}>
+          <Card style={{ marginHorizontal: Spacing.lg, marginTop: Spacing.sm, padding: Spacing.md, flexDirection: "row", alignItems: "center", gap: 10, borderColor: colors.accent.primary + "40", borderWidth: 1 }}>
+            <View style={{ width: 32, height: 32, borderRadius: Radii.full, backgroundColor: isOnline(selectedLoc.createdAt) ? colors.status.success : colors.text.tertiary, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.xs }}>{(selectedLoc.agentName ?? "A")[0].toUpperCase()}</Text>
             </View>
-          </View>
-          <TouchableOpacity onPress={() => setSelectedId(null)} style={{ padding: 4 }}>
-            <Feather name="x" size={16} color={colors.text.tertiary} />
-          </TouchableOpacity>
-        </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>{selectedLoc.agentName ?? `Агент #${selectedLoc.agentId}`}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                <Badge variant={isOnline(selectedLoc.createdAt) ? "success" : "warning"}>
+                  {isOnline(selectedLoc.createdAt) ? "Онлайн" : timeAgo(selectedLoc.createdAt)}
+                </Badge>
+                {selectedLoc.batteryLevel != null && (
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: batteryColor(selectedLoc.batteryLevel) }}>🔋 {selectedLoc.batteryLevel}%</Text>
+                )}
+                {selectedLoc.accuracy && (
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>±{Math.round(Number(selectedLoc.accuracy))}м</Text>
+                )}
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setSelectedId(null)} style={{ padding: 4 }}>
+              <Feather name="x" size={16} color={colors.text.tertiary} />
+            </TouchableOpacity>
+          </Card>
+        </FadeInItem>
       )}
 
       {/* Agent list */}
       <FlatList
         data={locations}
         keyExtractor={l => String(l.id)}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 24 }}
         refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            tintColor={colors.accent.primary}
-            colors={[colors.accent.primary]}
-          />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.accent.primary} colors={[colors.accent.primary]} />
         }
         ListEmptyComponent={
           !isLoading ? (
             <View style={{ alignItems: "center", paddingTop: 40, gap: 8 }}>
               <Feather name="map-pin" size={28} color={colors.text.muted} />
-              <Text
-                style={{
-                  fontFamily: Typography.fontMedium,
-                  fontSize: Typography.size.base,
-                  color: colors.text.secondary,
-                }}
-              >
-                Нет данных о локации
-              </Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.secondary }}>Нет данных о локации</Text>
             </View>
           ) : null
         }
@@ -407,95 +232,24 @@ export default function TrackingScreen() {
           const online = isOnline(loc.createdAt);
           const selected = selectedId === loc.agentId;
           return (
-            <PressableScale onPress={() => focusAgent(loc)} haptic="light">
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 10,
-                  backgroundColor: colors.bg.card,
-                  borderRadius: Radii.lg,
-                  borderWidth: 1.5,
-                  borderColor: selected ? colors.accent.primary : colors.border.default,
-                  padding: 12,
-                  marginBottom: 8,
-                  shadowColor: sc,
-                  shadowOffset: Shadows.sm.shadowOffset,
-                  shadowOpacity: Shadows.sm.shadowOpacity,
-                  shadowRadius: Shadows.sm.shadowRadius,
-                  elevation: Shadows.sm.elevation,
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: online ? colors.status.success : colors.text.tertiary,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#fff",
-                      fontFamily: Typography.fontBold,
-                      fontSize: Typography.size.sm,
-                    }}
-                  >
-                    {(loc.agentName ?? "A")[0].toUpperCase()}
-                  </Text>
+            <PressableScale onPress={() => focusAgent(loc)} haptic="light" style={{ marginBottom: 8 }}>
+              <Card style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderWidth: selected ? 1.5 : 1, borderColor: selected ? colors.accent.primary : colors.border.default }}>
+                <View style={{ width: 36, height: 36, borderRadius: Radii.full, backgroundColor: online ? colors.status.success : colors.text.tertiary, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.sm }}>{(loc.agentName ?? "A")[0].toUpperCase()}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontFamily: Typography.fontSemibold,
-                      fontSize: Typography.size.base,
-                      color: colors.text.primary,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {loc.agentName ?? `Агент #${loc.agentId}`}
-                  </Text>
-                  <View
-                    style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 }}
-                  >
-                    <View
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: online ? colors.status.success : colors.status.warning,
-                      }}
-                    />
-                    <Text
-                      style={{
-                        fontFamily: Typography.fontRegular,
-                        fontSize: Typography.size.xs,
-                        color: colors.text.tertiary,
-                      }}
-                    >
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{loc.agentName ?? `Агент #${loc.agentId}`}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 }}>
+                    <Badge variant={online ? "success" : "warning"}>
                       {online ? "Онлайн" : timeAgo(loc.createdAt)}
-                    </Text>
+                    </Badge>
                     {loc.batteryLevel != null && (
-                      <Text
-                        style={{
-                          fontFamily: Typography.fontMedium,
-                          fontSize: Typography.size.xs,
-                          color: batteryColor(loc.batteryLevel),
-                        }}
-                      >
-                        🔋 {loc.batteryLevel}%
-                      </Text>
+                      <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: batteryColor(loc.batteryLevel) }}>🔋 {loc.batteryLevel}%</Text>
                     )}
                   </View>
                 </View>
-                <Feather
-                  name={selected ? "chevron-down" : "chevron-right"}
-                  size={16}
-                  color={colors.text.tertiary}
-                />
-              </View>
+                <Feather name={selected ? "chevron-down" : "chevron-right"} size={16} color={colors.text.tertiary} />
+              </Card>
             </PressableScale>
           );
         }}
