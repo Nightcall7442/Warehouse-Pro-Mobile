@@ -45,13 +45,14 @@ export default function ProfileScreen() {
   const [confirmPwd, setConfirmPwd] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (user?.name) setNewName(user.name); }, [user?.name]);
 
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
   const isAgent = user?.role === "agent";
   const roleMeta = ROLE_META[user?.role ?? ""] ?? { label: user?.role ?? "—", icon: "user" as IconName };
 
-  const { data: kpis, refetch: refetchKpis } = useQuery({ queryKey: ["agentDashboard"], queryFn: getAgentDashboard, enabled: isAgent });
+  const { refetch: refetchKpis } = useQuery({ queryKey: ["agentDashboard"], queryFn: getAgentDashboard, enabled: isAgent });
   const { refetch: refetchShops } = useQuery({ queryKey: ["shops"], queryFn: getMyShops, enabled: isAgent || isSupervisor });
   const onRefresh = async () => { setRefreshing(true); await Promise.all([refetchKpis(), refetchShops()]); setRefreshing(false); };
 

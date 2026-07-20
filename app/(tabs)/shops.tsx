@@ -9,12 +9,11 @@ import { getMyShops, getAllShopsForSupervisor, Shop } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { useLocation, getDistanceKm, getEstimatedTime } from "../../src/hooks/useLocation";
-import * as Haptics from "expo-haptics";
-import { Typography, Spacing, Radii, Shadows, ThemeColors, KpiColors } from "../../src/theme";
-import { ScreenHeader, SearchInput, Badge, Card } from "../../src/components/ui";
+import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
+import { ScreenHeader, SearchInput, Card } from "../../src/components/ui";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 
-function ShopCard({ shop, isDark, colors, index, distance, estimatedTime, onView, onOrder }: {
+function ShopCard({ shop, isDark: _isDark, colors, index, distance, estimatedTime, onView, onOrder }: {
   shop: Shop; isDark: boolean; colors: ThemeColors; index: number;
   distance?: number; estimatedTime?: string; onView: () => void; onOrder: () => void;
 }) {

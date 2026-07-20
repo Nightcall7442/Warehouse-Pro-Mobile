@@ -1,6 +1,6 @@
 // Warehouse Pro — Barcode Scanner v2 (cold palette, Card, PressableScale)
 import { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, useWindowDimensions } from "react-native";
+import { View, Text, StyleSheet, Alert, useWindowDimensions } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";

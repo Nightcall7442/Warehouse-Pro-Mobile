@@ -64,6 +64,7 @@ export default function TrackingScreen() {
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (polledLocations) setLocations(polledLocations);
   }, [polledLocations]);
 

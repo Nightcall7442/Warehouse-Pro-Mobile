@@ -94,7 +94,8 @@ export default function GpsScreen() {
 
   useEffect(() => {
     if (autoTrack) {
-      locate();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void locate();
       intervalRef.current = setInterval(locate, 5 * 60 * 1000);
       startBackgroundTracking().then(ok => { if (!ok) console.warn("Background location permission not granted"); });
     } else {
@@ -107,6 +108,7 @@ export default function GpsScreen() {
   useEffect(() => {
     if (state === "locating") spin.value = withRepeat(withTiming(1, { duration: 1000 }), -1, false);
     else cancelAnimation(spin);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
   const spinStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));

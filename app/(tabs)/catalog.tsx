@@ -1,8 +1,8 @@
 // Warehouse Pro — Catalog v2 (cold palette, Card from ui.tsx)
 import React, { useState, useCallback, useMemo } from "react";
 import {
-  View, Text, FlatList, TouchableOpacity, TextInput, Modal, Pressable,
-  Image, ActivityIndicator, ScrollView, useWindowDimensions,
+  View, Text, FlatList, TouchableOpacity, Modal, Pressable,
+  Image, ScrollView, useWindowDimensions,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -11,12 +11,12 @@ import { getProducts, getCategories, createOrder, getMyShops, Product, Shop } fr
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
-import { Typography, Spacing, Radii, Shadows, ThemeColors, KpiColors } from "../../src/theme";
-import { ScreenHeader, SearchInput, Card } from "../../src/components/ui";
+import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
+import { SearchInput, Card } from "../../src/components/ui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ── Hero Product Card ────────────────────────────────────────────────────────
-function ProductCard({ product, colors, isDark, onPress, onAdd, fmt, cardWidth }: {
+function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, cardWidth }: {
   product: Product; colors: ThemeColors; isDark: boolean; onPress: () => void; onAdd: () => void;
   fmt: (v: number | string | null | undefined) => string; cardWidth: number;
 }) {
@@ -63,7 +63,7 @@ function ProductCard({ product, colors, isDark, onPress, onAdd, fmt, cardWidth }
 }
 
 // ── Product Detail Modal ─────────────────────────────────────────────────────
-function ProductDetail({ product, visible, onClose, onAdd, colors, isDark, fmt }: {
+function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDark, fmt }: {
   product: Product | null; visible: boolean; onClose: () => void; onAdd: (qty: number) => void;
   colors: ThemeColors; isDark: boolean; fmt: (v: number | string | null | undefined) => string;
 }) {

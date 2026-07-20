@@ -35,13 +35,6 @@ export default function LoginScreen() {
   const { login, loginWithBiometric } = useAuthStore();
   const { capabilities, biometricEnabled, loginWithBiometric: biometricAuth } = useBiometricAuth();
 
-  useEffect(() => {
-    if (capabilities.hasHardware && capabilities.isEnrolled && biometricEnabled) {
-      handleBiometricLogin();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const handleLogin = async () => {
     if (!email.trim() || !password) { setError("Введите email и пароль"); return; }
     setError(""); setLoading(true);
@@ -63,6 +56,13 @@ export default function LoginScreen() {
     catch { setError("Ошибка биометрии"); }
     finally { setBiometricLoading(false); }
   };
+
+  useEffect(() => {
+    if (capabilities.hasHardware && capabilities.isEnrolled && biometricEnabled) {
+      handleBiometricLogin();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>

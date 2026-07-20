@@ -1,18 +1,18 @@
 // Warehouse Pro — Orders v2 (cold palette, ProgressRing donuts)
-import React, { useMemo, useCallback, useState } from "react";
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert } from "react-native";
+import React, { useMemo } from "react";
+import { View, Text, FlatList, RefreshControl, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
-import { getMyOrders, deleteOrder, Order, createOrder } from "../../src/api";
-import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { getMyOrders, Order } from "../../src/api";
+import { useThemeColors } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors } from "../../src/theme";
-import { notify } from "../../src/store/toast";
-import { Card, Badge } from "../../src/components/ui";
+import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
+
+import { Card } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale } from "../../src/components/Animated";
 import { LinearGradient } from "expo-linear-gradient";
@@ -37,7 +37,6 @@ function dayKey(dateStr: string): string {
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const { isDark } = useThemeStore();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
@@ -67,18 +66,6 @@ export default function OrdersScreen() {
     }
     return result;
   }, [orders]);
-
-  const handleDelete = useCallback((order: Order) => {
-    Alert.alert("Удалить заказ?", `Заказ #${order.orderNumber}`, [
-      { text: "Нет", style: "cancel" },
-      { text: "Да", style: "destructive", onPress: async () => {
-        try { await deleteOrder(order.id); notify.success("Удалён"); refetch(); }
-        catch { notify.error("Не удалось удалить"); }
-      }},
-    ]);
-  }, [refetch]);
-
-  const orderCount = items.filter(i => i.type === "order").length;
 
   const stats = useMemo(() => {
     const arr = Array.isArray(orders) ? orders : [];

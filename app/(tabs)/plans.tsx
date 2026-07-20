@@ -32,9 +32,9 @@ import {
 import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { Typography, Spacing, Radii, Shadows, ThemeColors, KpiColors } from "../../src/theme";
+import { Typography, Spacing, Radii, Shadows, ThemeColors } from "../../src/theme";
 import { ScreenHeader, Button, EmptyState } from "../../src/components/ui";
-import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
+import { NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 
 function fmtDate(d: Date): string {
@@ -673,7 +673,7 @@ function CreatePlanModal({
 // ── Date navigator — timeline stepper with dots ────────────────────────────────
 function DateNav({
   date,
-  isToday,
+  isToday: _isToday,
   colors,
   onPrev,
   onNext,
