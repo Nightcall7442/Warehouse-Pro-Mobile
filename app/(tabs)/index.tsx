@@ -347,23 +347,22 @@ function SupervisorHome() {
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <FadeInItem delay={0}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.lg }}>
-          <View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: Spacing.lg }}>
+          <View style={{ flex: 1 }}>
             <CardDots />
             <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
-            <Text style={{ fontSize: Typography.size.xl, fontFamily: Typography.fontBold, color: colors.text.primary, marginTop: 2 }}>Главная</Text>
+            <Text style={{ fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, color: colors.text.primary, marginTop: 2 }}>Главная</Text>
           </View>
         </View>
       </FadeInItem>
 
-      {/* KPI row */}
+      {/* KPI rings + revenue card */}
       <FadeInItem delay={80}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           {isLoading ? (
             <>
-              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
             </>
           ) : isError ? (
             <PressableScale onPress={() => refetch()} haptic="light" style={{ flex: 1 }}>
@@ -374,12 +373,37 @@ function SupervisorHome() {
             </PressableScale>
           ) : (
             <>
-              <KpiCard label="ЗАКАЗОВ" value={kpis?.todayOrders ?? 0} icon="shopping-cart" color={KpiColors.indigo} colors={colors} isDark={isDark} />
-              <KpiCard label="ВЫРУЧКА" value={(kpis?.todayRevenue ?? 0).toLocaleString("ru")} icon="trending-up" color={KpiColors.green} colors={colors} isDark={isDark} />
-              <KpiCard label="АГЕНТЫ" value={`${kpis?.onlineAgents ?? 0}/${kpis?.activeAgents ?? 0}`} icon="users" color={KpiColors.teal} colors={colors} isDark={isDark} />
+              {/* Orders ring */}
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
+                <ProgressRing value={kpis?.todayOrders ? Math.min(kpis.todayOrders * 10, 100) : 0} size={70} strokeWidth={7} color={KpiColors.blue} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 8 }}>{kpis?.todayOrders ?? 0}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Заказов</Text>
+              </Card>
+              {/* Agents ring */}
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
+                <ProgressRing value={kpis?.activeAgents ? Math.round((kpis.onlineAgents ?? 0) / Math.max(kpis.activeAgents, 1) * 100) : 0} size={70} strokeWidth={7} color={KpiColors.teal} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 8 }}>{kpis?.onlineAgents ?? 0}/{kpis?.activeAgents ?? 0}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Агенты онлайн</Text>
+              </Card>
             </>
           )}
         </View>
+      </FadeInItem>
+
+      {/* Revenue card with sparkline */}
+      <FadeInItem delay={120}>
+        <Card style={{ marginBottom: Spacing.base }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <View>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Выручка сегодня</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xxl, color: colors.text.primary, marginTop: 4, fontVariant: ["tabular-nums"] }}>
+                {(kpis?.todayRevenue ?? 0).toLocaleString("ru")} сум
+              </Text>
+            </View>
+            <ProgressRing value={kpis?.todayRevenue ? Math.min((kpis.todayRevenue / 5000000) * 100, 100) : 0} size={56} strokeWidth={6} color={KpiColors.green} />
+          </View>
+          <Sparkline data={[8, 15, 12, 20, 18, 25, 22]} color={KpiColors.blue} width={280} height={40} />
+        </Card>
       </FadeInItem>
 
       {/* Quick actions */}
@@ -387,7 +411,7 @@ function SupervisorHome() {
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           <PressableScale onPress={() => router.push("/(tabs)/tracking")} haptic="light" style={{ flex: 1 }}>
             <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.md, gap: 8 }}>
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
               <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
                 <Feather name="map-pin" size={18} color="#fff" />
               </View>
@@ -395,7 +419,7 @@ function SupervisorHome() {
             </LinearGradient>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/plans")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.md, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default, ...Shadows.panel }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
               <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="calendar" size={18} color={colors.brand.primaryLight} />
               </View>
@@ -437,52 +461,64 @@ function CourierHome() {
   const inTransit = (deliveries ?? []).filter((d: any) => d.deliveryStatus === "out_for_delivery").length;
   const delivered = (deliveries ?? []).filter((d: any) => d.deliveryStatus === "delivered").length;
   const total = (deliveries ?? []).length;
+  const deliveryPct = total > 0 ? Math.round((delivered / total) * 100) : 0;
 
   const scrollRefresh = <RefreshControl refreshing={false} onRefresh={refetch} tintColor={colors.brand.primary} />;
-  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <FadeInItem delay={0}>
-        <View style={{ marginBottom: Spacing.lg }}>
-          <CardDots />
-          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
-          <Text style={{ fontSize: Typography.size.xl, fontFamily: Typography.fontBold, color: colors.text.primary, marginTop: 2 }}>Доставки</Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: Spacing.lg }}>
+          <View style={{ flex: 1 }}>
+            <CardDots />
+            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
+            <Text style={{ fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, color: colors.text.primary, marginTop: 2 }}>Доставки</Text>
+          </View>
         </View>
       </FadeInItem>
 
-      {/* KPI row */}
+      {/* KPI rings — 3 donuts */}
       <FadeInItem delay={80}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           {isLoading ? (
             <>
-              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={100} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
             </>
           ) : (
             <>
-              <KpiCard label="ОЖИДАЮТ" value={assigned} icon="package" color={KpiColors.blue} colors={colors} isDark={isDark} />
-              <KpiCard label="В ПУТИ" value={inTransit} icon="truck" color={KpiColors.amber} colors={colors} isDark={isDark} />
-              <KpiCard label="ДОСТАВЛЕНО" value={delivered} icon="check-circle" color={KpiColors.green} colors={colors} isDark={isDark} />
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.sm }}>
+                <ProgressRing value={total > 0 ? Math.round(assigned / Math.max(total, 1) * 100) : 0} size={60} strokeWidth={6} color={KpiColors.blue} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{assigned}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Ожидают</Text>
+              </Card>
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.sm }}>
+                <ProgressRing value={total > 0 ? Math.round(inTransit / Math.max(total, 1) * 100) : 0} size={60} strokeWidth={6} color={KpiColors.amber} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{inTransit}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>В пути</Text>
+              </Card>
+              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.sm }}>
+                <ProgressRing value={deliveryPct} size={60} strokeWidth={6} color={KpiColors.green} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{delivered}</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Доставлено</Text>
+              </Card>
             </>
           )}
         </View>
       </FadeInItem>
 
-      {/* Progress */}
+      {/* Progress — NeumorphicProgressBar */}
       <FadeInItem delay={120}>
         <Card style={{ marginBottom: Spacing.base }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ПРОГРЕСС ДНЯ</Text>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.accent.primary, fontVariant: ["tabular-nums"] }}>
-              {delivered}/{total} · {total > 0 ? Math.round((delivered / total) * 100) : 0}%
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: deliveryPct >= 80 ? colors.status.success : colors.accent.primary, fontVariant: ["tabular-nums"] }}>
+              {delivered}/{total} · {deliveryPct}%
             </Text>
           </View>
-          <View style={{ height: 6, backgroundColor: colors.bg.elevated, borderRadius: 3, overflow: "hidden" }}>
-            <View style={{ height: "100%", borderRadius: 3, width: `${total > 0 ? (delivered / total) * 100 : 0}%`, backgroundColor: colors.status.success }} />
-          </View>
+          <NeumorphicProgressBar value={deliveryPct} height={8} color={deliveryPct >= 80 ? colors.status.success : colors.brand.primary} />
           <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 8 }}>
             {total === 0 ? "Нет заказов на сегодня" : delivered === total ? "Все доставлены!" : `Осталось ${total - delivered}`}
           </Text>
@@ -513,7 +549,7 @@ function CourierHome() {
       </FadeInItem>
 
       {/* Recent deliveries */}
-      <FadeInItem delay={240}>
+      <FadeInItem delay={200}>
         <SectionHeader title="Последние доставки" />
       </FadeInItem>
       <Card style={{ padding: 0, overflow: "hidden" }}>
