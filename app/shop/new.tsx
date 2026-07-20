@@ -1,4 +1,4 @@
-// Warehouse Pro — New Shop (matches web ShopForm in AgentShops.tsx)
+// Warehouse Pro — New Shop v2 (cold palette, Card, Button, PressableScale)
 import React, { useState } from "react";
 import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,13 +8,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
-import { DarkShadowColor } from "../../src/theme";
-import { Shadows } from "../../src/theme";
+import { Card, Button } from "../../src/components/ui";
 import { createShop, uploadFile } from "../../src/api";
 import * as Haptics from "expo-haptics";
-import { PressableScale } from "../../src/components/Animated";
+import { PressableScale, FadeInItem } from "../../src/components/Animated";
 
 function Field({ label, children, colors }: { label: string; children: React.ReactNode; colors: ThemeColors }) {
   return (
@@ -28,9 +27,7 @@ function Field({ label, children, colors }: { label: string; children: React.Rea
 export default function NewShopScreen() {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
-  const { isDark } = useThemeStore();
   const qc = useQueryClient();
-  const sc = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
 
   const [name, setName] = useState("");
   const [owner, setOwner] = useState("");
@@ -47,7 +44,7 @@ export default function NewShopScreen() {
   const inputStyle = {
     backgroundColor: colors.bg.input, borderWidth: 1, borderColor: colors.border.default,
     borderRadius: Radii.md, padding: 12, fontFamily: Typography.fontRegular, fontSize: Typography.size.base,
-    color: colors.text.primary, shadowColor: sc, shadowOffset: { width: -1, height: -1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: -1,
+    color: colors.text.primary,
   };
 
   const [uploading, setUploading] = useState(false);
@@ -108,21 +105,23 @@ export default function NewShopScreen() {
       </LinearGradient>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
+        <FadeInItem delay={0}>
         {/* Photo */}
-        <TouchableOpacity onPress={pickPhoto}
-          style={{ width: "100%", height: 160, borderRadius: Radii.xl, overflow: "hidden", marginBottom: 20, borderWidth: 2, borderColor: photo ? "transparent" : colors.border.default, borderStyle: "dashed" }}>
-          {photo ? (
-            <Image source={{ uri: photo }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-          ) : (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.bg.card }}>
-              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent.primary + "22", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="camera" size={26} color={colors.accent.primary} />
+        <PressableScale onPress={pickPhoto} haptic="light">
+          <Card style={{ width: "100%", height: 160, overflow: "hidden", marginBottom: 20, borderWidth: 2, borderColor: photo ? "transparent" : colors.border.default, borderStyle: "dashed", padding: 0 }}>
+            {photo ? (
+              <Image source={{ uri: photo }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+            ) : (
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent.primary + "22", alignItems: "center", justifyContent: "center" }}>
+                  <Feather name="camera" size={26} color={colors.accent.primary} />
+                </View>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 14, color: colors.text.primary }}>Добавить фото</Text>
+                <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.secondary, textAlign: "center" }}>Чтобы доставщики не потерялись</Text>
               </View>
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 14, color: colors.text.primary }}>Добавить фото</Text>
-              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.secondary, textAlign: "center" }}>Чтобы доставщики не потерялись</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+            )}
+          </Card>
+        </PressableScale>
 
         {photo && (
           <TouchableOpacity onPress={() => setPhoto(null)}
@@ -163,11 +162,11 @@ export default function NewShopScreen() {
         </Field>
 
         {/* Submit */}
-        <PressableScale onPress={() => { if (!name.trim()) { notify.error("Введите название"); return; } Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); mutation.mutate(); }}
-          disabled={mutation.isPending} haptic="medium"
-          style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.lg, padding: 16, alignItems: "center", marginTop: 8, opacity: mutation.isPending ? 0.7 : 1, shadowColor: colors.accent.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 }}>
-          {mutation.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: "#fff" }}>Создать магазин</Text>}
-        </PressableScale>
+        <Button variant="primary" size="lg" fullWidth loading={mutation.isPending} disabled={mutation.isPending || !name.trim()}
+          onPress={() => { if (!name.trim()) { notify.error("Введите название"); return; } Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); mutation.mutate(); }}>
+          Создать магазин
+        </Button>
+        </FadeInItem>
       </ScrollView>
     </KeyboardAvoidingView>
   );
