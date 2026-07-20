@@ -1,13 +1,13 @@
+// Warehouse Pro — Tabs Layout v2 (cold palette, no DarkShadowColor)
+import { useMemo } from "react";
 import { Tabs } from "expo-router";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { View, Text, TouchableOpacity, Platform, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Shadows } from "../../src/theme";
+import { Typography, Spacing, Radii } from "../../src/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { DarkShadowColor } from "../../src/theme";
 
 type IconName = keyof typeof Feather.glyphMap;
 
@@ -57,36 +57,15 @@ function CustomTabBar(props: BottomTabBarProps) {
     return true;
   });
 
-  const shadowColor = isDark ? DarkShadowColor : "#000";
-
   return (
-    <View
-      style={{
-        position: "absolute",
-        left: Spacing.base,
-        right: Spacing.base,
-        bottom: insets.bottom > 0 ? insets.bottom + 8 : 20,
-        alignItems: "center",
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          width: "100%",
-          borderRadius: Radii.xxl,
-          overflow: "hidden",
-          borderWidth: 1,
-          borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.5)",
-          paddingHorizontal: Spacing.xs,
-          paddingVertical: Spacing.xs,
-          backgroundColor: isDark ? "rgba(34,31,28,0.95)" : "rgba(239,237,234,0.95)",
-          shadowColor,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: isDark ? 0.4 : 0.38,
-          shadowRadius: 24,
-          elevation: 16,
-        }}
-      >
+    <View style={{ position: "absolute", left: Spacing.base, right: Spacing.base, bottom: insets.bottom > 0 ? insets.bottom + 8 : 20, alignItems: "center" }}>
+      <View style={{
+        flexDirection: "row", width: "100%", borderRadius: Radii.xxl, overflow: "hidden",
+        borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.5)",
+        paddingHorizontal: Spacing.xs, paddingVertical: Spacing.xs,
+        backgroundColor: isDark ? "rgba(34,31,28,0.95)" : "rgba(239,237,234,0.95)",
+        shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: isDark ? 0.4 : 0.38, shadowRadius: 24, elevation: 16,
+      }}>
         {visibleRoutes.map((route: { name: string; key: string }) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === state.routes.indexOf(route);
@@ -142,8 +121,6 @@ function CustomTabBar(props: BottomTabBarProps) {
     </View>
   );
 }
-
-import { useMemo } from "react";
 
 export default function TabsLayout() {
   const colors = useThemeColors();
