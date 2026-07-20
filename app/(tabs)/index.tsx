@@ -39,16 +39,17 @@ function KpiCard({ label, value, icon, color, colors, isDark }: {
   return (
     <View style={{
       flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.xl,
-      padding: Spacing.md, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+      padding: Spacing.sm, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
       shadowColor, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity, shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation,
+      minWidth: 0,
     }}>
-      <View style={{ width: 36, height: 36, borderRadius: Radii.sm, backgroundColor: color + "18", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-        <Feather name={icon} size={16} color={color} />
+      <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: color + "18", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+        <Feather name={icon} size={14} color={color} />
       </View>
-      <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: colors.text.primary, fontVariant: ["tabular-nums"] }}>
+      <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
         {value}
       </Text>
-      <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2, letterSpacing: 0.5, textTransform: "uppercase" }}>
+      <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, marginTop: 2, letterSpacing: 0.5, textTransform: "uppercase" }} numberOfLines={1}>
         {label}
       </Text>
     </View>
