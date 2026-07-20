@@ -34,7 +34,7 @@ export const DarkColors = {
     onGlass: "rgba(237,233,227,0.92)",
   },
   accent: {
-    primary: "#00d4ff",
+    primary: "#0099cc",
     secondary: "#a78bfa",
     success: "#00e68a",
     danger: "#ff4d6a",
@@ -42,12 +42,12 @@ export const DarkColors = {
     info: "#00b4ff",
   },
   brand: {
-    primary: "#00d4ff",
-    primaryLight: "#33ddff",
+    primary: "#0099cc",
+    primaryLight: "#00b4e6",
     secondary: "#a78bfa",
-    primaryDim: "rgba(0,212,255,0.12)",
-    glow: "rgba(0,212,255,0.35)",
-    glowSoft: "rgba(0,212,255,0.14)",
+    primaryDim: "rgba(0,153,204,0.12)",
+    glow: "rgba(0,153,204,0.35)",
+    glowSoft: "rgba(0,153,204,0.14)",
   },
   status: {
     success: "#00e68a",
@@ -67,14 +67,14 @@ export const DarkColors = {
     border: "rgba(255,255,255,0.06)",
   },
   gradient: {
-    primary: ["#00d4ff", "#33ddff"] as const,
-    primarySoft: ["rgba(0,212,255,0.16)", "rgba(167,139,250,0.06)"] as const,
+    primary: ["#0099cc", "#00b4e6"] as const,
+    primarySoft: ["rgba(0,153,204,0.16)", "rgba(167,139,250,0.06)"] as const,
     success: ["#00e68a", "#3cd0b0"] as const,
     warm: ["#ffb020", "#f09858"] as const,
     danger: ["#ff4d6a", "#e878a8"] as const,
-    ocean: ["#00b4ff", "#00d4ff"] as const,
+    ocean: ["#0088cc", "#0099cc"] as const,
     sunset: ["#f09858", "#e878a8"] as const,
-    profileHeader: ["#00d4ff", "#33ddff"] as const,
+    profileHeader: ["#0099cc", "#00b4e6"] as const,
   },
 };
 
