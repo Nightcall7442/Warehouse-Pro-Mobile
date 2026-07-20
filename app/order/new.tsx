@@ -315,9 +315,9 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
           {PAYMENT_OPTIONS.map(opt => {
             const active = paymentMethod === opt.key;
             return (
-              <PressableScale key={opt.key} onPress={() => onPaymentChange(opt.key)} haptic="light">
+              <PressableScale key={opt.key} onPress={() => onPaymentChange(opt.key)} haptic="light" style={{ flex: 1 }}>
                 <View style={{
-                  flex: 1, alignItems: "center", gap: 6, paddingVertical: 12,
+                  alignItems: "center", gap: 6, paddingVertical: 12,
                   borderRadius: Radii.md, borderWidth: 1.5,
                   backgroundColor: active ? colors.accent.primary + "12" : colors.bg.elevated,
                   borderColor: active ? colors.accent.primary : colors.border.default,
