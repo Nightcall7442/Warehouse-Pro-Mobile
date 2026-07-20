@@ -1,6 +1,6 @@
-// Warehouse Pro — Shop Detail (matches web ShopDetail.tsx)
+// Warehouse Pro — Shop Detail v2 (cold palette, Card, Badge, FadeInItem)
 import { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Linking, RefreshControl, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Linking, RefreshControl } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
@@ -9,15 +9,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, router } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { useThemeColors } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { Typography, Spacing, Radii, Gradients, Shadows, ThemeColors } from "../../src/theme";
-import { DarkShadowColor } from "../../src/theme";
+import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
 import { getShop, getShopForSupervisor, updateShop, uploadShopPhoto, uploadFile } from "../../src/api";
-import { PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
+import { Card, Badge, Button } from "../../src/components/ui";
+import { PressableScale, FadeInItem, ShimmerSkeleton } from "../../src/components/Animated";
 
-function InfoRow({ icon, label, value, onPress, colors, isDark }: { icon: string; label: string; value: string; onPress?: () => void; colors: ThemeColors; isDark: boolean }) {
-  const sc = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
+function InfoRow({ icon, label, value, onPress, colors }: { icon: string; label: string; value: string; onPress?: () => void; colors: ThemeColors }) {
   const content = (
     <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 16, gap: 12 }}>
       <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.accent.primary + "22", alignItems: "center", justifyContent: "center" }}>
@@ -37,7 +36,6 @@ export default function ShopDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
-  const { isDark } = useThemeStore();
   const { user } = useAuthStore();
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
   const qc = useQueryClient();
@@ -93,8 +91,6 @@ export default function ShopDetailScreen() {
     } catch { notify.error("Не удалось определить местоположение"); }
     setGpsLoading(false);
   };
-
-  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
 
   if (isLoading) return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary, padding: Spacing.base, paddingTop: insets.top + Spacing.lg, gap: Spacing.md }}>
@@ -165,59 +161,61 @@ export default function ShopDetailScreen() {
         </View>
 
         {/* Info card */}
-        <View style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.default, marginBottom: 16, overflow: "hidden", shadowColor: sc, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity, shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation }}>
-          {editing ? (
-            <View style={{ padding: 16, gap: 10 }}>
-              <Text style={{ fontFamily: Typography.fontSemiBold, fontSize: Typography.size.sm, color: colors.accent.primary, letterSpacing: 0.5, marginBottom: 4 }}>РЕДАКТИРОВАНИЕ</Text>
-              {[
-                { key: "name", label: "Название" }, { key: "ownerName", label: "Владелец" }, { key: "phone", label: "Телефон" },
-                { key: "city", label: "Город" }, { key: "district", label: "Район" }, { key: "address", label: "Адрес" },
-              ].map(f => (
-                <TextInput key={f.key} defaultValue={(shop as unknown as Record<string, string>)[f.key] ?? ""} onChangeText={v => setEditData(d => ({ ...d, [f.key]: v }))}
-                  placeholder={f.label} placeholderTextColor={colors.text.tertiary}
-                  style={{ backgroundColor: colors.bg.input, borderRadius: Radii.md, padding: 12, fontFamily: Typography.fontRegular, fontSize: Typography.size.base, color: colors.text.primary, borderWidth: 1, borderColor: colors.border.default }} />
-              ))}
-              {/* GPS */}
-              <View style={{ marginTop: 8 }}>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, marginBottom: 6 }}>ГЕОЛОКАЦИЯ</Text>
-                <PressableScale onPress={captureGPS} disabled={gpsLoading} haptic="medium"
-                  style={{ backgroundColor: (editData.gpsLat || shop.gpsLat) ? colors.accent.success + "15" : colors.bg.input, borderWidth: 1, borderColor: (editData.gpsLat || shop.gpsLat) ? colors.accent.success : colors.border.default, borderRadius: Radii.md, padding: 12, flexDirection: "row", alignItems: "center", gap: 8, opacity: gpsLoading ? 0.6 : 1 }}>
-                  {gpsLoading ? <ActivityIndicator size="small" color={colors.accent.primary} /> : <Feather name={(editData.gpsLat || shop.gpsLat) ? "check-circle" : "crosshair"} size={16} color={(editData.gpsLat || shop.gpsLat) ? colors.accent.success : colors.accent.primary} />}
-                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.primary }}>{(editData.gpsLat || shop.gpsLat) ? "Координаты сохранены" : "Определить местоположение"}</Text>
-                </PressableScale>
+        <FadeInItem delay={0}>
+          <Card style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
+            {editing ? (
+              <View style={{ padding: 16, gap: 10 }}>
+                <Text style={{ fontFamily: Typography.fontSemiBold, fontSize: Typography.size.sm, color: colors.accent.primary, letterSpacing: 0.5, marginBottom: 4 }}>РЕДАКТИРОВАНИЕ</Text>
+                {[
+                  { key: "name", label: "Название" }, { key: "ownerName", label: "Владелец" }, { key: "phone", label: "Телефон" },
+                  { key: "city", label: "Город" }, { key: "district", label: "Район" }, { key: "address", label: "Адрес" },
+                ].map(f => (
+                  <TextInput key={f.key} defaultValue={(shop as unknown as Record<string, string>)[f.key] ?? ""} onChangeText={v => setEditData(d => ({ ...d, [f.key]: v }))}
+                    placeholder={f.label} placeholderTextColor={colors.text.tertiary}
+                    style={{ backgroundColor: colors.bg.input, borderRadius: Radii.md, padding: 12, fontFamily: Typography.fontRegular, fontSize: Typography.size.base, color: colors.text.primary, borderWidth: 1, borderColor: colors.border.default }} />
+                ))}
+                {/* GPS */}
+                <View style={{ marginTop: 8 }}>
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, marginBottom: 6 }}>ГЕОЛОКАЦИЯ</Text>
+                  <PressableScale onPress={captureGPS} disabled={gpsLoading} haptic="medium"
+                    style={{ backgroundColor: (editData.gpsLat || shop.gpsLat) ? colors.accent.success + "15" : colors.bg.input, borderWidth: 1, borderColor: (editData.gpsLat || shop.gpsLat) ? colors.accent.success : colors.border.default, borderRadius: Radii.md, padding: 12, flexDirection: "row", alignItems: "center", gap: 8, opacity: gpsLoading ? 0.6 : 1 }}>
+                    {gpsLoading ? <ActivityIndicator size="small" color={colors.accent.primary} /> : <Feather name={(editData.gpsLat || shop.gpsLat) ? "check-circle" : "crosshair"} size={16} color={(editData.gpsLat || shop.gpsLat) ? colors.accent.success : colors.accent.primary} />}
+                    <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.primary }}>{(editData.gpsLat || shop.gpsLat) ? "Координаты сохранены" : "Определить местоположение"}</Text>
+                  </PressableScale>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+                  <Button variant="primary" size="md" fullWidth loading={updateMutation.isPending}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); updateMutation.mutate(editData as Record<string, string>); }}>
+                    Сохранить
+                  </Button>
+                  <Button variant="secondary" size="md" fullWidth
+                    onPress={() => { Haptics.selectionAsync(); setEditing(false); }}>
+                    Отмена
+                  </Button>
+                </View>
               </View>
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
-                <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); updateMutation.mutate(editData as Record<string, string>); }} disabled={updateMutation.isPending} haptic="medium"
-                  style={{ flex: 1, backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 13, alignItems: "center", opacity: updateMutation.isPending ? 0.6 : 1 }}>
-                  {updateMutation.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ fontFamily: Typography.fontBold, color: "#fff" }}>Сохранить</Text>}
-                </PressableScale>
-                <PressableScale onPress={() => { Haptics.selectionAsync(); setEditing(false); }} haptic="selection"
-                  style={{ flex: 1, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, padding: 13, alignItems: "center" }}>
-                  <Text style={{ fontFamily: Typography.fontMedium, color: colors.text.secondary }}>Отмена</Text>
-                </PressableScale>
-              </View>
-            </View>
-          ) : (
-            <>
-              {shop.ownerName && <InfoRow icon="user" label="Владелец" value={shop.ownerName} colors={colors} isDark={isDark} />}
-              {shop.phone && <InfoRow icon="phone" label="Телефон" value={shop.phone} onPress={() => Linking.openURL(`tel:${shop.phone}`)} colors={colors} isDark={isDark} />}
-              {shop.address && <InfoRow icon="map-pin" label="Адрес" value={shop.address} colors={colors} isDark={isDark} />}
-              {shop.city && <InfoRow icon="navigation" label="Город" value={[shop.city, shop.district].filter(Boolean).join(", ")} colors={colors} isDark={isDark} />}
-              {shop.gpsLat && shop.gpsLng && <InfoRow icon="crosshair" label="Геолокация" value={`${Number(shop.gpsLat).toFixed(6)}, ${Number(shop.gpsLng).toFixed(6)}`} colors={colors} isDark={isDark} />}
-              {shop.notes && <InfoRow icon="file-text" label="Заметки" value={shop.notes} colors={colors} isDark={isDark} />}
-            </>
-          )}
-        </View>
+            ) : (
+              <>
+                {shop.ownerName && <InfoRow icon="user" label="Владелец" value={shop.ownerName} colors={colors} />}
+                {shop.phone && <InfoRow icon="phone" label="Телефон" value={shop.phone} onPress={() => Linking.openURL(`tel:${shop.phone}`)} colors={colors} />}
+                {shop.address && <InfoRow icon="map-pin" label="Адрес" value={shop.address} colors={colors} />}
+                {shop.city && <InfoRow icon="navigation" label="Город" value={[shop.city, shop.district].filter(Boolean).join(", ")} colors={colors} />}
+                {shop.gpsLat && shop.gpsLng && <InfoRow icon="crosshair" label="Геолокация" value={`${Number(shop.gpsLat).toFixed(6)}, ${Number(shop.gpsLng).toFixed(6)}`} colors={colors} />}
+                {shop.notes && <InfoRow icon="file-text" label="Заметки" value={shop.notes} colors={colors} />}
+              </>
+            )}
+          </Card>
+        </FadeInItem>
 
         {/* Status */}
-        <View style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, borderWidth: 1, borderColor: colors.border.default, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", shadowColor: sc, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation }}>
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.primary }}>Статус</Text>
-          <View style={{ backgroundColor: shop.status === "active" ? colors.accent.success + "22" : colors.border.default, paddingHorizontal: 12, paddingVertical: 4, borderRadius: Radii.full }}>
-            <Text style={{ fontFamily: Typography.fontSemiBold, fontSize: Typography.size.sm, color: shop.status === "active" ? colors.accent.success : colors.text.secondary }}>
+        <FadeInItem delay={40}>
+          <Card style={{ padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.primary }}>Статус</Text>
+            <Badge variant={shop.status === "active" ? "success" : "default"}>
               {shop.status === "active" ? "Активен" : "Неактивен"}
-            </Text>
-          </View>
-        </View>
+            </Badge>
+          </Card>
+        </FadeInItem>
       </ScrollView>
     </View>
   );
