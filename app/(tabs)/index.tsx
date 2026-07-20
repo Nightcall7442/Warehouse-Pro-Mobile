@@ -1,5 +1,5 @@
 // Warehouse Pro — Agent Dashboard v2 (cold palette + rings/sparklines)
-import React, { useEffect, useMemo, useCallback } from "react";
+import React, { useCallback } from "react";
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +8,7 @@ import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
 import { getAgentDashboard, getSupervisorDashboard, getPlans, updatePlanStatus, Plan } from "../../src/api";
-import { Card, SectionHeader, Badge } from "../../src/components/ui";
+import { Card, SectionHeader } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar } from "../../src/components/Charts";
 import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors, Gradients } from "../../src/theme";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
@@ -26,31 +26,6 @@ function CardDots() {
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: KpiColors.coral }} />
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: KpiColors.amber }} />
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: KpiColors.teal }} />
-    </View>
-  );
-}
-
-// ── Compact KPI card (matches web .kpi-card) ─────────────────────────────────
-function KpiCard({ label, value, icon, color, colors, isDark }: {
-  label: string; value: string | number; icon: IconName; color: string; colors: ThemeColors; isDark: boolean;
-}) {
-  const shadowColor = isDark ? "#000" : Shadows.sm.shadowColor;
-  return (
-    <View style={{
-      flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.xl,
-      padding: Spacing.sm, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
-      shadowColor, shadowOffset: Shadows.sm.shadowOffset, shadowOpacity: Shadows.sm.shadowOpacity, shadowRadius: Shadows.sm.shadowRadius, elevation: Shadows.sm.elevation,
-      minWidth: 0,
-    }}>
-      <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: color + "18", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
-        <Feather name={icon} size={14} color={color} />
-      </View>
-      <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
-        {value}
-      </Text>
-      <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, marginTop: 2, letterSpacing: 0.5, textTransform: "uppercase" }} numberOfLines={1}>
-        {label}
-      </Text>
     </View>
   );
 }
@@ -328,7 +303,6 @@ function AgentHome() {
 function SupervisorHome() {
   const router = useRouter();
   const colors = useThemeColors();
-  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 
@@ -442,7 +416,6 @@ const COURIER_STATUS: Record<string, { icon: IconName; variant: string; label: s
 function CourierHome() {
   const router = useRouter();
   const colors = useThemeColors();
-  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 

@@ -9,7 +9,7 @@ import { router } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
+import { Typography, Radii, Gradients, ThemeColors } from "../../src/theme";
 import { Card, Button } from "../../src/components/ui";
 import { createShop, uploadFile } from "../../src/api";
 import * as Haptics from "expo-haptics";
@@ -47,26 +47,20 @@ export default function NewShopScreen() {
     color: colors.text.primary,
   };
 
-  const [uploading, setUploading] = useState(false);
-
   const pickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) { const cam = await ImagePicker.requestCameraPermissionsAsync(); if (!cam.granted) { notify.error("Нет доступа"); return; }
       const res = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true });
       if (!res.canceled && res.assets[0].base64) {
-        setUploading(true);
         try { const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops"); setPhoto(url); }
         catch { notify.error("Ошибка загрузки"); }
-        finally { setUploading(false); }
       }
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true });
     if (!res.canceled && res.assets[0].base64) {
-      setUploading(true);
       try { const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops"); setPhoto(url); }
       catch { notify.error("Ошибка загрузки"); }
-      finally { setUploading(false); }
     }
   };
 

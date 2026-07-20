@@ -62,19 +62,15 @@ export default function ShopDetailScreen() {
     onError: (e: Error) => notify.error(e.message),
   });
 
-  const [photoUploading, setPhotoUploading] = useState(false);
-
   const pickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) { notify.error("Нет доступа к галерее"); return; }
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true });
     if (!res.canceled && res.assets[0].base64) {
-      setPhotoUploading(true);
       try {
         const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops");
         photoMutation.mutate(url);
       } catch { notify.error("Ошибка загрузки"); }
-      finally { setPhotoUploading(false); }
     }
   };
 

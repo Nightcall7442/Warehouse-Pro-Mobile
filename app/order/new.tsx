@@ -13,7 +13,7 @@ import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card, SearchInput, Skeleton } from "../../src/components/ui";
-import { PressableScale, FadeInItem } from "../../src/components/Animated";
+import { PressableScale } from "../../src/components/Animated";
 
 interface OrderLine {
   productId: number;
@@ -391,8 +391,6 @@ export default function NewOrderScreen() {
   });
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
-
-  const subtotal = useMemo(() => lines.reduce((s, l) => s + l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100), 0), [lines]);
 
   const createMutation = useMutation({
     mutationFn: createOrder,

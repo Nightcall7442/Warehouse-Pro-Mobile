@@ -1,6 +1,6 @@
 // Warehouse Pro — Merchandiser Visit Report v2 (cold palette, Card, Badge, Button)
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Image } from "react-native";
+import { View, Text, ScrollView, TextInput, ActivityIndicator, Alert, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii } from "../../src/theme";
 import { getProducts, submitVisitReport, uploadFile, type Product } from "../../src/api";
 import { notify } from "../../src/store/toast";
 import { Card, Badge, Button, IconCircle } from "../../src/components/ui";
@@ -59,8 +59,6 @@ export default function MerchandiserVisitScreen() {
     onError: (e: Error) => notify.error(e.message),
   });
 
-  const [uploading, setUploading] = useState(false);
-
   const pickPhoto = async (useCamera: boolean) => {
     const permMethod = useCamera ? ImagePicker.requestCameraPermissionsAsync : ImagePicker.requestMediaLibraryPermissionsAsync;
     const perm = await permMethod();
@@ -69,12 +67,10 @@ export default function MerchandiserVisitScreen() {
     const result = await launchMethod({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true });
     if (!result.canceled && result.assets[0].base64) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setUploading(true);
       try {
         const url = await uploadFile(`data:image/jpeg;base64,${result.assets[0].base64}`, "visits");
         setPhotos(prev => [...prev, url]);
       } catch { notify.error("Ошибка загрузки фото"); }
-      finally { setUploading(false); }
     }
   };
 

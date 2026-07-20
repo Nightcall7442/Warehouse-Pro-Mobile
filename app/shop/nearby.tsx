@@ -1,11 +1,11 @@
 // Warehouse Pro — Nearby Shops v2 (cold palette, Card, Badge, FadeInItem)
 import { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii } from "../../src/theme";
+import { Typography, Radii } from "../../src/theme";
 import { Card, Button, Badge, SearchInput, EmptyState, ScreenHeader } from "../../src/components/ui";
 import { FadeInItem, PressableScale } from "../../src/components/Animated";
 import { getMyShops, type Shop } from "../../src/api";
