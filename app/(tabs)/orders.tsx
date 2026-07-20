@@ -1,19 +1,22 @@
-// Warehouse Pro — Orders (minimal with date sections)
-import React, { useMemo, useCallback } from "react";
+// Warehouse Pro — Orders (matches web Orders.tsx — KPI cards + list)
+import React, { useMemo, useCallback, useState } from "react";
 import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
-import { getMyOrders, deleteOrder, Order } from "../../src/api";
+import { getMyOrders, deleteOrder, Order, createOrder } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { Typography, Spacing, Radii } from "../../src/theme";
+import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors } from "../../src/theme";
 import { DarkShadowColor } from "../../src/theme";
 import { notify } from "../../src/store/toast";
-import { Shadows } from "../../src/theme";
+import { Card, Badge } from "../../src/components/ui";
+import { FadeInItem, PressableScale } from "../../src/components/Animated";
+import { LinearGradient } from "expo-linear-gradient";
+import { Gradients } from "../../src/theme";
 
 const BOTTOM_TAB_HEIGHT = 80;
 
@@ -78,13 +81,62 @@ export default function OrdersScreen() {
   const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
   const orderCount = items.filter(i => i.type === "order").length;
 
+  const stats = useMemo(() => {
+    const arr = Array.isArray(orders) ? orders : [];
+    const newCount = arr.filter(o => o.status === "new").length;
+    const processingCount = arr.filter(o => o.status === "processing").length;
+    const completedCount = arr.filter(o => o.status === "completed").length;
+    const cancelledCount = arr.filter(o => o.status === "cancelled").length;
+    return { total: arr.length, newCount, processingCount, completedCount, cancelledCount };
+  }, [orders]);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
-      {/* Header */}
+      {/* Header — matches web Orders.tsx */}
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm }}>
-        <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: colors.text.primary }}>Заказы</Text>
-        <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>{orderCount} заказов</Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <View>
+            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: colors.text.primary }}>Заказы</Text>
+            <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
+              {stats.total} заказов · {stats.newCount} новых
+            </Text>
+          </View>
+          <PressableScale onPress={() => router.push("/order/new")} haptic="light">
+            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radii.md }}>
+              <Feather name="plus" size={14} color="#fff" />
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff" }}>Новый</Text>
+            </LinearGradient>
+          </PressableScale>
+        </View>
       </View>
+
+      {/* KPI Cards — matches web Orders.tsx */}
+      <FadeInItem delay={0}>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, paddingHorizontal: Spacing.base, marginBottom: Spacing.base }}>
+          <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, padding: Spacing.md, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+            <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: KpiColors.orange + "18", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+              <Feather name="clipboard" size={14} color={KpiColors.orange} />
+            </View>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{stats.total}</Text>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Всего</Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, padding: Spacing.md, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+            <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: KpiColors.blue + "18", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+              <Feather name="clock" size={14} color={KpiColors.blue} />
+            </View>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{stats.newCount}</Text>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Новые</Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, padding: Spacing.md, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+            <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: KpiColors.green + "18", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+              <Feather name="check-circle" size={14} color={KpiColors.green} />
+            </View>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{stats.completedCount}</Text>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Выполнены</Text>
+          </View>
+        </View>
+      </FadeInItem>
 
       {/* List */}
       <FlatList
