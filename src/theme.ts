@@ -101,8 +101,8 @@ export const LightColors = {
   text: {
     primary: "#2b3340",
     secondary: "#5b6472",
-    tertiary: "#8891a0",
-    muted: "#8891a0",
+    tertiary: "#6b7a8d",
+    muted: "#6b7a8d",
     inverse: "#ffffff",
     onGlass: "rgba(43,51,64,0.92)",
   },
