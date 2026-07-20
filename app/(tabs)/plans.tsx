@@ -32,8 +32,9 @@ import {
 import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { Typography, Spacing, Radii, Shadows, ThemeColors, DarkShadowColor } from "../../src/theme";
+import { Typography, Spacing, Radii, Shadows, ThemeColors, DarkShadowColor, KpiColors } from "../../src/theme";
 import { ScreenHeader, Button, EmptyState } from "../../src/components/ui";
+import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 
 function fmtDate(d: Date): string {
@@ -110,18 +111,20 @@ function PlanRow({
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.lg }}>
-        {/* Status icon */}
+        {/* Status circle — circular badge */}
         <View
           style={{
-            width: 56,
-            height: 56,
-            borderRadius: Radii.lg,
+            width: 48,
+            height: 48,
+            borderRadius: 24,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: meta.bg,
+            borderWidth: 2,
+            borderColor: meta.color + "30",
           }}
         >
-          <Feather name={meta.icon} size={22} color={meta.color} />
+          <Feather name={meta.icon} size={18} color={meta.color} />
         </View>
         {/* Info */}
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -667,7 +670,7 @@ function CreatePlanModal({
   );
 }
 
-// ── Date navigator ────────────────────────────────────────────────────────────
+// ── Date navigator — timeline stepper with dots ────────────────────────────────
 function DateNav({
   date,
   isToday,
@@ -681,69 +684,78 @@ function DateNav({
   onPrev: () => void;
   onNext: () => void;
 }) {
+  const days = useMemo(() => {
+    const result = [];
+    for (let i = -2; i <= 2; i++) {
+      const d = new Date(date.getTime() + i * 86_400_000);
+      const isCurrent = i === 0;
+      result.push({ date: d, isCurrent, label: d.toLocaleDateString("ru", { weekday: "short" }), dayNum: d.getDate() });
+    }
+    return result;
+  }, [date]);
+
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
-      <PressableScale onPress={onPrev} haptic="light">
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: colors.bg.elevated,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Feather name="chevron-left" size={18} color={colors.text.primary} />
+    <View style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, padding: Spacing.md, borderWidth: 1, borderColor: colors.border.default }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.sm }}>
+        <PressableScale onPress={onPrev} haptic="light">
+          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="chevron-left" size={16} color={colors.text.primary} />
+          </View>
+        </PressableScale>
+        <View style={{ flex: 1, alignItems: "center" }}>
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary, textTransform: "capitalize" }}>
+            {date.toLocaleDateString("ru", { weekday: "long" })}
+          </Text>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
+            {date.toLocaleDateString("ru", { day: "numeric", month: "long", year: "numeric" })}
+          </Text>
         </View>
-      </PressableScale>
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.bg.card,
-          borderRadius: Radii.md,
-          borderWidth: 1,
-          borderColor: colors.border.default,
-          padding: 10,
-          alignItems: "center",
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: Typography.fontSemibold,
-            fontSize: Typography.size.base,
-            color: colors.text.primary,
-            textTransform: "capitalize",
-          }}
-        >
-          {date.toLocaleDateString("ru", { weekday: "long" })}
-        </Text>
-        <Text
-          style={{
-            fontFamily: Typography.fontMedium,
-            fontSize: Typography.size.xs,
-            color: colors.text.tertiary,
-            marginTop: 2,
-          }}
-        >
-          {date.toLocaleDateString("ru", { day: "numeric", month: "long", year: "numeric" })}
-          {isToday ? " · Сегодня" : ""}
-        </Text>
+        <PressableScale onPress={onNext} haptic="light">
+          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="chevron-right" size={16} color={colors.text.primary} />
+          </View>
+        </PressableScale>
       </View>
-      <PressableScale onPress={onNext} haptic="light">
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: colors.bg.elevated,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Feather name="chevron-right" size={18} color={colors.text.primary} />
-        </View>
-      </PressableScale>
+      {/* Timeline dots */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: Spacing.xs }}>
+        {days.map((d, i) => (
+          <PressableScale key={i} onPress={() => {
+            const diff = d.date.getTime() - date.getTime();
+            if (diff !== 0) {
+              const fn = diff > 0 ? onNext : onPrev;
+              for (let j = 0; j < Math.abs(Math.round(diff / 86_400_000)); j++) fn();
+            }
+          }} haptic="light" style={{ alignItems: "center", gap: 4 }}>
+            <View style={{
+              width: d.isCurrent ? 36 : 28,
+              height: d.isCurrent ? 36 : 28,
+              borderRadius: d.isCurrent ? 18 : 14,
+              backgroundColor: d.isCurrent ? colors.brand.primary : "transparent",
+              borderWidth: d.isCurrent ? 0 : 1.5,
+              borderColor: d.isCurrent ? "transparent" : colors.border.default,
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
+              <Text style={{
+                fontFamily: d.isCurrent ? Typography.fontBold : Typography.fontMedium,
+                fontSize: d.isCurrent ? Typography.size.base : Typography.size.xs,
+                color: d.isCurrent ? "#fff" : colors.text.secondary,
+              }}>
+                {d.dayNum}
+              </Text>
+            </View>
+            <Text style={{
+              fontFamily: Typography.fontMedium,
+              fontSize: 9,
+              color: d.isCurrent ? colors.accent.primary : colors.text.muted,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+            }}>
+              {d.label}
+            </Text>
+          </PressableScale>
+        ))}
+      </View>
     </View>
   );
 }
@@ -869,29 +881,12 @@ function SupervisorPlansView() {
             >
               {visited}/{total}
             </Text>
-            <View
-              style={{
-                flex: 1,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: colors.bg.elevated,
-                overflow: "hidden",
-              }}
-            >
-              <View
-                style={{
-                  width: `${pct}%`,
-                  height: "100%",
-                  borderRadius: 3,
-                  backgroundColor:
-                    pct === 100
-                      ? colors.accent.success
-                      : pct >= 60
-                        ? colors.accent.warning
-                        : colors.accent.primary,
-                }}
-              />
-            </View>
+            <NeumorphicProgressBar
+              value={pct}
+              height={6}
+              color={pct === 100 ? colors.accent.success : pct >= 60 ? colors.accent.warning : colors.brand.primary}
+              style={{ flex: 1 }}
+            />
             <Text
               style={{
                 fontFamily: Typography.fontBold,
