@@ -568,3 +568,12 @@ export async function getReportById(id: number): Promise<VisitReport | null> {
 export async function getReportsByShop(shopId: number, page = 1, pageSize = 25): Promise<{ data: VisitReport[]; total: number }> {
   return trpcQuery("merchandiser.getReportsByShop", { shopId, page, pageSize });
 }
+
+// ── Push notifications ────────────────────────────────────────────────────────
+export async function registerPushToken(pushToken: string): Promise<{ success: boolean }> {
+  return trpcMutation<{ success: boolean }>("user.registerPushToken", { pushToken });
+}
+
+export async function removePushToken(): Promise<{ success: boolean }> {
+  return trpcMutation<{ success: boolean }>("user.removePushToken", {});
+}
