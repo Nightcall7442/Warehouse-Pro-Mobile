@@ -16,6 +16,7 @@ import { useThemeStore } from "../src/store/theme";
 import { useBrandingStore } from "../src/store/branding";
 import { ToastHost } from "../src/components/Toast";
 import { ErrorBoundary } from "../src/components/ErrorBoundary";
+import { usePushNotifications } from "../src/hooks/usePushNotifications";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -61,6 +62,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, hydrate } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
+
+  // Register push token on auth
+  usePushNotifications();
 
   useEffect(() => {
     hydrate();

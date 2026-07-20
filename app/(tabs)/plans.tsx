@@ -33,7 +33,7 @@ import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { Typography, Spacing, Radii, Shadows, ThemeColors } from "../../src/theme";
-import { ScreenHeader, Button, EmptyState } from "../../src/components/ui";
+import { ScreenHeader, Button, EmptyState, Card } from "../../src/components/ui";
 import { NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 
@@ -1200,6 +1200,25 @@ function AgentPlansView() {
             {pct}%
           </Text>
         </View>
+      )}
+
+      {/* Route optimization button */}
+      {!isLoading && plans && plans.length > 0 && (
+        <PressableScale
+          onPress={() => router.push({ pathname: "/(tabs)/plans", params: { optimize: "true" } })}
+          haptic="light"
+        >
+          <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, marginBottom: Spacing.md }}>
+            <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: colors.accent.primary + "15", alignItems: "center", justifyContent: "center" }}>
+              <Feather name="navigation" size={18} color={colors.accent.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>Оптимизировать маршрут</Text>
+              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>Сортировка по близости</Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+          </Card>
+        </PressableScale>
       )}
 
       {isLoading ? (
