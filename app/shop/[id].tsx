@@ -148,11 +148,13 @@ export default function ShopDetailScreen() {
           style={{ position: "absolute", top: insets.top + 8, left: 16, width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
           <Feather name="arrow-left" size={20} color="#fff" />
         </PressableScale>
-        {/* Edit */}
-        <PressableScale onPress={() => { setEditData({}); setEditing(e => !e); }} haptic="light"
-          style={{ position: "absolute", top: insets.top + 8, right: 16, width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
-          <Feather name={editing ? "x" : "edit-2"} size={18} color="#fff" />
-        </PressableScale>
+        {/* Edit - only for supervisors/operators */}
+        {isSupervisor && (
+          <PressableScale onPress={() => { setEditData({}); setEditing(e => !e); }} haptic="light"
+            style={{ position: "absolute", top: insets.top + 8, right: 16, width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
+            <Feather name={editing ? "x" : "edit-2"} size={18} color="#fff" />
+          </PressableScale>
+        )}
         {/* Name overlay */}
         <View style={{ position: "absolute", bottom: 16, left: 16, right: 16 }}>
           <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: "#fff" }}>{shop.name}</Text>
@@ -192,10 +194,14 @@ export default function ShopDetailScreen() {
                 {[
                   { key: "name", label: "Название" }, { key: "ownerName", label: "Владелец" }, { key: "phone", label: "Телефон" },
                   { key: "city", label: "Город" }, { key: "district", label: "Район" }, { key: "address", label: "Адрес" },
+                  { key: "notes", label: "Заметки" },
                 ].map(f => (
-                  <TextInput key={f.key} defaultValue={(shop as unknown as Record<string, string>)[f.key] ?? ""} onChangeText={v => setEditData(d => ({ ...d, [f.key]: v }))}
+                  <TextInput key={f.key} value={editData[f.key] ?? (shop as unknown as Record<string, string>)[f.key] ?? ""} onChangeText={v => setEditData(d => ({ ...d, [f.key]: v }))}
                     placeholder={f.label} placeholderTextColor={colors.text.tertiary}
-                    style={{ backgroundColor: colors.bg.input, borderRadius: Radii.md, padding: 12, fontFamily: Typography.fontRegular, fontSize: Typography.size.base, color: colors.text.primary, borderWidth: 1, borderColor: colors.border.default }} />
+                    multiline={f.key === "notes"}
+                    numberOfLines={f.key === "notes" ? 3 : 1}
+                    textAlignVertical={f.key === "notes" ? "top" : "center"}
+                    style={{ backgroundColor: colors.bg.input, borderRadius: Radii.md, padding: 12, fontFamily: Typography.fontRegular, fontSize: Typography.size.base, color: colors.text.primary, borderWidth: 1, borderColor: colors.border.default, minHeight: f.key === "notes" ? 80 : undefined }} />
                 ))}
                 {/* GPS */}
                 <View style={{ marginTop: 8 }}>
