@@ -68,14 +68,41 @@ export default function NewShopScreen() {
     setGpsLoading(true);
     try {
       const Location = await import("expo-location");
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") { notify.error("Разрешение не выдано"); setGpsLoading(false); return; }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+
+      // Check permission first
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status === "undetermined") {
+        ({ status } = await Location.requestForegroundPermissionsAsync());
+      }
+      if (status !== "granted") {
+        notify.error("Разрешение на геолокацию не выдано. Разрешите в настройках.");
+        setGpsLoading(false);
+        return;
+      }
+
+      // Get position with timeout
+      const pos = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("GPS timeout")), 15_000)
+        ),
+      ]);
+
+      if (!pos?.coords) {
+        notify.error("Не удалось определить координаты");
+        setGpsLoading(false);
+        return;
+      }
+
       setGpsLat(pos.coords.latitude.toFixed(8));
       setGpsLng(pos.coords.longitude.toFixed(8));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       notify.success("Координаты сохранены");
-    } catch { notify.error("Не удалось определить местоположение"); }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.warn("[GPS] captureGPS failed:", msg);
+      notify.error(`Не удалось определить местоположение: ${msg}`);
+    }
     setGpsLoading(false);
   };
 
