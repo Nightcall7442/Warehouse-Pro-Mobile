@@ -431,12 +431,22 @@ export async function listAllOrders(params?: { page?: number; pageSize?: number;
   return trpcQuery<{ data: Order[]; total: number }>("order.list", params ?? {});
 }
 
-export async function getShop(id: number): Promise<Shop> {
-  return trpcQuery<Shop>("agent.getShopById", { id });
+export async function getShop(id: number): Promise<Shop | null> {
+  try {
+    return await trpcQuery<Shop>("agent.getShopById", { id });
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes("empty json payload")) return null;
+    throw e;
+  }
 }
 
-export async function getShopForSupervisor(id: number): Promise<Shop> {
-  return trpcQuery<Shop>("agent.getShopByIdSupervisor", { id });
+export async function getShopForSupervisor(id: number): Promise<Shop | null> {
+  try {
+    return await trpcQuery<Shop>("agent.getShopByIdSupervisor", { id });
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes("empty json payload")) return null;
+    throw e;
+  }
 }
 
 export async function updateShop(id: number, data: Partial<CreateShopInput>): Promise<void> {

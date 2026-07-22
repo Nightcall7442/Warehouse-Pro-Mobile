@@ -123,10 +123,17 @@ export default function ShopDetailScreen() {
     </View>
   );
 
-  if (isError || !shop) return (
-    <View style={{ flex: 1, backgroundColor: colors.bg.primary, alignItems: "center", justifyContent: "center", gap: Spacing.md }}>
-      <Feather name="wifi-off" size={32} color={colors.text.muted} />
-      <Text style={{ color: colors.text.secondary, fontFamily: Typography.fontMedium }}>Магазин не найден</Text>
+  if (isError || (!shop && !isLoading)) return (
+    <View style={{ flex: 1, backgroundColor: colors.bg.primary, alignItems: "center", justifyContent: "center", gap: Spacing.lg, paddingHorizontal: 32 }}>
+      <Feather name={isError ? "wifi-off" : "search"} size={32} color={colors.text.muted} />
+      <Text style={{ color: colors.text.secondary, fontFamily: Typography.fontMedium, textAlign: "center" }}>
+        {isError ? "Ошибка загрузки" : "Магазин не найден"}
+      </Text>
+      <PressableScale onPress={() => refetch()} haptic="light">
+        <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingVertical: 10, paddingHorizontal: 20 }}>
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>Повторить</Text>
+        </View>
+      </PressableScale>
     </View>
   );
 
