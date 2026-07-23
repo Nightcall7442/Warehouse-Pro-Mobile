@@ -15,6 +15,14 @@ import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { SearchInput, Card } from "../../src/components/ui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+// ── Unit label mapping ──────────────────────────────────────────────────────
+const UNIT_LABELS: Record<string, string> = {
+  kg: "кг", l: "л", pcs: "шт", box: "ящ", pack: "упак", m: "м",
+};
+function unitLabel(unit?: string | null): string {
+  return UNIT_LABELS[unit ?? ""] ?? unit ?? "шт";
+}
+
 // ── Hero Product Card ────────────────────────────────────────────────────────
 function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, cardWidth }: {
   product: Product; colors: ThemeColors; isDark: boolean; onPress: () => void; onAdd: () => void;
@@ -22,6 +30,7 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
 }) {
   const hasPhoto = !!product.photoUrl && product.photoUrl.startsWith("http");
   const inStock = Number(product.available) > 0;
+  const price = Number(product.unitPrice ?? 0);
   const imgHeight = cardWidth * 0.7;
 
   return (
@@ -53,8 +62,11 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, marginBottom: 4 }} numberOfLines={2}>{product.name}</Text>
           {product.code && <Text style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMono, marginBottom: 6 }}>Артикул: {product.code}</Text>}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}</Text>
-            {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{product.available} {product.unit || "шт"}</Text>}
+            {price > 0
+              ? <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}<Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>/{unitLabel(product.unit)}</Text></Text>
+              : <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>Цена не задана</Text>
+            }
+            {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{product.available} {unitLabel(product.unit)}</Text>}
           </View>
         </View>
       </Card>
@@ -68,27 +80,28 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
   colors: ThemeColors; isDark: boolean; fmt: (v: number | string | null | undefined) => string;
 }) {
   const [qty, setQty] = useState(1);
-  const { width: SCREEN_W } = useWindowDimensions();
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   if (!product) return null;
+  const price = Number(product.unitPrice ?? 0);
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={onClose}>
         <Pressable style={{
-          position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "88%",
+          position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "92%",
           backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, overflow: "hidden",
         }} onPress={e => e.stopPropagation()}>
           {/* Handle */}
           <View style={{ alignItems: "center", paddingVertical: 10 }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
           </View>
-          {/* Big photo */}
-          <View style={{ width: "100%", height: SCREEN_W * 0.6, backgroundColor: colors.bg.elevated }}>
+          {/* Big photo — full width, 55% of screen height */}
+          <View style={{ width: "100%", height: SCREEN_H * 0.45, backgroundColor: colors.bg.elevated }}>
             {product.photoUrl ? (
               <Image source={{ uri: product.photoUrl ?? undefined }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             ) : (
               <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="package" size={56} color={colors.text.muted} />
+                <Feather name="package" size={64} color={colors.text.muted} />
               </View>
             )}
           </View>
@@ -98,13 +111,13 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
             {/* Price + Stock row */}
             <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: 20 }}>
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
-                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Цена</Text>
-                <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: colors.accent.primary, marginTop: 4 }}>{fmt(product.unitPrice)}</Text>
+                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Цена за {unitLabel(product.unit)}</Text>
+                <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: price > 0 ? colors.accent.primary : colors.text.muted, marginTop: 4 }}>{price > 0 ? fmt(product.unitPrice) : "Не задана"}</Text>
               </View>
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
                 <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Остаток</Text>
                 <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: Number(product.available) > 0 ? colors.status.success : colors.status.danger, marginTop: 4 }}>
-                  {product.available} {product.unit || "шт"}
+                  {product.available} {unitLabel(product.unit)}
                 </Text>
               </View>
             </View>
