@@ -26,6 +26,7 @@ import {
   getAgentsList,
   getAllShops,
   uploadFile,
+  getOptimizedRoute,
   Plan,
   ShopSummary,
 } from "../../src/api";
@@ -1096,6 +1097,26 @@ function AgentPlansView() {
     onError: (e: Error) => notify.error(e.message ?? "Ошибка отправки фото"),
   });
 
+  // Route optimization
+  const [optimizedPlanIds, setOptimizedPlanIds] = useState<number[] | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
+
+  const handleOptimize = async () => {
+    setOptimizing(true);
+    try {
+      const { coords } = await (await import("expo-location")).getCurrentPositionAsync({ accuracy: 1 });
+      const result = await getOptimizedRoute(coords.latitude, coords.longitude);
+      if (result.plans.length > 0) {
+        setOptimizedPlanIds(result.plans.map(p => p.id));
+        notify.success(`Маршрут оптимизирован (${result.totalStops} точек, ${result.totalDistance.toFixed(1)} км)`);
+      }
+    } catch {
+      notify.error("Не удалось оптимизировать маршрут");
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
   const handleTakePhoto = async (planId: number) => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
@@ -1205,18 +1226,23 @@ function AgentPlansView() {
       {/* Route optimization button */}
       {!isLoading && plans && plans.length > 0 && (
         <PressableScale
-          onPress={() => router.push({ pathname: "/(tabs)/plans", params: { optimize: "true" } })}
+          onPress={handleOptimize}
           haptic="light"
+          disabled={optimizing}
         >
-          <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, marginBottom: Spacing.md }}>
+          <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, marginBottom: Spacing.md, opacity: optimizing ? 0.6 : 1 }}>
             <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: colors.accent.primary + "15", alignItems: "center", justifyContent: "center" }}>
-              <Feather name="navigation" size={18} color={colors.accent.primary} />
+              {optimizing ? <Feather name="loader" size={18} color={colors.accent.primary} /> : <Feather name="navigation" size={18} color={colors.accent.primary} />}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>Оптимизировать маршрут</Text>
-              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>Сортировка по близости</Text>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
+                {optimizing ? "Оптимизация..." : optimizedPlanIds ? "Маршрут оптимизирован" : "Оптимизировать маршрут"}
+              </Text>
+              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
+                {optimizedPlanIds ? `${optimizedPlanIds.length} точек по порядку` : "Сортировка по близости"}
+              </Text>
             </View>
-            <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+            {!optimizing && <Feather name="check-circle" size={16} color={colors.status.success} />}
           </Card>
         </PressableScale>
       )}
@@ -1229,7 +1255,16 @@ function AgentPlansView() {
         </View>
       ) : (
         <FlatList
-          data={plans ?? []}
+          data={optimizedPlanIds
+            ? [...(plans ?? [])].sort((a, b) => {
+                const ai = optimizedPlanIds.indexOf(a.id);
+                const bi = optimizedPlanIds.indexOf(b.id);
+                if (ai === -1 && bi === -1) return 0;
+                if (ai === -1) return 1;
+                if (bi === -1) return -1;
+                return ai - bi;
+              })
+            : plans ?? []}
           keyExtractor={p => String(p.id)}
           contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 24 }}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}

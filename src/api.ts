@@ -385,6 +385,10 @@ export async function getSupervisorDashboard(): Promise<SupervisorKpis> {
   return trpcQuery<SupervisorKpis>("dashboard.supervisorDashboard");
 }
 
+export async function getRevenueTrend(days: number = 7): Promise<number[]> {
+  return trpcQuery<number[]>("dashboard.revenueTrend", { days });
+}
+
 export async function getProducts(search?: string): Promise<Product[]> {
   const res = await trpcQuery<Product[] | { data: Product[] }>("product.listAll", search ? { search } : undefined);
   return Array.isArray(res) ? res : (res as any)?.data ?? [];

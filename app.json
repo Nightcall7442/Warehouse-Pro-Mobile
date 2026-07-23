@@ -2,6 +2,7 @@
   "expo": {
     "name": "Warehouse Pro",
     "slug": "warehouse-pro-agent",
+    "owner": "wwy666",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +17,13 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0B10"
       },
-      "package": "com.warehousepro.agent"
+      "package": "com.warehousepro.agent",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -27,9 +34,10 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "6ae2aa12-a019-46d5-a6d8-99c9ac55620f"
+        "projectId": "e5d30f54-2b04-473c-988f-4715f4946a01"
       },
-      "yandexMapsApiKey": "YOUR_YANDEX_MAPS_API_KEY_HERE"
+      "yandexMapsApiKey": "YOUR_YANDEX_MAPS_API_KEY_HERE",
+      "router": {}
     }
   }
 }

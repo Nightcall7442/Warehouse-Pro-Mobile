@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
-import { getAgentDashboard, getSupervisorDashboard, getPlans, updatePlanStatus, Plan } from "../../src/api";
+import { getAgentDashboard, getSupervisorDashboard, getPlans, updatePlanStatus, getRevenueTrend, Plan } from "../../src/api";
 import { Card, SectionHeader } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar } from "../../src/components/Charts";
 import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors, Gradients } from "../../src/theme";
@@ -114,6 +114,12 @@ function AgentHome() {
     retry: false, enabled: isAgentRole,
   });
 
+  const { data: revenueTrend } = useQuery({
+    queryKey: ["revenueTrend"],
+    queryFn: () => getRevenueTrend(7),
+    retry: false, enabled: isAgentRole,
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) => updatePlanStatus(planId, status),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["plans"] }),
@@ -202,7 +208,7 @@ function AgentHome() {
             </View>
             <ProgressRing value={kpis?.todayRevenue ? Math.min((kpis.todayRevenue / 1000000) * 100, 100) : 0} size={56} strokeWidth={6} color={KpiColors.green} />
           </View>
-          <Sparkline data={[12, 19, 8, 15, 22, 18, 25]} color={KpiColors.blue} width={280} height={40} />
+          <Sparkline data={revenueTrend?.length ? revenueTrend : [0]} color={KpiColors.blue} width={280} height={40} />
         </Card>
       </FadeInItem>
 
@@ -313,6 +319,12 @@ function SupervisorHome() {
     queryKey: ["supervisorDashboard"], queryFn: getSupervisorDashboard, retry: false,
   });
 
+  const { data: revenueTrend } = useQuery({
+    queryKey: ["revenueTrend"],
+    queryFn: () => getRevenueTrend(7),
+    retry: false,
+  });
+
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
   const firstName = (user?.name ?? user?.email ?? "Супервайзер").split(" ")[0];
@@ -378,7 +390,7 @@ function SupervisorHome() {
             </View>
             <ProgressRing value={kpis?.todayRevenue ? Math.min((kpis.todayRevenue / 5000000) * 100, 100) : 0} size={56} strokeWidth={6} color={KpiColors.green} />
           </View>
-          <Sparkline data={[8, 15, 12, 20, 18, 25, 22]} color={KpiColors.blue} width={280} height={40} />
+          <Sparkline data={revenueTrend?.length ? revenueTrend : [0]} color={KpiColors.blue} width={280} height={40} />
         </Card>
       </FadeInItem>
 
