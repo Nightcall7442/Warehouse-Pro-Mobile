@@ -30,7 +30,6 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
 }) {
   const hasPhoto = !!product.photoUrl && product.photoUrl.startsWith("http");
   const inStock = Number(product.available) > 0;
-  const price = Number(product.unitPrice ?? 0);
   const imgHeight = cardWidth * 0.7;
 
   return (
@@ -62,10 +61,7 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, marginBottom: 4 }} numberOfLines={2}>{product.name}</Text>
           {product.code && <Text style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMono, marginBottom: 6 }}>Артикул: {product.code}</Text>}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            {price > 0
-              ? <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}<Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>/{unitLabel(product.unit)}</Text></Text>
-              : <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>Цена не задана</Text>
-            }
+            <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}<Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>/{unitLabel(product.unit)}</Text></Text>
             {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{product.available} {unitLabel(product.unit)}</Text>}
           </View>
         </View>
@@ -82,7 +78,6 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
   const [qty, setQty] = useState(1);
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   if (!product) return null;
-  const price = Number(product.unitPrice ?? 0);
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -112,7 +107,7 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
             <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: 20 }}>
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
                 <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Цена за {unitLabel(product.unit)}</Text>
-                <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: price > 0 ? colors.accent.primary : colors.text.muted, marginTop: 4 }}>{price > 0 ? fmt(product.unitPrice) : "Не задана"}</Text>
+                <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: colors.accent.primary, marginTop: 4 }}>{fmt(product.unitPrice)}</Text>
               </View>
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
                 <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Остаток</Text>
