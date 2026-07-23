@@ -386,12 +386,8 @@ export async function getSupervisorDashboard(): Promise<SupervisorKpis> {
 }
 
 export async function getProducts(search?: string): Promise<Product[]> {
-  const res = await trpcQuery<{ data: Product[] } | Product[]>("product.list", {
-    page: 1,
-    pageSize: 200,
-    ...(search ? { search } : {}),
-  });
-  return Array.isArray(res) ? res : res.data;
+  const res = await trpcQuery<Product[] | { data: Product[] }>("product.listAll", search ? { search } : undefined);
+  return Array.isArray(res) ? res : (res as any)?.data ?? [];
 }
 
 export async function getCategories(): Promise<string[]> {
