@@ -26,7 +26,7 @@ async function getExpoPushToken(): Promise<string | null> {
   }
 
   if (finalStatus !== "granted") {
-    console.warn("[Push] Push notification permission not granted");
+    if (__DEV__) console.warn("[Push] Push notification permission not granted");
     return null;
   }
 
@@ -78,7 +78,7 @@ export function usePushNotifications() {
           });
         }
       } catch (e) {
-        console.warn("[Push] Failed to register:", e);
+        if (__DEV__) console.warn("[Push] Failed to register:", e);
       }
     }
 
@@ -109,7 +109,7 @@ export function usePushNotifications() {
         await removePushToken();
         tokenRef.current = null;
       } catch (e) {
-        console.warn("[Push] Failed to unregister:", e);
+        if (__DEV__) console.warn("[Push] Failed to unregister:", e);
       }
     }
 

@@ -26,7 +26,7 @@ jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('@expo/vector-icons', () => ({ Feather: 'Feather' }));
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { Button } from '../components/ui';
 
 describe('Button', () => {
@@ -37,8 +37,9 @@ describe('Button', () => {
 
   it('calls onPress when pressed', () => {
     const onPress = jest.fn();
-    render(<Button onPress={onPress}>Press</Button>);
-    fireEvent.press(screen.getByText('Press'));
+    const { container } = render(<Button onPress={onPress}>Press</Button>);
+    const btn = container.querySelector('[role="button"]') || container.querySelector('div');
+    fireEvent.click(btn!);
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
@@ -49,8 +50,9 @@ describe('Button', () => {
 
   it('is disabled when disabled prop is true', () => {
     const onPress = jest.fn();
-    render(<Button disabled onPress={onPress}>Disabled</Button>);
-    fireEvent.press(screen.getByText('Disabled'));
+    const { container } = render(<Button disabled onPress={onPress}>Disabled</Button>);
+    const btn = container.querySelector('[role="button"]') || container.querySelector('div');
+    fireEvent.click(btn!);
     expect(onPress).not.toHaveBeenCalled();
   });
 });

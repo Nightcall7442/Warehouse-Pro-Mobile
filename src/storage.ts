@@ -14,14 +14,14 @@ export const SecureStore = Platform.OS === 'web'
         try {
           localStorage.setItem(key, value);
         } catch (e) {
-          console.error('SecureStore.setItemAsync failed:', e);
+          if (__DEV__) console.error('SecureStore.setItemAsync failed:', e);
         }
       },
       deleteItemAsync: async (key: string): Promise<void> => {
         try {
           localStorage.removeItem(key);
         } catch (e) {
-          console.error('SecureStore.deleteItemAsync failed:', e);
+          if (__DEV__) console.error('SecureStore.deleteItemAsync failed:', e);
         }
       },
     }

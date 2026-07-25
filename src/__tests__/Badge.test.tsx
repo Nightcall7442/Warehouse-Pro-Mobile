@@ -26,7 +26,7 @@ jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('@expo/vector-icons', () => ({ Feather: 'Feather' }));
 
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render, screen } from '@testing-library/react';
 import { Badge } from '../components/ui';
 
 describe('Badge', () => {

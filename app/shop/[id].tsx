@@ -54,12 +54,13 @@ export default function ShopDetailScreen() {
   });
 
   // Initialize territoryId from shop data
-  const shopTerritoryId = (shop as any)?.territoryId;
+  const shopTerritoryId = (shop as Record<string, unknown>)?.territoryId as number | undefined;
   if (shopTerritoryId && territoryId === undefined) {
     setTerritoryId(shopTerritoryId);
   }
 
   const updateMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: (data: Partial<Record<string, string>>) => updateShop(Number(id), { ...data, territoryId } as any),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); setEditing(false); notify.success("Сохранено"); },
     onError: (e: Error) => notify.error(e.message),
@@ -118,7 +119,7 @@ export default function ShopDetailScreen() {
       notify.success("Координаты обновлены");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Unknown error";
-      console.warn("[GPS] captureGPS failed:", msg);
+      if (__DEV__) console.warn("[GPS] captureGPS failed:", msg);
       notify.error(`Не удалось определить местоположение: ${msg}`);
     }
     setGpsLoading(false);

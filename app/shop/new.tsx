@@ -104,7 +104,7 @@ export default function NewShopScreen() {
       notify.success("Координаты сохранены");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Unknown error";
-      console.warn("[GPS] captureGPS failed:", msg);
+      if (__DEV__) console.warn("[GPS] captureGPS failed:", msg);
       notify.error(`Не удалось определить местоположение: ${msg}`);
     }
     setGpsLoading(false);

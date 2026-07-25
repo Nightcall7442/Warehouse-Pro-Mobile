@@ -12,16 +12,8 @@ jest.mock('../store/theme', () => ({
   }),
   useThemeStore: () => ({ isDark: false }),
 }));
-
-jest.mock('expo-haptics', () => ({
-  impactAsync: jest.fn(),
-  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
-}));
-
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-}));
-
+jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' } }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('@expo/vector-icons', () => ({ Feather: 'Feather' }));
 
@@ -29,17 +21,11 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Card } from '../components/ui';
 
-describe('Card', () => {
-  it('renders children', () => {
-    render(<Card><span>Hello</span></Card>);
-    expect(screen.getByText('Hello')).toBeTruthy();
-  });
-
-  it('calls onPress when pressed', () => {
-    const onPress = jest.fn();
-    const { container } = render(<Card onPress={onPress}><span>Tap me</span></Card>);
-    const button = container.querySelector('[role="button"]') || container.querySelector('div');
-    fireEvent.click(button!);
-    expect(onPress).toHaveBeenCalledTimes(1);
+it('debug render', () => {
+  const { container } = render(<Card onPress={() => {}}><span>Tap me</span></Card>);
+  console.log('RENDERED HTML:', container.innerHTML);
+  const divs = container.querySelectorAll('div');
+  divs.forEach((d, i) => {
+    console.log(`div[${i}] role=${d.getAttribute('role')} class=${d.className}`);
   });
 });

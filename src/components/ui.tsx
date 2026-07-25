@@ -5,7 +5,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, TouchableOpacityProps, ActivityIndicator, TextInput, ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
-import { Typography, Spacing, Radii, Shadows, Gradients, ThemeColors, DarkShadowColor } from "../theme";
+import { Typography, Spacing, Radii, Shadows, Gradients, DarkShadowColor } from "../theme";
 import { useThemeColors, useThemeStore } from "../store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";

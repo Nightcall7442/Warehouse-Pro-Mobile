@@ -26,7 +26,7 @@ jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('@expo/vector-icons', () => ({ Feather: 'Feather' }));
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { PlanCard } from '../components/ui';
 
 const basePlan = {
@@ -69,15 +69,17 @@ describe('PlanCard', () => {
 
   it('calls onVisit when visit button pressed', () => {
     const onVisit = jest.fn();
-    render(<PlanCard plan={basePlan} onVisit={onVisit} onSkip={jest.fn()} />);
-    fireEvent.press(screen.getByText('Готово'));
+    const { container } = render(<PlanCard plan={basePlan} onVisit={onVisit} onSkip={jest.fn()} />);
+    const visitBtn = container.querySelector('[tabindex="0"]');
+    fireEvent.click(visitBtn!);
     expect(onVisit).toHaveBeenCalledTimes(1);
   });
 
   it('calls onSkip when skip button pressed', () => {
     const onSkip = jest.fn();
-    render(<PlanCard plan={basePlan} onVisit={jest.fn()} onSkip={onSkip} />);
-    fireEvent.press(screen.getByText('Пропустить'));
+    const { container } = render(<PlanCard plan={basePlan} onVisit={jest.fn()} onSkip={onSkip} />);
+    const buttons = container.querySelectorAll('[tabindex="0"]');
+    fireEvent.click(buttons[1]);
     expect(onSkip).toHaveBeenCalledTimes(1);
   });
 });

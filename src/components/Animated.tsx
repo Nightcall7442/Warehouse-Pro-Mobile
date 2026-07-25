@@ -3,7 +3,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, ViewStyle, TextStyle, ActivityIndicator } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useThemeStore } from "../store/theme";
-import { Typography, Radii } from "../theme";
+import { Radii } from "../theme";
 
 // ── FadeInItem → plain View (no animation) ──────────────────────────────────
 export function FadeInItem({
@@ -393,8 +393,8 @@ export function ParallaxScroll({
   children,
   style,
   contentContainerStyle,
-  refreshControl,
-  showsVerticalScrollIndicator = false,
+  refreshControl: _refreshControl,
+  showsVerticalScrollIndicator: _showsVerticalScrollIndicator = false,
 }: {
   headerHeight?: number;
   headerContent: React.ReactNode;

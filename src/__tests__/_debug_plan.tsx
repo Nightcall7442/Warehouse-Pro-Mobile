@@ -12,34 +12,20 @@ jest.mock('../store/theme', () => ({
   }),
   useThemeStore: () => ({ isDark: false }),
 }));
-
-jest.mock('expo-haptics', () => ({
-  impactAsync: jest.fn(),
-  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
-}));
-
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-}));
-
+jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' } }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('@expo/vector-icons', () => ({ Feather: 'Feather' }));
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Card } from '../components/ui';
+import { render } from '@testing-library/react';
+import { PlanCard } from '../components/ui';
 
-describe('Card', () => {
-  it('renders children', () => {
-    render(<Card><span>Hello</span></Card>);
-    expect(screen.getByText('Hello')).toBeTruthy();
-  });
-
-  it('calls onPress when pressed', () => {
-    const onPress = jest.fn();
-    const { container } = render(<Card onPress={onPress}><span>Tap me</span></Card>);
-    const button = container.querySelector('[role="button"]') || container.querySelector('div');
-    fireEvent.click(button!);
-    expect(onPress).toHaveBeenCalledTimes(1);
-  });
+it('debug PlanCard', () => {
+  const basePlan = { id: 1, shopName: 'Test Shop', shopAddress: '123 Main St', status: 'planned' };
+  const { container } = render(<PlanCard plan={basePlan} onVisit={() => {}} onSkip={() => {}} />);
+  console.log('HTML:', container.innerHTML);
+  const buttons = container.querySelectorAll('[role="button"]');
+  console.log('buttons with role:', buttons.length);
+  buttons.forEach((b, i) => console.log(`btn[${i}] text=${b.textContent}`));
 });

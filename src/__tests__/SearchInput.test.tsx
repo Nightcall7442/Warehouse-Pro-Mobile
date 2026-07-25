@@ -26,7 +26,7 @@ jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('@expo/vector-icons', () => ({ Feather: 'Feather' }));
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SearchInput } from '../components/ui';
 
 describe('SearchInput', () => {
@@ -43,13 +43,13 @@ describe('SearchInput', () => {
   it('calls onChangeText on text change', () => {
     const onChangeText = jest.fn();
     render(<SearchInput value="" onChangeText={onChangeText} />);
-    fireEvent.changeText(screen.getByPlaceholderText('Поиск…'), 'test query');
+    fireEvent.change(screen.getByPlaceholderText('Поиск…'), { target: { value: 'test query' } });
     expect(onChangeText).toHaveBeenCalledWith('test query');
   });
 
   it('clear button appears when value is non-empty', () => {
     render(<SearchInput value="hello" onChangeText={jest.fn()} />);
-    expect(screen.getByText('hello')).toBeTruthy();
+    expect(screen.getByDisplayValue('hello')).toBeTruthy();
   });
 
   it('clear button does not render when value is empty', () => {

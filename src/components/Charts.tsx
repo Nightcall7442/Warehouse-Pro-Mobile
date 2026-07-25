@@ -4,7 +4,7 @@
 import React from "react";
 import { View, Text } from "react-native";
 import Svg, { Circle, Path, Defs, LinearGradient as SvgGrad, Stop } from "react-native-svg";
-import { Typography, Spacing, Radii } from "../theme";
+import { Typography, Radii } from "../theme";
 import { useThemeColors } from "../store/theme";
 
 // ── ProgressRing ──────────────────────────────────────────────────────────────

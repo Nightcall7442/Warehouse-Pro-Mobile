@@ -7,7 +7,6 @@ const BACKGROUND_LOCATION_TASK = "background-location-task";
 
 // Track consecutive errors for backoff
 let consecutiveErrors = 0;
-const MAX_BACKOFF_MS = 300_000; // 5 minutes max backoff
 
 TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async () => {
   try {
@@ -27,11 +26,11 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async () => {
     consecutiveErrors = 0; // Reset on success
   } catch (e) {
     consecutiveErrors++;
-    console.error(`Background location error (attempt ${consecutiveErrors}):`, e);
+    if (__DEV__) console.error(`Background location error (attempt ${consecutiveErrors}):`, e);
 
     // If too many consecutive errors, stop tracking to save battery
     if (consecutiveErrors >= 5) {
-      console.warn("Too many consecutive background location errors, stopping tracking");
+      if (__DEV__) console.warn("Too many consecutive background location errors, stopping tracking");
       await stopBackgroundTracking();
     }
   }
@@ -71,7 +70,7 @@ export async function startBackgroundTracking(): Promise<{ success: boolean; rea
     consecutiveErrors = 0;
     return { success: true };
   } catch (e) {
-    console.error("Failed to start background tracking:", e);
+    if (__DEV__) console.error("Failed to start background tracking:", e);
     return { success: false, reason: "unknown_error" };
   }
 }
@@ -83,7 +82,7 @@ export async function stopBackgroundTracking(): Promise<void> {
       await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
     }
   } catch (e) {
-    console.error("Failed to stop background tracking:", e);
+    if (__DEV__) console.error("Failed to stop background tracking:", e);
   }
 }
 

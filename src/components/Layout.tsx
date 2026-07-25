@@ -1,7 +1,7 @@
 // Warehouse Pro — Unified Layout System
 // Consistent padding, headers, and safe area handling for all screens.
 import React from "react";
-import { View, Text, TouchableOpacity, ViewStyle, ScrollView, RefreshControl } from "react-native";
+import { View, Text, TouchableOpacity, ViewStyle, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useThemeColors, useThemeStore } from "../store/theme";
@@ -9,7 +9,6 @@ import { Typography, Spacing, Radii, Shadows } from "../theme";
 import { DarkShadowColor } from "../theme";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const HEADER_HEIGHT = 56;
 const BOTTOM_TAB_HEIGHT = 80;
 
 // ── PageContainer ────────────────────────────────────────────────────────────
