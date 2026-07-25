@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { router } from "expo-router";
 import { registerPushToken, removePushToken } from "../api";
 import { useAuthStore } from "../store/auth";
 
@@ -31,6 +32,23 @@ async function getExpoPushToken(): Promise<string | null> {
 
   const tokenData = await Notifications.getExpoPushTokenAsync();
   return tokenData.data;
+}
+
+function handleNotificationResponse(response: Notifications.NotificationResponse) {
+  const data = response.notification.request.content.data;
+
+  // Deep link based on notification type
+  if (data?.type === "order.delivered" || data?.type === "order.failed") {
+    if (data.orderId) {
+      router.push(`/order/${data.orderId}`);
+    } else {
+      router.push("/(tabs)/deliveries");
+    }
+  } else if (data?.type === "order.assigned") {
+    router.push("/(tabs)/deliveries");
+  } else if (data?.type === "order.created") {
+    router.push("/(tabs)/orders");
+  }
 }
 
 export function usePushNotifications() {
@@ -66,8 +84,19 @@ export function usePushNotifications() {
 
     register();
 
+    // Listen for notification taps (foreground + background)
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+
+    // Handle notification that opened the app from killed state
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) {
+        handleNotificationResponse(response);
+      }
+    });
+
     return () => {
       cancelled = true;
+      responseSubscription.remove();
     };
   }, [isAuthenticated]);
 

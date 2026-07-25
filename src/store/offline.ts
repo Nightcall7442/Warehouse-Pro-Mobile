@@ -43,6 +43,7 @@ interface OfflineStore {
   remove: (id: string) => Promise<void>;
   clear: () => Promise<void>;
   retry: (id: string) => Promise<boolean>;
+  retryDeliveryAction: (id: string) => Promise<boolean>;
 }
 
 async function readQueue(): Promise<OfflineOrder[]> {
@@ -251,6 +252,41 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       );
       set({ orders: finalOrders });
       await writeQueue(finalOrders);
+      return false;
+    }
+  },
+
+  retryDeliveryAction: async (id) => {
+    const action = get().deliveryActions.find((a) => a.id === id);
+    if (!action || action.synced) return false;
+
+    const updated = get().deliveryActions.map((a) =>
+      a.id === id ? { ...a, status: "syncing" as const, error: undefined } : a
+    );
+    set({ deliveryActions: updated });
+    await writeDeliveryActionsQueue(updated);
+
+    try {
+      const { markOutForDelivery, markDelivered, markFailed } = await import("../../src/api");
+      const act = action.action;
+      if (act.type === "markOutForDelivery") await markOutForDelivery(act.orderId);
+      else if (act.type === "markDelivered") await markDelivered(act.orderId, act.cashAmount);
+      else if (act.type === "markFailed") await markFailed(act.orderId, act.reason);
+
+      const final = get().deliveryActions.map((a) =>
+        a.id === id ? { ...a, synced: true, status: "pending" as const } : a
+      );
+      set({ deliveryActions: final });
+      await writeDeliveryActionsQueue(final);
+      return true;
+    } catch (e) {
+      const final = get().deliveryActions.map((a) =>
+        a.id === id
+          ? { ...a, status: "failed" as const, error: e instanceof Error ? e.message : "Retry failed", retryable: isRetryableError(e) }
+          : a
+      );
+      set({ deliveryActions: final });
+      await writeDeliveryActionsQueue(final);
       return false;
     }
   },

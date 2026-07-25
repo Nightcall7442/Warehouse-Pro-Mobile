@@ -408,7 +408,7 @@ export default function NewOrderScreen() {
     };
     const net = await Network.getNetworkStateAsync();
     if (!net.isConnected) {
-      await addOrder({ id: Date.now().toString(), input, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false });
+      await addOrder({ id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       notify.info("Нет подключения. Заказ сохранён офлайн.");
       router.back();
