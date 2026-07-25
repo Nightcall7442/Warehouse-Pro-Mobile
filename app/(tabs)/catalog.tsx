@@ -7,7 +7,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
-import { getProducts, getCategories, createOrder, getMyShops, Product, Shop } from "../../src/api";
+import { getProducts, getCategories, createOrder, getMyShops, getAllShopsForSupervisor, Product, Shop } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
@@ -76,7 +76,7 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
   colors: ThemeColors; isDark: boolean; fmt: (v: number | string | null | undefined) => string;
 }) {
   const [qty, setQty] = useState(1);
-  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const { height: SCREEN_H } = useWindowDimensions();
   if (!product) return null;
 
   return (
@@ -247,12 +247,13 @@ export default function CatalogScreen() {
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
 
   const canAccessAgent = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
+  const isSupervisor = user?.role === "supervisor" || user?.role === "ceo";
   const { data: products = [], isLoading, isError, error } = useQuery({
     queryKey: ["products", search],
     queryFn: () => getProducts(search),
     enabled: canAccessAgent,
   });
-  const { data: shopsData } = useQuery({ queryKey: ["myShops"], queryFn: getMyShops, enabled: canAccessAgent });
+  const { data: shopsData } = useQuery({ queryKey: ["myShops"], queryFn: isSupervisor ? getAllShopsForSupervisor : getMyShops, enabled: canAccessAgent });
   const { data: serverCategories = [] } = useQuery({ queryKey: ["categories"], queryFn: getCategories, enabled: canAccessAgent });
 
   const shops = useMemo(() => (shopsData ?? []).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")), [shopsData]);

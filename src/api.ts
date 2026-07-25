@@ -133,6 +133,8 @@ export interface Shop {
   notes?: string;
   gpsLat?: string;
   gpsLng?: string;
+  territoryId?: number | null;
+  territoryName?: string | null;
 }
 
 export interface CreateShopInput {
@@ -145,6 +147,7 @@ export interface CreateShopInput {
   photoUrl?: string;
   gpsLat?: string;
   gpsLng?: string;
+  territoryId?: number;
   notes?: string;
 }
 
@@ -259,13 +262,18 @@ export async function logout(): Promise<void> {
   await SecureStore.deleteItemAsync("session_token").catch(() => {});
 }
 
+interface MeResponse extends Omit<User, "tenant"> {
+  tenantId?: number;
+  tenant?: { id?: number; name?: string; slug?: string };
+}
+
 export async function getMe(): Promise<User> {
-  const res = await trpcQuery<User & { tenantId?: number }>('auth.me');
+  const res = await trpcQuery<MeResponse>("auth.me");
   // auth.me returns the full user object from ctx.user
   // It may have tenantId (flat) or tenant (nested) depending on Drizzle serialization
-  const tenantId = res.tenantId ?? (res.tenant as any)?.id;
-  const tenantName = (res.tenant as any)?.name ?? "";
-  const tenantSlug = (res.tenant as any)?.slug ?? "";
+  const tenantId = res.tenantId ?? res.tenant?.id;
+  const tenantName = res.tenant?.name ?? "";
+  const tenantSlug = res.tenant?.slug ?? "";
   return {
     id: res.id,
     name: res.name,
@@ -391,11 +399,22 @@ export async function getRevenueTrend(days: number = 7): Promise<number[]> {
 
 export async function getProducts(search?: string): Promise<Product[]> {
   const res = await trpcQuery<Product[] | { data: Product[] }>("product.listAll", search ? { search } : undefined);
-  return Array.isArray(res) ? res : (res as any)?.data ?? [];
+  return Array.isArray(res) ? res : (res as { data?: Product[] })?.data ?? [];
 }
 
 export async function getCategories(): Promise<string[]> {
   return trpcQuery<string[]>("product.categories");
+}
+
+export interface Territory {
+  id: number;
+  name: string;
+  color?: string | null;
+  shopCount?: number;
+}
+
+export async function getTerritories(): Promise<Territory[]> {
+  return trpcQuery<Territory[]>("territory.list");
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<{ id: number }> {

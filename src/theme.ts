@@ -156,8 +156,7 @@ export type ThemeColors = typeof DarkColors | typeof LightColors;
 // Colors will be updated by theme store - initially dark
 // NOTE: Components should use useThemeColors() hook instead of importing Colors directly
 // to avoid stale references after theme toggle
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export let Colors: any = DarkColors;
+export let Colors: ThemeColors = DarkColors;
 
 // Function to update Colors when theme changes
 export function updateColors(isDark: boolean) {

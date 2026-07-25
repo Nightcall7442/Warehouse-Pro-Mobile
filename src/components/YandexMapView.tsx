@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useImperativeHandle } from "react";
-import { WebView } from "react-native-webview";
+import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import Constants from "expo-constants";
 
 const YANDEX_API_KEY = Constants.expoConfig?.extra?.yandexMapsApiKey ?? process.env.EXPO_PUBLIC_YANDEX_MAPS_API_KEY ?? "";
@@ -134,7 +134,7 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
   }, [center]);
 
   const handleMessage = useCallback(
-    (event: any) => {
+    (event: WebViewMessageEvent) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
         if (data.type === "markerClick" && onMarkerPress) {

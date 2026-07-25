@@ -11,7 +11,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Radii, Gradients, ThemeColors } from "../../src/theme";
 import { Card, Button } from "../../src/components/ui";
-import { createShop, uploadFile } from "../../src/api";
+import { createShop, uploadFile, getTerritories, Territory } from "../../src/api";
+import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
 
@@ -40,6 +41,9 @@ export default function NewShopScreen() {
   const [gpsLat, setGpsLat] = useState<string | null>(null);
   const [gpsLng, setGpsLng] = useState<string | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [territoryId, setTerritoryId] = useState<number | undefined>(undefined);
+
+  const { data: territories = [] } = useQuery({ queryKey: ["territories"], queryFn: getTerritories });
 
   const inputStyle = {
     backgroundColor: colors.bg.input, borderWidth: 1, borderColor: colors.border.default,
@@ -107,7 +111,7 @@ export default function NewShopScreen() {
   };
 
   const mutation = useMutation({
-    mutationFn: () => createShop({ name, ownerName: owner || undefined, phone: phone || undefined, city: city || undefined, district: district || undefined, address: address || undefined, notes: notes || undefined, photoUrl: photo || undefined, gpsLat: gpsLat || undefined, gpsLng: gpsLng || undefined }),
+    mutationFn: () => createShop({ name, ownerName: owner || undefined, phone: phone || undefined, city: city || undefined, district: district || undefined, address: address || undefined, notes: notes || undefined, photoUrl: photo || undefined, gpsLat: gpsLat || undefined, gpsLng: gpsLng || undefined, territoryId }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["shops"] }); router.back(); notify.success("Магазин создан"); },
     onError: (e: Error) => notify.error(e.message),
   });
@@ -168,6 +172,23 @@ export default function NewShopScreen() {
         <Field label="Адрес" colors={colors}>
           <TextInput style={inputStyle} value={address} onChangeText={setAddress} placeholder="ул. Ал-Хорезми, 12" placeholderTextColor={colors.text.tertiary} />
         </Field>
+        {territories.length > 0 && (
+          <Field label="Территория" colors={colors}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <TouchableOpacity onPress={() => setTerritoryId(undefined)}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, borderWidth: 1, borderColor: !territoryId ? colors.accent.primary : colors.border.default, backgroundColor: !territoryId ? colors.accent.primary + "15" : colors.bg.input }}>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: !territoryId ? colors.accent.primary : colors.text.secondary }}>Без территории</Text>
+              </TouchableOpacity>
+              {territories.map((ter: Territory) => (
+                <TouchableOpacity key={ter.id} onPress={() => setTerritoryId(ter.id)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, borderWidth: 1, borderColor: territoryId === ter.id ? colors.accent.primary : colors.border.default, backgroundColor: territoryId === ter.id ? colors.accent.primary + "15" : colors.bg.input }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ter.color || colors.accent.primary }} />
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: territoryId === ter.id ? colors.accent.primary : colors.text.secondary }}>{ter.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Field>
+        )}
         <Field label="Заметки" colors={colors}>
           <TextInput style={[inputStyle, { height: 80, textAlignVertical: "top" }]} multiline value={notes} onChangeText={setNotes} placeholder="Дополнительная информация…" placeholderTextColor={colors.text.tertiary} />
         </Field>

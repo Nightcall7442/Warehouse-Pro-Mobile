@@ -102,7 +102,7 @@ function AgentHome() {
   const { user } = useAuthStore();
   const qc = useQueryClient();
 
-  const isAgentRole = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
+  const isAgentRole = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator" || user?.role === "merchandiser";
 
   const { data: kpis, isLoading: kpisLoading, isError: kpisError, refetch: refetchKpis } = useQuery({
     queryKey: ["agentDashboard"], queryFn: getAgentDashboard, retry: false, enabled: isAgentRole,
@@ -444,9 +444,9 @@ function CourierHome() {
   const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
   const firstName = (user?.name ?? user?.email ?? "Курьер").split(" ")[0];
 
-  const assigned = (deliveries ?? []).filter((d: any) => d.deliveryStatus === "assigned").length;
-  const inTransit = (deliveries ?? []).filter((d: any) => d.deliveryStatus === "out_for_delivery").length;
-  const delivered = (deliveries ?? []).filter((d: any) => d.deliveryStatus === "delivered").length;
+  const assigned = (deliveries ?? []).filter(d => d.deliveryStatus === "assigned").length;
+  const inTransit = (deliveries ?? []).filter(d => d.deliveryStatus === "out_for_delivery").length;
+  const delivered = (deliveries ?? []).filter(d => d.deliveryStatus === "delivered").length;
   const total = (deliveries ?? []).length;
   const deliveryPct = total > 0 ? Math.round((delivered / total) * 100) : 0;
 
@@ -544,13 +544,13 @@ function CourierHome() {
           <View style={{ padding: Spacing.base, gap: 10 }}>
             {[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={56} radius={Radii.lg} />)}
           </View>
-        ) : !(deliveries as any[])?.length ? (
+        ) : !deliveries?.length ? (
           <View style={{ padding: Spacing.xl, alignItems: "center", gap: 8 }}>
             <Feather name="truck" size={28} color={colors.text.muted} />
             <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>Доставок пока нет</Text>
           </View>
         ) : (
-          (deliveries as any[]).slice(0, 5).map((d: any, idx: number) => {
+          deliveries.slice(0, 5).map((d, idx) => {
             const cfg = COURIER_STATUS[d.deliveryStatus] ?? COURIER_STATUS.assigned;
             return (
               <View key={d.id}>
@@ -567,7 +567,7 @@ function CourierHome() {
                     <Text style={{ fontSize: 11, fontFamily: Typography.fontSemibold, color: cfg.variant === "success" ? colors.status.success : cfg.variant === "warning" ? colors.status.warning : cfg.variant === "danger" ? colors.status.danger : colors.status.info }}>{cfg.label}</Text>
                   </View>
                 </TouchableOpacity>
-                {idx < Math.min((deliveries as any[]).length, 5) - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 52 }} />}
+                {idx < Math.min(deliveries.length, 5) - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 52 }} />}
               </View>
             );
           })

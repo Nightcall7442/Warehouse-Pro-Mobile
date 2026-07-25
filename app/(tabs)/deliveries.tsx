@@ -52,7 +52,7 @@ export default function DeliveriesScreen() {
       const { markOutForDelivery } = await import("../../src/api");
       return markOutForDelivery(orderId);
     },
-    onSuccess: (result: any) => {
+    onSuccess: (result: { offline?: boolean } | void) => {
       if (result?.offline) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         notify.info("Нет подключения. Действие сохранено офлайн.");
@@ -60,7 +60,7 @@ export default function DeliveriesScreen() {
       }
       qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Взято в доставку");
+      notify.success("Доставлено!");
     },
     onError: (e: Error) => notify.error(e.message),
   });
@@ -80,7 +80,7 @@ export default function DeliveriesScreen() {
       const { markDelivered } = await import("../../src/api");
       return markDelivered(orderId, cashAmount);
     },
-    onSuccess: (result: any) => {
+    onSuccess: (result: { offline?: boolean } | void) => {
       if (result?.offline) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         notify.info("Нет подключения. Действие сохранено офлайн.");
@@ -108,7 +108,7 @@ export default function DeliveriesScreen() {
       const { markFailed } = await import("../../src/api");
       return markFailed(orderId, reason);
     },
-    onSuccess: (result: any) => {
+    onSuccess: (result: { offline?: boolean } | void) => {
       if (result?.offline) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         notify.info("Нет подключения. Действие сохранено офлайн.");

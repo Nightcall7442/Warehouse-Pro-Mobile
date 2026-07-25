@@ -107,7 +107,7 @@ export default function ShopsScreen() {
     queryKey: ["shops"],
     queryFn: isSupervisor ? getAllShopsForSupervisor : getMyShops,
     staleTime: 5 * 60 * 1000,
-    enabled: user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator",
+    enabled: user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator" || user?.role === "merchandiser",
   });
 
   const filtered = useMemo(() => {

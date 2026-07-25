@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
-import { getShop, getShopForSupervisor, updateShop, uploadShopPhoto, uploadFile } from "../../src/api";
+import { getShop, getShopForSupervisor, updateShop, uploadShopPhoto, uploadFile, getTerritories, Territory } from "../../src/api";
 import { Card, Badge, Button } from "../../src/components/ui";
 import { PressableScale, FadeInItem, ShimmerSkeleton } from "../../src/components/Animated";
 
@@ -43,6 +43,9 @@ export default function ShopDetailScreen() {
   const [editData, setEditData] = useState<Partial<Record<string, string>>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [territoryId, setTerritoryId] = useState<number | undefined>(undefined);
+
+  const { data: territories = [] } = useQuery({ queryKey: ["territories"], queryFn: getTerritories });
 
   const { data: shop, isLoading, isError, refetch } = useQuery({
     queryKey: ["shop", id],
@@ -50,8 +53,14 @@ export default function ShopDetailScreen() {
     enabled: !!id,
   });
 
+  // Initialize territoryId from shop data
+  const shopTerritoryId = (shop as any)?.territoryId;
+  if (shopTerritoryId && territoryId === undefined) {
+    setTerritoryId(shopTerritoryId);
+  }
+
   const updateMutation = useMutation({
-    mutationFn: (data: Partial<Record<string, string>>) => updateShop(Number(id), data),
+    mutationFn: (data: Partial<Record<string, string>>) => updateShop(Number(id), { ...data, territoryId } as any),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); setEditing(false); notify.success("Сохранено"); },
     onError: (e: Error) => notify.error(e.message),
   });
@@ -219,6 +228,25 @@ export default function ShopDetailScreen() {
                     <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.primary }}>{(editData.gpsLat || shop.gpsLat) ? "Координаты сохранены" : "Определить местоположение"}</Text>
                   </PressableScale>
                 </View>
+                {/* Territory */}
+                {territories.length > 0 && (
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, marginBottom: 6 }}>ТЕРРИТОРИЯ</Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      <TouchableOpacity onPress={() => setTerritoryId(undefined)}
+                        style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, borderWidth: 1, borderColor: !territoryId ? colors.accent.primary : colors.border.default, backgroundColor: !territoryId ? colors.accent.primary + "15" : colors.bg.input }}>
+                        <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: !territoryId ? colors.accent.primary : colors.text.secondary }}>Без территории</Text>
+                      </TouchableOpacity>
+                      {territories.map((ter: Territory) => (
+                        <TouchableOpacity key={ter.id} onPress={() => setTerritoryId(ter.id)}
+                          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, borderWidth: 1, borderColor: territoryId === ter.id ? colors.accent.primary : colors.border.default, backgroundColor: territoryId === ter.id ? colors.accent.primary + "15" : colors.bg.input }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ter.color || colors.accent.primary }} />
+                          <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: territoryId === ter.id ? colors.accent.primary : colors.text.secondary }}>{ter.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                   <Button variant="primary" size="md" fullWidth loading={updateMutation.isPending}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); updateMutation.mutate(editData as Record<string, string>); }}>
