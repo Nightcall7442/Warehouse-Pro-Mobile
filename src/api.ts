@@ -204,6 +204,7 @@ export interface CreateOrderInput {
   notes?: string;
   discount?: number;
   paymentMethod?: "cash" | "card" | "transfer" | "debt";
+  idempotencyKey?: string;
 }
 
 export interface Order {

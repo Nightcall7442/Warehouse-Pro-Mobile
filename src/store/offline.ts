@@ -2,6 +2,11 @@ import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed } from "../api";
 
+const S4 = () => ((1 + Math.random()) * 0x10000 | 0).toString(16).substring(1);
+function uuidv4() {
+  return `${S4()}${S4()}-${S4()}-4${S4().slice(0, 3)}-${S4()}-${S4()}${S4()}${S4()}`;
+}
+
 const STORAGE_KEY = "pending_orders";
 const DELIVERY_ACTIONS_KEY = "pending_delivery_actions";
 
@@ -35,6 +40,8 @@ interface OfflineStore {
   orders: OfflineOrder[];
   deliveryActions: OfflineDeliveryAction[];
   loaded: boolean;
+  syncingOrders: boolean;
+  syncingActions: boolean;
   load: () => Promise<void>;
   addOrder: (order: OfflineOrder) => Promise<void>;
   addDeliveryAction: (action: OfflineDeliveryAction) => Promise<void>;
@@ -91,6 +98,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   orders: [],
   deliveryActions: [],
   loaded: false,
+  syncingOrders: false,
+  syncingActions: false,
 
   load: async () => {
     const [orders, deliveryActions] = await Promise.all([readQueue(), readDeliveryActionsQueue()]);
@@ -98,7 +107,12 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   },
 
   addOrder: async (order) => {
-    const orders = [...get().orders, { ...order, status: "pending" as const }];
+    const withKey = {
+      ...order,
+      input: { ...order.input, idempotencyKey: uuidv4() },
+      status: "pending" as const,
+    };
+    const orders = [...get().orders, withKey];
     set({ orders });
     await writeQueue(orders);
   },
@@ -110,108 +124,107 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   },
 
   syncDeliveryActions: async () => {
-    let synced = 0;
-    let failed = 0;
+    if (get().syncingActions) return { synced: 0, failed: 0 };
+    set({ syncingActions: true });
 
-    const currentActions = get().deliveryActions;
-    const pendingActions = currentActions.filter(a => !a.synced);
+    try {
+      let synced = 0;
+      let failed = 0;
 
-    if (pendingActions.length === 0) return { synced: 0, failed: 0 };
+      const currentActions = get().deliveryActions;
+      const pendingActions = currentActions.filter(a => !a.synced);
 
-    const syncingActions = currentActions.map(a =>
-      a.synced ? a : { ...a, status: "syncing" as const }
-    );
-    set({ deliveryActions: syncingActions });
-    await writeDeliveryActionsQueue(syncingActions);
+      if (pendingActions.length === 0) return { synced: 0, failed: 0 };
 
-    const failedIds: Set<string> = new Set();
+      const syncingActions = currentActions.map(a =>
+        a.synced ? a : { ...a, status: "syncing" as const }
+      );
+      set({ deliveryActions: syncingActions });
+      await writeDeliveryActionsQueue(syncingActions);
 
-    for (const entry of pendingActions) {
-      try {
-        const { action } = entry;
-        if (action.type === "markOutForDelivery") {
-          await markOutForDelivery(action.orderId);
-        } else if (action.type === "markDelivered") {
-          await markDelivered(action.orderId, action.cashAmount);
-        } else if (action.type === "markFailed") {
-          await markFailed(action.orderId, action.reason);
-        }
-        synced++;
-      } catch (e) {
-        failedIds.add(entry.id);
-        failed++;
-        const idx = syncingActions.findIndex(a => a.id === entry.id);
-        if (idx !== -1) {
-          syncingActions[idx] = {
-            ...syncingActions[idx],
+      const results = await Promise.allSettled(
+        pendingActions.map((entry) => {
+          const { action } = entry;
+          if (action.type === "markOutForDelivery") {
+            return markOutForDelivery(action.orderId);
+          } else if (action.type === "markDelivered") {
+            return markDelivered(action.orderId, action.cashAmount);
+          } else {
+            return markFailed(action.orderId, action.reason);
+          }
+        })
+      );
+
+      const finalActions = syncingActions.map(a => {
+        if (a.synced) return a;
+        const idx = pendingActions.findIndex((p) => p.id === a.id);
+        if (idx !== -1 && results[idx].status === "rejected") {
+          return {
+            ...a,
             status: "failed" as const,
-            error: e instanceof Error ? e.message : "Sync failed",
-            retryable: isRetryableError(e),
+            error: results[idx].reason instanceof Error
+              ? (results[idx].reason as Error).message
+              : "Sync failed",
+            retryable: isRetryableError(results[idx].reason),
           };
         }
-      }
+        return { ...a, synced: true, status: "pending" as const };
+      });
+
+      set({ deliveryActions: finalActions });
+      await writeDeliveryActionsQueue(finalActions);
+      return { synced, failed };
+    } finally {
+      set({ syncingActions: false });
     }
-
-    const finalActions = syncingActions.map(a => {
-      if (a.synced) return a;
-      if (failedIds.has(a.id)) return a;
-      return { ...a, synced: true, status: "pending" as const };
-    });
-
-    set({ deliveryActions: finalActions });
-    await writeDeliveryActionsQueue(finalActions);
-    return { synced, failed };
   },
 
   syncAll: async () => {
-    let synced = 0;
-    let failed = 0;
+    if (get().syncingOrders) return { synced: 0, failed: 0 };
+    set({ syncingOrders: true });
 
-    // Snapshot orders once to avoid race conditions
-    const currentOrders = get().orders;
-    const pendingOrders = currentOrders.filter(o => !o.synced);
+    try {
+      let synced = 0;
+      let failed = 0;
 
-    if (pendingOrders.length === 0) return { synced: 0, failed: 0 };
+      const currentOrders = get().orders;
+      const pendingOrders = currentOrders.filter(o => !o.synced);
 
-    // Mark all as syncing
-    const syncingOrders = currentOrders.map(o =>
-      o.synced ? o : { ...o, status: "syncing" as const }
-    );
-    set({ orders: syncingOrders });
-    await writeQueue(syncingOrders);
+      if (pendingOrders.length === 0) return { synced: 0, failed: 0 };
 
-    const failedIds: Set<string> = new Set();
+      // Mark all as syncing
+      const syncingOrders = currentOrders.map(o =>
+        o.synced ? o : { ...o, status: "syncing" as const }
+      );
+      set({ orders: syncingOrders });
+      await writeQueue(syncingOrders);
 
-    for (const order of pendingOrders) {
-      try {
-        await createOrder(order.input);
-        synced++;
-      } catch (e) {
-        failedIds.add(order.id);
-        failed++;
-        // Update the specific order with error info
-        const idx = syncingOrders.findIndex(o => o.id === order.id);
-        if (idx !== -1) {
-          syncingOrders[idx] = {
-            ...syncingOrders[idx],
+      const results = await Promise.allSettled(
+        pendingOrders.map((order) => createOrder(order.input))
+      );
+
+      const finalOrders = syncingOrders.map(o => {
+        if (o.synced) return o;
+        const idx = pendingOrders.findIndex((p) => p.id === o.id);
+        if (idx !== -1 && results[idx].status === "rejected") {
+          return {
+            ...o,
             status: "failed" as const,
-            error: e instanceof Error ? e.message : "Sync failed",
-            retryable: isRetryableError(e),
+            error: results[idx].reason instanceof Error
+              ? (results[idx].reason as Error).message
+              : "Sync failed",
+            retryable: isRetryableError(results[idx].reason),
           };
         }
-      }
+        return { ...o, synced: true, status: "pending" as const };
+      });
+
+      set({ orders: finalOrders });
+      await writeQueue(finalOrders);
+      return { synced, failed };
+    } finally {
+      set({ syncingOrders: false });
     }
-
-    // Build final state: synced orders get synced=true, failed keep their status
-    const finalOrders = syncingOrders.map(o => {
-      if (o.synced) return o;
-      if (failedIds.has(o.id)) return o; // already updated with error
-      return { ...o, synced: true, status: "pending" as const };
-    });
-
-    set({ orders: finalOrders });
-    await writeQueue(finalOrders);
-    return { synced, failed };
   },
 
   remove: async (id) => {
