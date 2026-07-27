@@ -17,8 +17,9 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "Приложение использует камеру для сканирования штрихкодов и фотографирования",
-        "NSLocationWhenInUseUsageDescription": "Приложение использует геолокацию для определения местоположения магазинов",
-        "NSLocationAlwaysUsageDescription": "Приложение использует геолокацию в фоне для отслеживания доставок",
+        "NSLocationWhenInUseUsageDescription": "Приложение использует геолокацию для определения местоположения магазинов и построения маршрутов",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Приложение использует геолокацию в фоне для отслеживания местоположения агентов и доставок",
+        "NSLocationAlwaysUsageDescription": "Приложение использует геолокацию в фоне для отслеживания местоположения агентов и доставок",
         "NSPhotoLibraryUsageDescription": "Приложение использует галерею для загрузки фотографий"
       }
     },
@@ -39,7 +40,14 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-location",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Приложение использует геолокацию в фоне для отслеживания местоположения агентов и доставок",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
       "expo-camera",
       "expo-image-picker",
       "expo-notifications"
