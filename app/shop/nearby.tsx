@@ -1,6 +1,6 @@
 // Warehouse Pro — Nearby Shops v2 (cold palette, Card, Badge, FadeInItem)
 import { useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl, Linking } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -144,7 +144,6 @@ export default function NearbyShopsScreen() {
               .map(s => `${s.gpsLng},${s.gpsLat}`)
               .join("~");
             const url = `https://yandex.ru/maps/?rtext=${waypoints}&rtt=auto`;
-            const { Linking } = await import("expo-native-modules");
             try {
               const canOpen = await Linking.canOpenURL(url);
               if (canOpen) await Linking.openURL(url);
