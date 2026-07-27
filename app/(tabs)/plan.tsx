@@ -22,7 +22,7 @@ type IconName = keyof typeof Feather.glyphMap;
 function QuotaCard({ colors, isDark }: { colors: ReturnType<typeof useThemeColors>; isDark: boolean }) {
   const { data: quota, isLoading } = useQuery({
     queryKey: ["myQuota"],
-    queryFn: () => getMyQuota(),
+    queryFn: () => getMyQuota().catch(() => null),
     retry: false,
   });
 
@@ -140,7 +140,7 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index }: {
 function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> }) {
   const { data: kpi, isLoading } = useQuery({
     queryKey: ["agentKpi", "month"],
-    queryFn: () => getAgentKpi("month"),
+    queryFn: () => getAgentKpi("month").catch(() => null),
     retry: false,
   });
 

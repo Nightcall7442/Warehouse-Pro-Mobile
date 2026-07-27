@@ -2,7 +2,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
@@ -100,18 +100,11 @@ function AgentHome() {
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
-  const qc = useQueryClient();
 
   const isAgentRole = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator" || user?.role === "merchandiser";
 
   const { data: kpis, isLoading: kpisLoading, isError: kpisError, refetch: refetchKpis } = useQuery({
     queryKey: ["agentDashboard"], queryFn: getAgentDashboard, retry: false, enabled: isAgentRole,
-  });
-
-  const { data: plans, isLoading: plansLoading, refetch: refetchPlans } = useQuery({
-    queryKey: ["plans"],
-    queryFn: async () => { const r = await getPlans(); return Array.isArray(r) ? r : []; },
-    retry: false, enabled: isAgentRole,
   });
 
   const { data: revenueTrend } = useQuery({
@@ -120,31 +113,20 @@ function AgentHome() {
     retry: false, enabled: isAgentRole,
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) => updatePlanStatus(planId, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["plans"] }),
-  });
-
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
   const firstName = (user?.name ?? user?.email ?? "Агент").split(" ")[0];
-
-  const visited = plans?.filter(p => p.status === "visited").length ?? 0;
-  const total = plans?.length ?? 0;
-  const pct = total > 0 ? Math.round((visited / total) * 100) : 0;
-  const unvisitedCount = total - visited;
-  const debtShopsCount = plans?.filter(p => Number(p.shopDebt ?? 0) > 0).length ?? 0;
 
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchKpis(), refetchPlans()]);
+      await refetchKpis();
     } finally {
       setRefreshing(false);
     }
-  }, [refetchKpis, refetchPlans]);
+  }, [refetchKpis]);
 
   const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand.primary} />;
 
@@ -219,63 +201,6 @@ function AgentHome() {
         </Card>
       </FadeInItem>
 
-      {/* Progress card — inset progress bar */}
-      <FadeInItem delay={160}>
-        <Card style={{ marginBottom: Spacing.base }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ПЛАН ВИЗИТОВ</Text>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: pct >= 80 ? colors.status.success : pct >= 40 ? colors.status.warning : colors.accent.primary, fontVariant: ["tabular-nums"] }}>
-              {visited}/{total} · {pct}%
-            </Text>
-          </View>
-          <NeumorphicProgressBar value={pct} height={8} color={pct >= 80 ? colors.status.success : pct >= 40 ? colors.status.warning : colors.brand.primary} />
-          <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 8 }}>
-            {total === 0 ? "На сегодня визитов нет" : pct === 100 ? "Все визиты выполнены!" : `Осталось ${total - visited}`}
-          </Text>
-        </Card>
-      </FadeInItem>
-
-      {/* Tasks for today */}
-      <FadeInItem delay={180}>
-        <Card style={{ marginBottom: Spacing.base }}>
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>ЗАДАЧИ НА СЕГОДНЯ</Text>
-          {/* Visit shops task */}
-          <View style={{ marginBottom: 12 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ width: 28, height: 28, borderRadius: Radii.sm, backgroundColor: KpiColors.teal + "20", alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="map-pin" size={14} color={KpiColors.teal} />
-                </View>
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
-                  Посетить {unvisitedCount} {unvisitedCount === 1 ? "магазин" : unvisitedCount < 5 ? "магазина" : "магазинов"}
-                </Text>
-              </View>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: KpiColors.teal, fontVariant: ["tabular-nums"] }}>
-                {visited}/{total}
-              </Text>
-            </View>
-            <NeumorphicProgressBar value={total > 0 ? Math.round((visited / total) * 100) : 0} height={6} color={KpiColors.teal} />
-          </View>
-          {/* Collect debt task */}
-          <View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ width: 28, height: 28, borderRadius: Radii.sm, backgroundColor: KpiColors.coral + "20", alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="dollar-sign" size={14} color={KpiColors.coral} />
-                </View>
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
-                  Собрать долг с {debtShopsCount} {debtShopsCount === 1 ? "магазина" : debtShopsCount < 5 ? "магазинов" : "магазинов"}
-                </Text>
-              </View>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: debtShopsCount > 0 ? KpiColors.coral : colors.status.success, fontVariant: ["tabular-nums"] }}>
-                {debtShopsCount}
-              </Text>
-            </View>
-            <NeumorphicProgressBar value={debtShopsCount === 0 ? 100 : 0} height={6} color={debtShopsCount > 0 ? KpiColors.coral : colors.status.success} />
-          </View>
-        </Card>
-      </FadeInItem>
-
       {/* Quick actions — 2x2 grid */}
       <FadeInItem delay={200}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
@@ -324,34 +249,6 @@ function AgentHome() {
           </PressableScale>
         </View>
       </FadeInItem>
-
-      {/* Today's visits */}
-      <FadeInItem delay={320}>
-        <SectionHeader title="Сегодняшние визиты" />
-      </FadeInItem>
-      <Card style={{ padding: 0, overflow: "hidden" }}>
-        {plansLoading ? (
-          <View style={{ padding: Spacing.base, gap: 10 }}>
-            {[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={56} radius={Radii.lg} />)}
-          </View>
-        ) : !plans?.length ? (
-          <View style={{ padding: Spacing.xl, alignItems: "center", gap: 8 }}>
-            <Feather name="calendar" size={28} color={colors.text.muted} />
-            <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>На сегодня визитов нет</Text>
-          </View>
-        ) : (
-          plans.map((plan, idx) => (
-            <View key={plan.id}>
-              <PlanRow plan={plan} colors={colors} isDark={isDark} index={idx}
-                onDone={() => updateMutation.mutate({ planId: plan.id, status: "visited" })}
-                onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
-                onPress={() => plan.shopId && router.push({ pathname: "/shop/[id]", params: { id: String(plan.shopId) } })}
-              />
-              {idx < plans.length - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 54 }} />}
-            </View>
-          ))
-        )}
-      </Card>
     </ScrollView>
   );
 }
