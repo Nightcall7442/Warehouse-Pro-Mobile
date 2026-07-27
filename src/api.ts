@@ -25,7 +25,14 @@ api.interceptors.response.use(
     const status = err?.response?.status;
     const url = err?.config?.url;
     const data = err?.response?.data;
-    if (__DEV__) console.error(`[tRPC ERROR] ${status} ${url}`, typeof data === "object" ? JSON.stringify(data)?.slice(0, 500) : data);
+    if (__DEV__) console.error(`[tRPC ERROR] ${status} ${url}`, typeof data === "object" ? JSON.stringify(data)?.slice(0, 1000) : data);
+    // Extract actual tRPC error message for the caller
+    const trpcMsg = data?.error?.json?.message;
+    const trpcData = data?.error?.json?.data;
+    if (trpcMsg && err instanceof Error) {
+      (err as Error & { trpcMessage?: string; trpcData?: unknown }).trpcMessage = trpcMsg;
+      (err as Error & { trpcMessage?: string; trpcData?: unknown }).trpcData = trpcData;
+    }
     if (status === 401) {
       await SecureStore.deleteItemAsync("session_token").catch(() => {});
       // Clearing the token alone isn't enough — without this, the auth
@@ -102,9 +109,15 @@ async function trpcQuery<T>(procedure: string, input?: unknown): Promise<T> {
 async function trpcMutation<T>(procedure: string, input: unknown): Promise<T> {
   // tRPC v11 non-batch format: body is {"json": input}
   if (__DEV__) console.log(`[tRPC POST] ${procedure}`, input);
-  const res = await api.post(`/${procedure}`, { json: input });
-  if (__DEV__) console.log(`[tRPC POST ${procedure}] status=${res.status}`, JSON.stringify(res.data)?.slice(0, 300));
-  return unwrap<T>(res.data);
+  try {
+    const res = await api.post(`/${procedure}`, { json: input });
+    if (__DEV__) console.log(`[tRPC POST ${procedure}] status=${res.status}`, JSON.stringify(res.data)?.slice(0, 300));
+    return unwrap<T>(res.data);
+  } catch (err: unknown) {
+    const e = err as Error & { trpcMessage?: string };
+    if (e.trpcMessage) throw new Error(e.trpcMessage);
+    throw err;
+  }
 }
 
 // ──────────────────────────────────────
