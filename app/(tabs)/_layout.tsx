@@ -16,7 +16,7 @@ const TAB_ICONS: Record<string, IconName> = {
   shops: "shopping-bag",
   catalog: "grid",
   orders: "clipboard",
-  profile: "user",
+  plan: "target",
   plans: "calendar",
   deliveries: "truck",
 };
@@ -26,7 +26,7 @@ const TAB_LABELS: Record<string, string> = {
   shops: "Магазины",
   catalog: "Каталог",
   orders: "Заказы",
-  profile: "Профиль",
+  plan: "План",
   plans: "Планы",
   deliveries: "Доставки",
 };
@@ -41,19 +41,19 @@ function CustomTabBar(props: BottomTabBarProps) {
   const isCourier = user?.role === "courier";
   const isMerchandiser = user?.role === "merchandiser";
 
-  const HIDDEN = ["tracking", "gps", "barcode"];
-  const AGENT_ONLY = ["orders"];
+  const ALWAYS_HIDDEN = ["tracking", "gps", "barcode", "profile"];
   const COURIER_HIDDEN = ["shops", "catalog", "orders"];
   const MERCH_HIDDEN = ["orders", "catalog"];
 
   const visibleRoutes = state.routes.filter((route: { name: string }) => {
-    if (HIDDEN.includes(route.name)) return false;
+    if (ALWAYS_HIDDEN.includes(route.name)) return false;
     if (isCourier && COURIER_HIDDEN.includes(route.name)) return false;
     if (isMerchandiser && MERCH_HIDDEN.includes(route.name)) return false;
-    if (isSupervisor && AGENT_ONLY.includes(route.name)) return false;
-    if (!isSupervisor && !isCourier && !isMerchandiser && route.name === "plans") return false;
     if (!isCourier && route.name === "deliveries") return false;
-    if (isCourier && route.name === "plans") return false;
+    // "plan" — agent/merchandiser combined tab (norms + visits + KPI)
+    if (route.name === "plan") return !isSupervisor && !isCourier;
+    // "plans" — supervisor visit management
+    if (route.name === "plans") return isSupervisor;
     return true;
   });
 
@@ -155,6 +155,10 @@ export default function TabsLayout() {
         options={{ title: "Каталог", headerShown: false }}
       />
       <Tabs.Screen name="orders" options={{ title: "Заказы" }} />
+      <Tabs.Screen
+        name="plan"
+        options={{ title: "План", headerShown: false }}
+      />
       <Tabs.Screen
         name="plans"
         options={{ title: "Планы", headerShown: false }}

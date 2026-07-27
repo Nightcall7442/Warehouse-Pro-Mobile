@@ -4,8 +4,9 @@
 import React from "react";
 import { View, Text } from "react-native";
 import Svg, { Circle, Path, Defs, LinearGradient as SvgGrad, Stop } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import { Typography, Radii } from "../theme";
-import { useThemeColors } from "../store/theme";
+import { useThemeColors, useThemeStore } from "../store/theme";
 
 // ── ProgressRing ──────────────────────────────────────────────────────────────
 // Donut chart with percentage inside. Matches reference "Target Doctors" style.
@@ -93,12 +94,30 @@ export function NeumorphicProgressBar({ value, height = 8, color, style }: {
   value: number; height?: number; color?: string; style?: object;
 }) {
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const barColor = color ?? colors.brand.primary;
   const pct = Math.min(Math.max(value, 0), 100);
 
   return (
-    <View style={[{ height, borderRadius: Radii.full, backgroundColor: colors.bg.elevated, overflow: "hidden", shadowColor: "#a0988c", shadowOffset: { width: -2, height: -2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: -1 }, style]}>
-      <View style={{ height: "100%", width: `${pct}%`, borderRadius: Radii.full, backgroundColor: barColor }} />
+    <View style={[{
+      height, borderRadius: Radii.full,
+      backgroundColor: colors.bg.elevated,
+      overflow: "hidden",
+      // Neumorphic inset shadow
+      shadowColor: isDark ? "#000" : "#a0988c",
+      shadowOffset: { width: -3, height: -3 },
+      shadowOpacity: isDark ? 0.35 : 0.22,
+      shadowRadius: 5,
+      elevation: -1,
+      borderWidth: 0.5,
+      borderColor: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.4)",
+    }, style]}>
+      <LinearGradient
+        colors={[barColor + "cc", barColor]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ height: "100%", width: `${pct}%`, borderRadius: Radii.full }}
+      />
     </View>
   );
 }

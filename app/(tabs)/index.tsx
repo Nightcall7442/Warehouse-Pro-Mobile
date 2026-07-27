@@ -161,12 +161,10 @@ function AgentHome() {
               {format(new Date(), "EEEE, d MMMM", { locale: ru })}
             </Text>
           </View>
-          <PressableScale onPress={() => router.push("/order/new")} haptic="light">
-            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radii.md }}>
-              <Feather name="plus" size={14} color="#fff" />
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff" }}>Новый заказ</Text>
-            </LinearGradient>
+          <PressableScale onPress={() => router.push("/profile")} haptic="light">
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.brand.primary }}>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.brand.primary }}>{firstName.charAt(0).toUpperCase()}</Text>
+            </View>
           </PressableScale>
         </View>
       </FadeInItem>

@@ -668,6 +668,43 @@ export async function setCommissionRate(userId: number, commissionRate: number):
   return trpcMutation<{ success: boolean }>("commission.setRate", { userId, commissionRate });
 }
 
+// ── Quota (my monthly plan) ──────────────────────────────────────────────────
+export interface MyQuota {
+  revenue: { target: number; actual: number; pct: number };
+  orders: { target: number; actual: number; pct: number };
+  visits: { target: number; actual: number; pct: number };
+  month: string;
+}
+
+export async function getMyQuota(month?: string): Promise<MyQuota | null> {
+  return trpcQuery<MyQuota | null>("salesTarget.myQuota", month ? { month } : undefined);
+}
+
+// ── Agent KPI ────────────────────────────────────────────────────────────────
+export interface AgentKpiData {
+  kpiScore: number;
+  grade: string;
+  totalPlans: number;
+  visitedPlans: number;
+  skippedPlans: number;
+  visitCompletionRate: number;
+  orderCount: number;
+  revenue: number;
+  avgOrderValue: number;
+  returnCount: number;
+  returnRate: number;
+  assignedShops: number;
+  totalDebt: number;
+  debtCollectionRate: number;
+  targetRevenue: number;
+  targetProgress: number;
+  salary?: { base: number; commission: number; bonus: number; total: number };
+}
+
+export async function getAgentKpi(period: string): Promise<AgentKpiData> {
+  return trpcQuery<AgentKpiData>("kpi.agentKpi", { period });
+}
+
 // ── Returns ───────────────────────────────────────────────────────────────────
 export interface Return {
   id: number;

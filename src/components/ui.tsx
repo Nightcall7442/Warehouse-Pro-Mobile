@@ -30,25 +30,27 @@ export function Card({ children, style, onPress, variant = "default", haptic = t
     backgroundColor: variant === "accent" ? colors.brand.primaryDim : colors.bg.card,
     borderRadius: Radii.xxl,
     padding: Spacing["2xl"],
-    borderWidth: 1,
-    borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.6)",
+    borderWidth: 0.5,
+    borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.7)",
+    // Neumorphic dual shadow: dark side (bottom-right) + light hint (top-left)
     shadowColor,
-    shadowOffset: Shadows.card.shadowOffset,
-    shadowOpacity: Shadows.card.shadowOpacity,
-    shadowRadius: Shadows.card.shadowRadius,
+    shadowOffset: { width: isDark ? 4 : 6, height: isDark ? 4 : 6 },
+    shadowOpacity: isDark ? 0.45 : 0.32,
+    shadowRadius: isDark ? 10 : 14,
     elevation: Shadows.card.elevation,
     ...(variant === "flat" ? { shadowOpacity: 0, elevation: 0, borderColor: "transparent" } : null),
   };
 
   const content = (
-    <View style={[cardStyle, style]}>
+    <View style={[cardStyle, { overflow: "hidden" }, style]}>
+      {/* Neumorphic top highlight line (gradient) */}
       {variant !== "flat" && (
-        <View
+        <LinearGradient
+          colors={["transparent", isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.45)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1 }}
           pointerEvents="none"
-          style={{
-            position: "absolute", top: 0, left: Radii.xxl, right: Radii.xxl, height: 1,
-            backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.6)",
-          }}
         />
       )}
       {children}
@@ -214,7 +216,14 @@ export function SearchInput({ value, onChangeText, placeholder = "Поиск…"
       flexDirection: "row", alignItems: "center", gap: 10,
       backgroundColor: colors.bg.input, borderRadius: Radii.lg,
       paddingHorizontal: Spacing.md, paddingVertical: 12,
-      shadowColor, shadowOffset: { width: -2, height: -2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: -1,
+      // Neumorphic inset: inner shadow (bottom-right dark)
+      shadowColor: isDark ? "#000" : "#a0988c",
+      shadowOffset: { width: -3, height: -3 },
+      shadowOpacity: isDark ? 0.3 : 0.2,
+      shadowRadius: 6,
+      elevation: -1,
+      borderWidth: 0.5,
+      borderColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.5)",
     }}>
       <Feather name="search" size={16} color={colors.text.muted} />
       <TextInput
