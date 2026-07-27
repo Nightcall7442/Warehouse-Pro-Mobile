@@ -1,7 +1,7 @@
 // Warehouse Pro — New Order (matches web NewOrder.tsx — 3-step wizard)
 import { useState, useMemo, useEffect } from "react";
 import { useDebounce } from "../../src/hooks/useDebounce";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, ActivityIndicator, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -128,7 +128,6 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
           )}
           <FlatList data={filtered} keyExtractor={s => String(s.id)} scrollEnabled={false} renderItem={renderShopItem} />
         </>
-      )}
       )}
     </View>
   );
