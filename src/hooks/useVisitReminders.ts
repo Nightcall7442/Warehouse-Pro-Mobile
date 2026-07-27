@@ -10,7 +10,7 @@ export function useVisitReminders() {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   const { data: plans } = useQuery({
     queryKey: ["plans"],
-    queryFn: getPlans,
+    queryFn: () => getPlans(),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });
