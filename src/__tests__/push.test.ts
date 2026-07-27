@@ -1,67 +1,50 @@
 // Warehouse Pro — Push notifications tests
-import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock dependencies
-vi.mock("expo-notifications", () => ({
-  setNotificationHandler: vi.fn(),
-  getPermissionsAsync: vi.fn(),
-  requestPermissionsAsync: vi.fn(),
-  getExpoPushTokenAsync: vi.fn(),
-  setNotificationChannelAsync: vi.fn(),
+jest.mock("expo-notifications", () => ({
+  setNotificationHandler: jest.fn(),
+  getPermissionsAsync: jest.fn(),
+  requestPermissionsAsync: jest.fn(),
+  getExpoPushTokenAsync: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
   AndroidImportance: { HIGH: 4 },
 }));
 
-vi.mock("../api", () => ({
-  registerPushToken: vi.fn(),
-  removePushToken: vi.fn(),
+jest.mock("../api", () => ({
+  registerPushToken: jest.fn(),
+  removePushToken: jest.fn(),
 }));
 
-vi.mock("../store/auth", () => ({
-  useAuthStore: vi.fn((selector: (s: any) => any) => selector({ isAuthenticated: false })),
-}));
+const Notifications = require("expo-notifications");
+const api = require("../api");
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
 describe("Push Notifications", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("registers push token when authenticated", async () => {
-    const Notifications = await import("expo-notifications");
-    const api = await import("../api");
+    Notifications.getPermissionsAsync.mockResolvedValue({ status: "granted" });
+    Notifications.getExpoPushTokenAsync.mockResolvedValue({ data: "ExponentPushToken[xxx]" });
+    api.registerPushToken.mockResolvedValue({ success: true });
 
-    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: "granted" } as any);
-    vi.mocked(Notifications.getExpoPushTokenAsync).mockResolvedValue({ data: "ExponentPushToken[xxx]" } as any);
-    vi.mocked(api.registerPushToken).mockResolvedValue({ success: true });
-
-    // Import and call the hook logic
-    const { registerPushToken } = api;
     const token = "ExponentPushToken[xxx]";
-
-    await registerPushToken(token);
-
+    await api.registerPushToken(token);
     expect(api.registerPushToken).toHaveBeenCalledWith(token);
   });
 
   it("removes push token on logout", async () => {
-    const api = await import("../api");
-    vi.mocked(api.removePushToken).mockResolvedValue({ success: true });
-
-    const { removePushToken } = api;
-    await removePushToken();
-
+    api.removePushToken.mockResolvedValue({ success: true });
+    await api.removePushToken();
     expect(api.removePushToken).toHaveBeenCalled();
   });
 
   it("handles permission denied gracefully", async () => {
-    const Notifications = await import("expo-notifications");
-
-    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: "denied" } as any);
-    vi.mocked(Notifications.requestPermissionsAsync).mockResolvedValue({ status: "denied" } as any);
+    Notifications.getPermissionsAsync.mockResolvedValue({ status: "denied" });
+    Notifications.requestPermissionsAsync.mockResolvedValue({ status: "denied" });
 
     const { status } = await Notifications.getPermissionsAsync();
     expect(status).toBe("denied");
 
-    // Should not throw
     const { status: newStatus } = await Notifications.requestPermissionsAsync();
     expect(newStatus).toBe("denied");
   });

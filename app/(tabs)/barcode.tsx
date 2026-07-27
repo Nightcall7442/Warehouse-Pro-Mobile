@@ -108,20 +108,28 @@ export default function BarcodeScannerScreen() {
               <Text style={{ color: "#fff", fontSize: Typography.size.md }}>Поиск товара...</Text>
             </View>
           ) : foundProduct ? (
-            <Card style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{foundProduct.name}</Text>
-                <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary, marginTop: 2 }}>{foundProduct.unitPrice} сум/{foundProduct.unit === "pcs" ? "шт" : "кг"}</Text>
-                {foundProduct.available && (
-                  <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>Остаток: {Number(foundProduct.available).toFixed(0)} {foundProduct.unit === "pcs" ? "шт" : "кг"}</Text>
-                )}
-              </View>
+            <View style={{ gap: 10 }}>
+              <Card style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{foundProduct.name}</Text>
+                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary, marginTop: 2 }}>{foundProduct.unitPrice} сум/{foundProduct.unit === "pcs" ? "шт" : "кг"}</Text>
+                  {foundProduct.available && (
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>Остаток: {Number(foundProduct.available).toFixed(0)} {foundProduct.unit === "pcs" ? "шт" : "кг"}</Text>
+                  )}
+                </View>
+                <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); addToCart(); }} haptic="medium">
+                  <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="plus" size={20} color="#fff" />
+                  </View>
+                </PressableScale>
+              </Card>
               <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); addToCart(); }} haptic="medium">
-                <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="plus" size={20} color="#fff" />
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: Radii.lg, backgroundColor: colors.accent.primary }}>
+                  <Feather name="shopping-cart" size={18} color="#fff" />
+                  <Text style={{ color: "#fff", fontSize: Typography.size.md, fontFamily: Typography.fontSemibold }}>Заказать этот товар</Text>
                 </View>
               </PressableScale>
-            </Card>
+            </View>
           ) : (
             <PressableScale onPress={() => { Haptics.selectionAsync(); setScanned(false); }} haptic="light">
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: Radii.lg, backgroundColor: colors.bg.overlay }}>

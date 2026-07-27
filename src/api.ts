@@ -1,8 +1,9 @@
 import axios from "axios";
 import { SecureStore } from "./storage";
 
-export const API_BASE =
-  process.env.EXPO_PUBLIC_API_URL ?? "https://www.warehouse-pro.uz";
+export const API_BASE = (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim())
+  ? process.env.EXPO_PUBLIC_API_URL
+  : "https://www.warehouse-pro.uz";
 
 const api = axios.create({
   baseURL: `${API_BASE}/api/trpc`,
@@ -224,13 +225,13 @@ export interface OrderDetail extends Order {
     quantity: number;
     unitPrice: number;
     discount?: number;
-    total: number;
+    subtotal: number;
   }>;
   notes?: string;
   discount?: number;
   subtotal: string;
-  agentName?: string;
-  address?: string;
+  shop?: { id: number; name: string; address?: string; city?: string; phone?: string } | null;
+  agent?: { id: number; name: string } | null;
 }
 
 // ──────────────────────────────────────

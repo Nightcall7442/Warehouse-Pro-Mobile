@@ -1,5 +1,5 @@
 // Warehouse Pro — Agent Dashboard v2 (cold palette + rings/sparklines)
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -132,12 +132,21 @@ function AgentHome() {
   const visited = plans?.filter(p => p.status === "visited").length ?? 0;
   const total = plans?.length ?? 0;
   const pct = total > 0 ? Math.round((visited / total) * 100) : 0;
+  const unvisitedCount = total - visited;
+  const debtShopsCount = plans?.filter(p => Number(p.shopDebt ?? 0) > 0).length ?? 0;
+
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
-    await Promise.all([refetchKpis(), refetchPlans()]);
+    setRefreshing(true);
+    try {
+      await Promise.all([refetchKpis(), refetchPlans()]);
+    } finally {
+      setRefreshing(false);
+    }
   }, [refetchKpis, refetchPlans]);
 
-  const scrollRefresh = <RefreshControl refreshing={false} onRefresh={handleRefresh} tintColor={colors.brand.primary} />;
+  const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand.primary} />;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
@@ -228,6 +237,47 @@ function AgentHome() {
         </Card>
       </FadeInItem>
 
+      {/* Tasks for today */}
+      <FadeInItem delay={180}>
+        <Card style={{ marginBottom: Spacing.base }}>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>ЗАДАЧИ НА СЕГОДНЯ</Text>
+          {/* Visit shops task */}
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 28, height: 28, borderRadius: Radii.sm, backgroundColor: KpiColors.teal + "20", alignItems: "center", justifyContent: "center" }}>
+                  <Feather name="map-pin" size={14} color={KpiColors.teal} />
+                </View>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
+                  Посетить {unvisitedCount} {unvisitedCount === 1 ? "магазин" : unvisitedCount < 5 ? "магазина" : "магазинов"}
+                </Text>
+              </View>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: KpiColors.teal, fontVariant: ["tabular-nums"] }}>
+                {visited}/{total}
+              </Text>
+            </View>
+            <NeumorphicProgressBar value={total > 0 ? Math.round((visited / total) * 100) : 0} height={6} color={KpiColors.teal} />
+          </View>
+          {/* Collect debt task */}
+          <View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 28, height: 28, borderRadius: Radii.sm, backgroundColor: KpiColors.coral + "20", alignItems: "center", justifyContent: "center" }}>
+                  <Feather name="dollar-sign" size={14} color={KpiColors.coral} />
+                </View>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
+                  Собрать долг с {debtShopsCount} {debtShopsCount === 1 ? "магазина" : debtShopsCount < 5 ? "магазинов" : "магазинов"}
+                </Text>
+              </View>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: debtShopsCount > 0 ? KpiColors.coral : colors.status.success, fontVariant: ["tabular-nums"] }}>
+                {debtShopsCount}
+              </Text>
+            </View>
+            <NeumorphicProgressBar value={debtShopsCount === 0 ? 100 : 0} height={6} color={debtShopsCount > 0 ? KpiColors.coral : colors.status.success} />
+          </View>
+        </Card>
+      </FadeInItem>
+
       {/* Quick actions — 2x2 grid */}
       <FadeInItem delay={200}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
@@ -314,6 +364,7 @@ function SupervisorHome() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
+  const [refreshing, setRefreshing] = useState(false);
 
   const { data: kpis, isLoading, isError, refetch } = useQuery({
     queryKey: ["supervisorDashboard"], queryFn: getSupervisorDashboard, retry: false,
@@ -329,7 +380,12 @@ function SupervisorHome() {
   const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
   const firstName = (user?.name ?? user?.email ?? "Супервайзер").split(" ")[0];
 
-  const scrollRefresh = <RefreshControl refreshing={false} onRefresh={refetch} tintColor={colors.brand.primary} />;
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await refetch(); } finally { setRefreshing(false); }
+  }, [refetch]);
+
+  const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand.primary} />;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
@@ -439,6 +495,7 @@ function CourierHome() {
     queryFn: () => import("../../src/api").then(m => m.listMyDeliveries()),
     retry: false,
   });
+  const [refreshing, setRefreshing] = useState(false);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
@@ -450,7 +507,12 @@ function CourierHome() {
   const total = (deliveries ?? []).length;
   const deliveryPct = total > 0 ? Math.round((delivered / total) * 100) : 0;
 
-  const scrollRefresh = <RefreshControl refreshing={false} onRefresh={refetch} tintColor={colors.brand.primary} />;
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await refetch(); } finally { setRefreshing(false); }
+  }, [refetch]);
+
+  const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand.primary} />;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>

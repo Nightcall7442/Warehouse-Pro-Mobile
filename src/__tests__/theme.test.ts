@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { DarkColors, LightColors, Typography, Spacing, Radii, Timing } from '../theme';
 
 describe('Theme', () => {

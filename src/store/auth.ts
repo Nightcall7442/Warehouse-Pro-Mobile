@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { SecureStore } from "../storage";
-import { getMe, login as apiLogin, logout as apiLogout, User } from "../api";
+import { getMe, login as apiLogin, logout as apiLogout, API_BASE, User } from "../api";
 
 interface AuthState {
   user: User | null;
@@ -13,6 +13,35 @@ interface AuthState {
   updateUser: (patch: Partial<User>) => void;
 }
 
+/** Decode JWT payload without verification (expiry check only) */
+function decodeJwtPayload(token: string): { exp?: number } | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/** Attempt to silently refresh the session token. Returns new token or null. */
+async function tryRefreshToken(token: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/refresh-token`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const TOKEN_REFRESH_BUFFER_MS = 24 * 60 * 60 * 1000; // Refresh 24h before expiry
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
@@ -21,10 +50,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   hydrate: async () => {
     set({ isLoading: true });
     try {
-      const token = await SecureStore.getItemAsync("session_token");
+      let token = await SecureStore.getItemAsync("session_token");
       if (!token) {
         set({ isLoading: false, isAuthenticated: false });
         return;
+      }
+
+      // Proactive token refresh: if token expires within 24h, refresh it silently
+      const payload = decodeJwtPayload(token);
+      if (payload?.exp) {
+        const expiresAt = payload.exp * 1000;
+        if (Date.now() > expiresAt - TOKEN_REFRESH_BUFFER_MS) {
+          const newToken = await tryRefreshToken(token);
+          if (newToken) {
+            await SecureStore.setItemAsync("session_token", newToken);
+            token = newToken;
+          }
+        }
       }
 
       const user = await getMe();
@@ -47,10 +89,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   loginWithBiometric: async () => {
-    const token = await SecureStore.getItemAsync("session_token");
+    let token = await SecureStore.getItemAsync("session_token");
     if (!token) return false;
 
     try {
+      // Proactive refresh on biometric login too
+      const payload = decodeJwtPayload(token);
+      if (payload?.exp) {
+        const expiresAt = payload.exp * 1000;
+        if (Date.now() > expiresAt - TOKEN_REFRESH_BUFFER_MS) {
+          const newToken = await tryRefreshToken(token);
+          if (newToken) {
+            await SecureStore.setItemAsync("session_token", newToken);
+            token = newToken;
+          }
+        }
+      }
+
       const user = await getMe();
       set({ user, isAuthenticated: true });
       return true;

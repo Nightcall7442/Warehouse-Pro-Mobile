@@ -168,7 +168,7 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
       allowsInlineMediaPlayback
       scrollEnabled={false}
       onMessage={handleMessage}
-      originWhitelist={["*"]}
+      originWhitelist={["about:srcdoc", "https://yandex.ru", "https://*.yandex.ru", "https://yastatic.net"]}
     />
   );
 });

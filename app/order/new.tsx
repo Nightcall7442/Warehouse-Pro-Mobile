@@ -1,10 +1,10 @@
 // Warehouse Pro — New Order (matches web NewOrder.tsx — 3-step wizard)
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useDebounce } from "../../src/hooks/useDebounce";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import * as Network from "expo-network";
 import { Feather } from "@expo/vector-icons";
 import { getMyShops, getProducts, createOrder, Shop } from "../../src/api";
 import { useOfflineStore } from "../../src/store/offline";
@@ -57,53 +57,78 @@ function StepIndicator({ step, total, colors }: { step: number; total: number; c
 // ── Step 1: Shop Picker ──────────────────────────────────────────────────────
 function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSelect: (s: Shop) => void; colors: ThemeColors }) {
   const [search, setSearch] = useState("");
+  const [recentIds, setRecentIds] = useState<number[]>([]);
   const { data: shops, isLoading } = useQuery({ queryKey: ["myShops"], queryFn: getMyShops });
 
-  const filtered = useMemo(() =>
-    (shops ?? []).filter(s => !search || s.name?.toLowerCase().includes(search.toLowerCase()) || s.ownerName?.toLowerCase().includes(search.toLowerCase())),
-    [shops, search]
-  );
+  // Load recent shop IDs on mount
+  useEffect(() => {
+    import("../../src/store/recentShops").then(m => m.getRecentShopIds()).then(setRecentIds);
+  }, []);
+
+  const { recentShops, otherShops } = useMemo(() => {
+    const all = (shops ?? []).filter(s => !search || s.name?.toLowerCase().includes(search.toLowerCase()) || s.ownerName?.toLowerCase().includes(search.toLowerCase()));
+    if (recentIds.length === 0 || search) return { recentShops: [], otherShops: all };
+    const recent = recentIds.map(id => all.find(s => s.id === id)).filter(Boolean) as Shop[];
+    const other = all.filter(s => !recentIds.includes(s.id));
+    return { recentShops: recent, otherShops: other };
+  }, [shops, search, recentIds]);
+
+  const filtered = search ? (shops ?? []).filter(s => !search || s.name?.toLowerCase().includes(search.toLowerCase()) || s.ownerName?.toLowerCase().includes(search.toLowerCase())) : otherShops;
+
+  const renderShopItem = ({ item: shop }: { item: Shop }) => {
+    const selected = shop.id === selectedId;
+    const hasDebt = Number(shop.debt ?? 0) > 0;
+    return (
+      <PressableScale onPress={() => { onSelect(shop); }} haptic="light" style={{ marginBottom: 8 }}>
+        <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderWidth: selected ? 1.5 : 1, borderColor: selected ? colors.accent.primary : colors.border.default }}>
+          <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: selected ? colors.accent.primary + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="shopping-bag" size={18} color={selected ? colors.accent.primary : colors.text.muted} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: selected ? colors.accent.primary : colors.text.primary }}>{shop.name}</Text>
+            <Text style={{ fontSize: Typography.size.sm, color: colors.text.tertiary }} numberOfLines={1}>
+              {[shop.ownerName, shop.city].filter(Boolean).join(" · ") || "—"}
+            </Text>
+            {hasDebt && <Text style={{ fontSize: Typography.size.xs, color: colors.status.danger, fontFamily: Typography.fontMedium, marginTop: 2 }}>Долг: {Number(shop.debt).toLocaleString("ru")} сум</Text>}
+          </View>
+          {selected ? (
+            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="check" size={14} color="#fff" />
+            </View>
+          ) : (
+            <View style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: colors.border.default }} />
+          )}
+        </Card>
+      </PressableScale>
+    );
+  };
 
   return (
     <View style={{ padding: Spacing.base, gap: Spacing.md }}>
       <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск магазинов…" autoFocus />
       {isLoading ? (
         <View style={{ gap: 10 }}>{[1, 2, 3, 4].map(i => <Skeleton key={i} height={64} radius={Radii.lg} />)}</View>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && recentShops.length === 0 ? (
         <View style={{ alignItems: "center", paddingVertical: 60 }}>
           <Feather name="search" size={32} color={colors.text.muted} />
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.secondary, marginTop: Spacing.md }}>Ничего не найдено</Text>
         </View>
       ) : (
-        <FlatList data={filtered} keyExtractor={s => String(s.id)} scrollEnabled={false}
-          renderItem={({ item: shop }) => {
-            const selected = shop.id === selectedId;
-            const hasDebt = Number(shop.debt ?? 0) > 0;
-            return (
-              <PressableScale onPress={() => { onSelect(shop); }} haptic="light" style={{ marginBottom: 8 }}>
-                <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderWidth: selected ? 1.5 : 1, borderColor: selected ? colors.accent.primary : colors.border.default }}>
-                  <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: selected ? colors.accent.primary + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
-                    <Feather name="shopping-bag" size={18} color={selected ? colors.accent.primary : colors.text.muted} />
-                  </View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: selected ? colors.accent.primary : colors.text.primary }}>{shop.name}</Text>
-                    <Text style={{ fontSize: Typography.size.sm, color: colors.text.tertiary }} numberOfLines={1}>
-                      {[shop.ownerName, shop.city].filter(Boolean).join(" · ") || "—"}
-                    </Text>
-                    {hasDebt && <Text style={{ fontSize: Typography.size.xs, color: colors.status.danger, fontFamily: Typography.fontMedium, marginTop: 2 }}>Долг: {Number(shop.debt).toLocaleString("ru")} сум</Text>}
-                  </View>
-                  {selected ? (
-                    <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-                      <Feather name="check" size={14} color="#fff" />
-                    </View>
-                  ) : (
-                    <View style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: colors.border.default }} />
-                  )}
-                </Card>
-              </PressableScale>
-            );
-          }}
-        />
+        <>
+          {/* Recent shops */}
+          {!search && recentShops.length > 0 && (
+            <View style={{ marginBottom: Spacing.sm }}>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5, marginBottom: 8 }}>НЕДАВНИЕ</Text>
+              <FlatList data={recentShops} keyExtractor={s => `recent-${s.id}`} scrollEnabled={false} renderItem={renderShopItem} />
+            </View>
+          )}
+          {/* All shops */}
+          {!search && recentShops.length > 0 && filtered.length > 0 && (
+            <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5, marginBottom: 4 }}>ВСЕ МАГАЗИНЫ</Text>
+          )}
+          <FlatList data={filtered} keyExtractor={s => String(s.id)} scrollEnabled={false} renderItem={renderShopItem} />
+        </>
+      )}
       )}
     </View>
   );
@@ -157,7 +182,9 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
             {/* Price info */}
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
               <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>{line.unitPrice.toLocaleString("ru")} сум / {line.unit ?? "кг"}</Text>
-              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>Остаток: {line.available}</Text>
+              <Text style={{ fontSize: Typography.size.xs, color: Number(line.quantity) > line.available && line.available > 0 ? colors.status.danger : colors.text.tertiary }}>
+                Остаток: {line.available}{Number(line.quantity) > line.available && line.available > 0 ? " (превышено!)" : ""}
+              </Text>
             </View>
             {/* Inputs */}
             <View style={{ flexDirection: "row", gap: 8 }}>
@@ -202,12 +229,15 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   visible: boolean; onClose: () => void; lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors;
 }) {
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const [onlyInStock, setOnlyInStock] = useState(true);
   const { data: products, isLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
 
   const filtered = useMemo(() => {
-    const list = (products ?? []).filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.code ?? "").toLowerCase().includes(search.toLowerCase()));
+    let list = (products ?? []).filter(p => !debouncedSearch || p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || (p.code ?? "").toLowerCase().includes(debouncedSearch.toLowerCase()));
+    if (onlyInStock) list = list.filter(p => Number(p.available) > 0);
     return list.sort((a, b) => (a.category ?? "").localeCompare(b.category ?? "") || a.name.localeCompare(b.name));
-  }, [products, search]);
+  }, [products, debouncedSearch, onlyInStock]);
 
   const already = useMemo(() => new Set(lines.map(l => l.productId)), [lines]);
 
@@ -233,6 +263,14 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
             <TextInput style={{ flex: 1, color: colors.text.primary, fontSize: Typography.size.base, fontFamily: Typography.fontRegular }} placeholder="Название или артикул…" placeholderTextColor={colors.text.muted} value={search} onChangeText={setSearch} autoFocus />
             {search.length > 0 && <TouchableOpacity onPress={() => setSearch("")}><Feather name="x-circle" size={16} color={colors.text.muted} /></TouchableOpacity>}
           </View>
+          {/* Stock filter */}
+          <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
+            <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: onlyInStock ? colors.accent.primary : colors.border.default, backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
+              {onlyInStock && <Feather name="check" size={12} color="#fff" />}
+            </View>
+            <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, fontFamily: Typography.fontMedium }}>Только в наличии</Text>
+            <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>({filtered.length})</Text>
+          </TouchableOpacity>
           {/* Product list */}
           {isLoading ? (
             <View style={{ padding: Spacing.base, gap: 10 }}>{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height={60} radius={Radii.lg} />)}</View>
@@ -371,6 +409,42 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
   );
 }
 
+// ── Draft auto-save ──────────────────────────────────────────────────────────
+const DRAFT_KEY = "order_draft";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+interface OrderDraft {
+  shop: Shop | null;
+  lines: OrderLine[];
+  notes: string;
+  paymentMethod: string;
+  savedAt: number;
+}
+
+async function saveDraft(draft: Omit<OrderDraft, "savedAt">) {
+  try {
+    await AsyncStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, savedAt: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+async function loadDraft(): Promise<OrderDraft | null> {
+  try {
+    const raw = await AsyncStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as OrderDraft;
+    // Expire after 24 hours
+    if (Date.now() - draft.savedAt > 24 * 60 * 60 * 1000) {
+      await AsyncStorage.removeItem(DRAFT_KEY);
+      return null;
+    }
+    return draft;
+  } catch { return null; }
+}
+
+async function clearDraft() {
+  try { await AsyncStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+}
+
 // ── Main Screen ──────────────────────────────────────────────────────────────
 export default function NewOrderScreen() {
   const router = useRouter();
@@ -391,14 +465,61 @@ export default function NewOrderScreen() {
   });
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [draftChecked, setDraftChecked] = useState(false);
+
+  // Check for saved draft on mount
+  useEffect(() => {
+    if (params.shopId || params.productId) { setDraftChecked(true); return; }
+    loadDraft().then(draft => {
+      if (draft && draft.lines.length > 0) {
+        Alert.alert(
+          "Продолжить черновик?",
+          `Найден неотправленный заказ${draft.shop ? ` для ${draft.shop.name}` : ""} (${draft.lines.length} товаров)`,
+          [
+            { text: "Начать заново", style: "cancel", onPress: () => clearDraft() },
+            { text: "Продолжить", onPress: () => {
+              setSelectedShop(draft.shop);
+              setLines(draft.lines);
+              setNotes(draft.notes);
+              setPaymentMethod(draft.paymentMethod);
+              setStep(draft.shop ? 2 : 1);
+            }},
+          ]
+        );
+      }
+      setDraftChecked(true);
+    });
+  }, []);
+
+  // Auto-save draft when data changes
+  useEffect(() => {
+    if (!draftChecked || lines.length === 0) return;
+    const timer = setTimeout(() => {
+      saveDraft({ shop: selectedShop, lines, notes, paymentMethod });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [selectedShop, lines, notes, paymentMethod, draftChecked]);
 
   const createMutation = useMutation({
     mutationFn: createOrder,
-    onSuccess: () => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); notify.success("Заказ создан!"); router.back(); },
-    onError: (e: Error) => notify.error(e.message ?? "Ошибка"),
+    onSuccess: () => { clearDraft(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); notify.success("Заказ создан!"); router.back(); },
+    onError: async (e: Error) => {
+      const isNetworkError = !e.message || e.message.includes("Network") || e.message.includes("timeout") || e.message.includes("fetch") || e.message.includes("status 5");
+      if (isNetworkError && selectedShop) {
+        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false };
+        await addOrder(offlineOrder);
+        clearDraft();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notify.info("Ошибка сети. Заказ сохранён офлайн.");
+        router.back();
+      } else {
+        notify.error(e.message ?? "Ошибка");
+      }
+    },
   });
 
-  const canNext = step === 1 ? !!selectedShop : step === 2 ? lines.length > 0 && lines.every(l => Number(l.quantity) > 0) : true;
+  const quantityError = lines.find(l => Number(l.quantity) > 0 && l.available > 0 && Number(l.quantity) > l.available);
+  const canNext = step === 1 ? !!selectedShop : step === 2 ? lines.length > 0 && lines.every(l => Number(l.quantity) > 0) && !quantityError : true;
 
   const handleSubmit = async () => {
     if (!selectedShop) return;
@@ -406,14 +527,6 @@ export default function NewOrderScreen() {
       shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt",
       items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })),
     };
-    const net = await Network.getNetworkStateAsync();
-    if (!net.isConnected) {
-      await addOrder({ id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      notify.info("Нет подключения. Заказ сохранён офлайн.");
-      router.back();
-      return;
-    }
     createMutation.mutate(input);
   };
 
@@ -438,7 +551,7 @@ export default function NewOrderScreen() {
 
       {/* Content */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); }} colors={colors} />}
+        {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); import("../../src/store/recentShops").then(m => m.addRecentShop(s.id)); }} colors={colors} />}
         {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} />}
         {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} colors={colors} />}
       </ScrollView>

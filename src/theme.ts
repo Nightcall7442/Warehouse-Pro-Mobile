@@ -23,13 +23,13 @@ export const DarkColors = {
     subtle: "#2a2622",
     strong: "#423d35",
     focus: "#00d4ff",
-    glass: "rgba(255,255,255,0.06)",
+    glass: "rgba(255,255,255,0.08)",
   },
   text: {
     primary: "#ede9e3",
     secondary: "#a39d92",
-    tertiary: "#8a8478", // WCAG AA: 4.5:1 on #1c1a17
-    muted: "#8a8478",
+    tertiary: "#a09a8e", // WCAG AA: 4.5:1 on #1c1a17
+    muted: "#a09a8e",
     inverse: "#1c1a17",
     onGlass: "rgba(237,233,227,0.92)",
   },
@@ -51,14 +51,14 @@ export const DarkColors = {
   },
   status: {
     success: "#00e68a",
-    successDim: "rgba(0,230,138,0.12)",
+    successDim: "rgba(0,230,138,0.18)",
     successGlow: "rgba(0,230,138,0.25)",
     warning: "#ffb020",
-    warningDim: "rgba(255,176,32,0.12)",
+    warningDim: "rgba(255,176,32,0.18)",
     danger: "#ff4d6a",
-    dangerDim: "rgba(255,77,106,0.12)",
+    dangerDim: "rgba(255,77,106,0.18)",
     info: "#00b4ff",
-    infoDim: "rgba(0,180,255,0.12)",
+    infoDim: "rgba(0,180,255,0.18)",
   },
   tab: {
     active: "#00d4ff",
@@ -171,7 +171,6 @@ export const Typography = {
   fontRegular: "DMSans_400Regular",
   fontMedium: "DMSans_500Medium",
   fontSemibold: "DMSans_600SemiBold",
-  fontSemiBold: "DMSans_600SemiBold",
   fontBold: "DMSans_700Bold",
   fontExtraBold: "DMSans_800ExtraBold",
   fontMono: "Courier New",

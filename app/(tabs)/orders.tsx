@@ -1,6 +1,6 @@
 // Warehouse Pro — Orders v2 (cold palette, ProgressRing donuts)
-import React, { useMemo } from "react";
-import { View, Text, FlatList, RefreshControl, TouchableOpacity } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,6 +10,7 @@ import { Feather } from "@expo/vector-icons";
 import { getMyOrders, Order } from "../../src/api";
 import { useThemeColors } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
+import { useOfflineStore } from "../../src/store/offline";
 import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
 
 import { Card } from "../../src/components/ui";
@@ -40,6 +41,8 @@ export default function OrdersScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
+  const offline = useOfflineStore();
+  const { orders: offlineOrders, deliveryActions, syncAll, retry, retryDeliveryAction, syncingOrders, syncingActions } = offline;
 
   const { data: orders, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["myOrders"],
@@ -47,6 +50,21 @@ export default function OrdersScreen() {
     retry: false, staleTime: 2 * 60 * 1000,
     enabled: user?.role === "agent" || user?.role === "ceo" || user?.role === "operator",
   });
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const pendingOffline = useMemo(() => {
+    return offlineOrders.filter(o => !o.synced);
+  }, [offlineOrders]);
+
+  const pendingActions = useMemo(() => {
+    return deliveryActions.filter(a => !a.synced);
+  }, [deliveryActions]);
+
+  useEffect(() => {
+    const s = useOfflineStore.getState();
+    if (s.orders.some(o => !o.synced)) s.syncAll();
+    if (s.deliveryActions.some(a => !a.synced)) s.syncDeliveryActions();
+  }, []);
 
   const items = useMemo<ListItem[]>(() => {
     const arr = Array.isArray(orders) ? orders : [];
@@ -96,6 +114,110 @@ export default function OrdersScreen() {
           </PressableScale>
         </View>
       </View>
+
+      {/* Online sync banner — offline orders pending */}
+      {pendingOffline.length > 0 && (
+        <View style={{ marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
+          <Card style={{ backgroundColor: colors.status.warningDim, borderWidth: 1, borderColor: colors.status.warning, padding: Spacing.md }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+              <Feather name="wifi-off" size={18} color={colors.status.warning} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
+                  {pendingOffline.length} {pendingOffline.length === 1 ? "заказ" : "заказов"} не отправлен{pendingOffline.length === 1 ? "" : "ы"}
+                </Text>
+                {syncingOrders ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                    <ActivityIndicator size="small" color={colors.accent.primary} />
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary }}>Отправка...</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity onPress={() => syncAll()} style={{ marginTop: 4 }}>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontSemibold }}>
+                      Нажмите для повторной отправки
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.text.muted} />
+            </View>
+            {/* Failed items with retry */}
+            {pendingOffline.filter(o => o.status === "failed").map(o => (
+              <TouchableOpacity
+                key={o.id}
+                onPress={async () => { setRetryingId(o.id); await retry(o.id); setRetryingId(null); }}
+                disabled={retryingId === o.id}
+                style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 26, opacity: retryingId === o.id ? 0.6 : 1 }}
+              >
+                {retryingId === o.id ? (
+                  <ActivityIndicator size="small" color={colors.accent.primary} />
+                ) : (
+                  <Feather name="alert-circle" size={14} color={colors.status.danger} />
+                )}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary }} numberOfLines={1}>
+                    {o.shopName}
+                  </Text>
+                  {o.error && retryingId !== o.id ? (
+                    <Text style={{ fontSize: 10, color: colors.status.danger, marginTop: 1 }} numberOfLines={2}>
+                      {o.error}
+                    </Text>
+                  ) : null}
+                </View>
+                {retryingId === o.id ? (
+                  <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>Отправка...</Text>
+                ) : (
+                  <>
+                    <Feather name="refresh-cw" size={14} color={colors.accent.primary} />
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>Повтор</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ))}
+          </Card>
+        </View>
+      )}
+
+      {/* Online sync banner — delivery actions pending */}
+      {pendingActions.length > 0 && (
+        <View style={{ marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
+          <Card style={{ backgroundColor: colors.status.warningDim, borderWidth: 1, borderColor: colors.status.warning, padding: Spacing.md }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+              <Feather name="truck" size={18} color={colors.status.warning} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
+                  {pendingActions.length} {pendingActions.length === 1 ? "действие" : "действий"} ожидают отправки
+                </Text>
+                {syncingActions ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                    <ActivityIndicator size="small" color={colors.accent.primary} />
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary }}>Отправка...</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity onPress={() => offline.syncDeliveryActions()} style={{ marginTop: 4 }}>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontSemibold }}>
+                      Нажмите для повторной отправки
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+            {pendingActions.filter(a => a.status === "failed").map(a => (
+              <TouchableOpacity
+                key={a.id}
+                onPress={() => retryDeliveryAction(a.id)}
+                style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 26 }}
+              >
+                <Feather name="alert-circle" size={14} color={colors.status.danger} />
+                <Text style={{ flex: 1, fontSize: Typography.size.xs, color: colors.text.secondary }} numberOfLines={1}>
+                  {a.action.type === "markOutForDelivery" ? "Выезд" : a.action.type === "markDelivered" ? "Доставлен" : "Проблема"} #{a.action.orderId}
+                </Text>
+                <Feather name="refresh-cw" size={14} color={colors.accent.primary} />
+                <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>Повтор</Text>
+              </TouchableOpacity>
+            ))}
+          </Card>
+        </View>
+      )}
 
       {/* KPI row — rings like Dashboard */}
       <FadeInItem delay={0}>

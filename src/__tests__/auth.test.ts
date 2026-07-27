@@ -1,74 +1,58 @@
 // Warehouse Pro — Auth store tests
-import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock dependencies
-vi.mock("../storage", () => ({
+jest.mock("../storage", () => ({
   SecureStore: {
-    getItemAsync: vi.fn(),
-    setItemAsync: vi.fn(),
-    deleteItemAsync: vi.fn(),
+    getItemAsync: jest.fn(),
+    setItemAsync: jest.fn(),
+    deleteItemAsync: jest.fn(),
   },
 }));
 
-vi.mock("../api", () => ({
-  getMe: vi.fn(),
-  login: vi.fn(),
-  logout: vi.fn(),
+jest.mock("../api", () => ({
+  getMe: jest.fn(),
+  login: jest.fn(),
+  logout: jest.fn(),
 }));
 
-describe("Auth Store", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+const { useAuthStore } = require("../store/auth");
+const { getMe } = require("../api");
 
-  it("initializes with correct default state", async () => {
-    const { useAuthStore } = await import("../store/auth");
+beforeEach(() => {
+  useAuthStore.setState({ user: null, isLoading: true, isAuthenticated: false });
+  jest.clearAllMocks();
+});
+
+describe("Auth Store", () => {
+  it("initializes with correct default state", () => {
     const state = useAuthStore.getState();
     expect(state.user).toBeNull();
     expect(state.isLoading).toBe(true);
     expect(state.isAuthenticated).toBe(false);
   });
 
-  it("hydrate sets loading true then false", async () => {
-    const { SecureStore } = await import("../storage");
-    const { useAuthStore } = await import("../store/auth");
+  it("hydrate sets isLoading true then false", async () => {
+    const mockUser = { id: 1, name: "Agent", role: "agent" };
+    const SecureStore = require("../storage").SecureStore;
+    SecureStore.getItemAsync.mockResolvedValue("valid_token");
+    getMe.mockResolvedValue(mockUser);
 
-    vi.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
-
-    const state = useAuthStore.getState();
-    expect(state.isLoading).toBe(true);
-
-    await state.hydrate();
-
-    const after = useAuthStore.getState();
-    expect(after.isLoading).toBe(false);
-    expect(after.isAuthenticated).toBe(false);
+    const p = useAuthStore.getState().hydrate();
+    expect(useAuthStore.getState().isLoading).toBe(true);
+    await p;
+    expect(useAuthStore.getState().isLoading).toBe(false);
+    expect(useAuthStore.getState().user).toEqual(mockUser);
   });
 
   it("logout clears user state", async () => {
-    const { useAuthStore } = await import("../store/auth");
-    const api = await import("../api");
-
-    vi.mocked(api.logout).mockResolvedValue(undefined);
-
-    // Set initial state
-    useAuthStore.setState({ user: { id: 1, name: "Test", email: "test@test.com", role: "agent", tenantId: 1 } as any, isAuthenticated: true });
-
+    useAuthStore.setState({ user: { id: 1, name: "Agent" } as any, isAuthenticated: true });
     await useAuthStore.getState().logout();
-
-    const after = useAuthStore.getState();
-    expect(after.user).toBeNull();
-    expect(after.isAuthenticated).toBe(false);
+    expect(useAuthStore.getState().user).toBeNull();
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
 
-  it("updateUser patches user object", async () => {
-    const { useAuthStore } = await import("../store/auth");
-
-    useAuthStore.setState({ user: { id: 1, name: "Old Name", email: "test@test.com", role: "agent", tenantId: 1 } as any });
-
-    useAuthStore.getState().updateUser({ name: "New Name" });
-
-    const after = useAuthStore.getState();
-    expect(after.user?.name).toBe("New Name");
+  it("updateUser patches user object", () => {
+    useAuthStore.setState({ user: { id: 1, name: "Agent" } as any });
+    useAuthStore.getState().updateUser({ name: "Updated" } as any);
+    expect(useAuthStore.getState().user).toEqual({ id: 1, name: "Updated" });
   });
 });

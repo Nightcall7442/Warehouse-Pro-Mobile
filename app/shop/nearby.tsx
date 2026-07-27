@@ -134,6 +134,31 @@ export default function NearbyShopsScreen() {
         </ScrollView>
       </View>
 
+      {/* Build route button */}
+      {filteredShops.length > 0 && filteredShops.some(s => s.gpsLat && s.gpsLng) && (
+        <PressableScale
+          onPress={async () => {
+            const waypoints = filteredShops
+              .filter(s => s.gpsLat && s.gpsLng)
+              .map(s => `${s.gpsLng},${s.gpsLat}`)
+              .join("~");
+            const url = `https://yandex.ru/maps/?rtext=${waypoints}&rtt=auto`;
+            const { Linking } = await import("expo-native-modules");
+            try {
+              const canOpen = await Linking.canOpenURL(url);
+              if (canOpen) await Linking.openURL(url);
+            } catch { /* ignore */ }
+          }}
+          haptic="medium"
+          style={{ marginHorizontal: 16, marginBottom: 12 }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: Radii.lg, backgroundColor: colors.accent.primary }}>
+            <Feather name="navigation" size={16} color="#fff" />
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 14, color: "#fff" }}>Построить маршрут ({filteredShops.filter(s => s.gpsLat && s.gpsLng).length} точек)</Text>
+          </View>
+        </PressableScale>
+      )}
+
       {/* Shops list */}
       <ScrollView
         style={{ flex: 1, paddingHorizontal: 16 }}

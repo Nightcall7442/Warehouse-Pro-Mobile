@@ -1,5 +1,5 @@
 // Warehouse Pro — Shop Detail v2 (cold palette, Card, Badge, FadeInItem)
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Linking, RefreshControl } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -55,9 +55,11 @@ export default function ShopDetailScreen() {
 
   // Initialize territoryId from shop data
   const shopTerritoryId = (shop as Record<string, unknown>)?.territoryId as number | undefined;
-  if (shopTerritoryId && territoryId === undefined) {
-    setTerritoryId(shopTerritoryId);
-  }
+  useEffect(() => {
+    if (shopTerritoryId && territoryId === undefined) {
+      setTerritoryId(shopTerritoryId);
+    }
+  }, [shopTerritoryId, territoryId]);
 
   const updateMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -207,7 +209,7 @@ export default function ShopDetailScreen() {
           <Card style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
             {editing ? (
               <View style={{ padding: 16, gap: 10 }}>
-                <Text style={{ fontFamily: Typography.fontSemiBold, fontSize: Typography.size.sm, color: colors.accent.primary, letterSpacing: 0.5, marginBottom: 4 }}>РЕДАКТИРОВАНИЕ</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.accent.primary, letterSpacing: 0.5, marginBottom: 4 }}>РЕДАКТИРОВАНИЕ</Text>
                 {[
                   { key: "name", label: "Название" }, { key: "ownerName", label: "Владелец" }, { key: "phone", label: "Телефон" },
                   { key: "city", label: "Город" }, { key: "district", label: "Район" }, { key: "address", label: "Адрес" },
@@ -281,6 +283,22 @@ export default function ShopDetailScreen() {
             </Badge>
           </Card>
         </FadeInItem>
+
+        {/* Quick order button */}
+        {shop.status === "active" && (
+          <FadeInItem delay={60}>
+            <PressableScale
+              onPress={() => router.push({ pathname: "/order/new", params: { shopId: id, shopName: shop.name } })}
+              haptic="medium"
+              style={{ borderRadius: Radii.xl, overflow: "hidden", marginTop: 4 }}
+            >
+              <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, paddingHorizontal: 20, borderRadius: Radii.xl }}>
+                <Feather name="shopping-cart" size={20} color="#fff" />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: "#fff" }}>Новый заказ</Text>
+              </LinearGradient>
+            </PressableScale>
+          </FadeInItem>
+        )}
       </ScrollView>
     </View>
   );

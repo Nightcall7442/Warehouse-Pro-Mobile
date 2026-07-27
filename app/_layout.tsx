@@ -16,7 +16,10 @@ import { useThemeStore } from "../src/store/theme";
 import { useBrandingStore } from "../src/store/branding";
 import { ToastHost } from "../src/components/Toast";
 import { ErrorBoundary } from "../src/components/ErrorBoundary";
+import { OfflineBanner } from "../src/components/OfflineBanner";
 import { usePushNotifications } from "../src/hooks/usePushNotifications";
+import { useAutoLock } from "../src/hooks/useAutoLock";
+import { useVisitReminders } from "../src/hooks/useVisitReminders";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -25,35 +28,54 @@ const queryClient = new QueryClient({
 });
 
 function AutoSync() {
-  const { syncAll, syncDeliveryActions, orders, deliveryActions } = useOfflineStore();
+  const { syncAll, syncDeliveryActions } = useOfflineStore();
   const qc = useQueryClient();
   const wasOffline = useRef(false);
+  const syncing = useRef(false);
+
+  // Helper to run sync if there are pending items
+  const runSync = useCallback(() => {
+    if (syncing.current) return;
+    syncing.current = true;
+    const { orders, deliveryActions } = useOfflineStore.getState();
+    const pendingOrders = orders.filter((o) => !o.synced);
+    const pendingActions = deliveryActions.filter((a) => !a.synced);
+
+    const tasks: Promise<unknown>[] = [];
+    if (pendingOrders.length > 0) {
+      tasks.push(syncAll().then(({ synced }) => {
+        if (synced > 0) qc.invalidateQueries({ queryKey: ["myOrders"] });
+      }));
+    }
+    if (pendingActions.length > 0) {
+      tasks.push(syncDeliveryActions().then(({ synced }) => {
+        if (synced > 0) qc.invalidateQueries({ queryKey: ["myDeliveries"] });
+      }));
+    }
+
+    if (tasks.length === 0) { syncing.current = false; return; }
+    Promise.all(tasks).finally(() => { syncing.current = false; });
+  }, [syncAll, syncDeliveryActions, qc]);
+
+  // Sync on mount (app foreground) — catches pending items from previous session
+  useEffect(() => {
+    runSync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
       const online = state.isConnected ?? false;
 
       if (online && wasOffline.current) {
-        const pendingOrders = orders.filter((o) => !o.synced);
-        const pendingActions = deliveryActions.filter((a) => !a.synced);
-
-        if (pendingOrders.length > 0) {
-          syncAll().then(({ synced }) => {
-            if (synced > 0) qc.invalidateQueries({ queryKey: ["myOrders"] });
-          });
-        }
-        if (pendingActions.length > 0) {
-          syncDeliveryActions().then(({ synced }) => {
-            if (synced > 0) qc.invalidateQueries({ queryKey: ["myDeliveries"] });
-          });
-        }
+        runSync();
       }
 
       wasOffline.current = !online;
     });
 
     return unsub;
-  }, [orders, deliveryActions, syncAll, syncDeliveryActions, qc]);
+  }, [runSync]);
 
   return null;
 }
@@ -65,6 +87,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   // Register push token on auth
   usePushNotifications();
+  useAutoLock();
+  useVisitReminders();
 
   useEffect(() => {
     hydrate();
@@ -113,6 +137,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthGate>
             <AutoSync />
+            <OfflineBanner />
             <StatusBar style={isDark ? "light" : "dark"} />
             <ToastHost />
             <Stack

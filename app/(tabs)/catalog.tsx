@@ -1,5 +1,5 @@
 // Warehouse Pro — Catalog v2 (cold palette, Card from ui.tsx)
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, Modal, Pressable,
   Image, ScrollView, useWindowDimensions,
@@ -14,6 +14,7 @@ import { notify } from "../../src/store/toast";
 import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { SearchInput, Card } from "../../src/components/ui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ── Unit label mapping ──────────────────────────────────────────────────────
 const UNIT_LABELS: Record<string, string> = {
@@ -245,6 +246,8 @@ export default function CatalogScreen() {
   const [pendingQty, setPendingQty] = useState(1);
   const [pendingShopId, setPendingShopId] = useState<number | null>(null);
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
+  const [cachedProducts, setCachedProducts] = useState<Product[]>([]);
+  const [isFromCache, setIsFromCache] = useState(false);
 
   const canAccessAgent = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo";
@@ -256,6 +259,26 @@ export default function CatalogScreen() {
   const { data: shopsData } = useQuery({ queryKey: ["myShops"], queryFn: isSupervisor ? getAllShopsForSupervisor : getMyShops, enabled: canAccessAgent });
   const { data: serverCategories = [] } = useQuery({ queryKey: ["categories"], queryFn: getCategories, enabled: canAccessAgent });
 
+  // Save products to cache on successful fetch
+  useEffect(() => {
+    if (products.length > 0) {
+      AsyncStorage.setItem("cached_products", JSON.stringify(products)).catch(() => {});
+      setIsFromCache(false);
+    }
+  }, [products]);
+
+  // Load cached products on error (offline)
+  useEffect(() => {
+    if (isError && !isLoading) {
+      AsyncStorage.getItem("cached_products").then(raw => {
+        if (raw) {
+          setCachedProducts(JSON.parse(raw));
+          setIsFromCache(true);
+        }
+      }).catch(() => {});
+    }
+  }, [isError, isLoading]);
+
   const shops = useMemo(() => (shopsData ?? []).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")), [shopsData]);
 
   const categories = useMemo(() => {
@@ -263,12 +286,14 @@ export default function CatalogScreen() {
     return [{ key: "all", label: "Все" }, ...dynamic];
   }, [serverCategories]);
 
+  const effectiveProducts = isFromCache ? cachedProducts : products;
+
   const filtered = useMemo(() => {
-    let result = products;
+    let result = effectiveProducts;
     if (search) { const q = search.toLowerCase(); result = result.filter(p => p.name.toLowerCase().includes(q) || p.code?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q)); }
     if (selectedCat !== "all") result = result.filter(p => p.category?.toLowerCase() === selectedCat);
     return result;
-  }, [products, search, selectedCat]);
+  }, [effectiveProducts, search, selectedCat]);
 
   const fmt = useCallback((v: number | string | null | undefined) => {
     return Number(v ?? 0).toLocaleString("ru-RU", { style: "currency", currency: "UZS", maximumFractionDigits: 0 });
@@ -314,7 +339,7 @@ export default function CatalogScreen() {
       )}
 
       {/* Products — 2-column grid with big images */}
-      {isError ? (
+      {isError && !isFromCache ? (
         <View style={{ alignItems: "center", paddingVertical: 80, paddingHorizontal: Spacing.xl }}>
           <View style={{ width: 72, height: 72, borderRadius: Radii.xl, backgroundColor: colors.status.dangerDim, alignItems: "center", justifyContent: "center", marginBottom: Spacing.md }}>
             <Feather name="wifi-off" size={32} color={colors.status.danger} />
@@ -322,7 +347,7 @@ export default function CatalogScreen() {
           <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>Ошибка загрузки</Text>
           <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>{error?.message ?? "Проверьте подключение"}</Text>
         </View>
-      ) : isLoading ? (
+      ) : isLoading && !isFromCache ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.md, paddingHorizontal: Spacing.base }}>
           {[1, 2, 3, 4].map(i => (
             <View key={i} style={{ width: CARD_W, height: 220, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated, opacity: 0.5 }} />
@@ -336,6 +361,12 @@ export default function CatalogScreen() {
           columnWrapperStyle={{ gap: Spacing.md, paddingHorizontal: Spacing.base }}
           contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={isFromCache ? (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, paddingHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.status.warningDim, borderRadius: Radii.md, marginHorizontal: Spacing.base }}>
+              <Feather name="wifi-off" size={14} color={colors.status.warning} />
+              <Text style={{ color: colors.status.warning, fontSize: Typography.size.sm, fontFamily: Typography.fontMedium }}>Офлайн данные</Text>
+            </View>
+          ) : null}
           renderItem={({ item }) => (
             <ProductCard
               product={item} colors={colors} isDark={isDark}

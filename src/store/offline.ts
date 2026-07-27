@@ -63,7 +63,11 @@ async function readQueue(): Promise<OfflineOrder[]> {
 }
 
 async function writeQueue(orders: OfflineOrder[]) {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+  } catch (e) {
+    if (__DEV__) console.warn("[OfflineStore] Failed to write queue:", e);
+  }
 }
 
 async function readDeliveryActionsQueue(): Promise<OfflineDeliveryAction[]> {
@@ -76,7 +80,11 @@ async function readDeliveryActionsQueue(): Promise<OfflineDeliveryAction[]> {
 }
 
 async function writeDeliveryActionsQueue(actions: OfflineDeliveryAction[]) {
-  await AsyncStorage.setItem(DELIVERY_ACTIONS_KEY, JSON.stringify(actions));
+  try {
+    await AsyncStorage.setItem(DELIVERY_ACTIONS_KEY, JSON.stringify(actions));
+  } catch (e) {
+    if (__DEV__) console.warn("[OfflineStore] Failed to write delivery actions queue:", e);
+  }
 }
 
 /**
@@ -128,9 +136,6 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     set({ syncingActions: true });
 
     try {
-      let synced = 0;
-      let failed = 0;
-
       const currentActions = get().deliveryActions;
       const pendingActions = currentActions.filter(a => !a.synced);
 
@@ -154,11 +159,15 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
           }
         })
       );
+      
+      let synced = 0;
+      let failed = 0;
 
       const finalActions = syncingActions.map(a => {
         if (a.synced) return a;
         const idx = pendingActions.findIndex((p) => p.id === a.id);
         if (idx !== -1 && results[idx].status === "rejected") {
+          failed++;
           return {
             ...a,
             status: "failed" as const,
@@ -168,6 +177,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
             retryable: isRetryableError(results[idx].reason),
           };
         }
+        synced++;
         return { ...a, synced: true, status: "pending" as const };
       });
 
@@ -184,40 +194,59 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     set({ syncingOrders: true });
 
     try {
-      let synced = 0;
-      let failed = 0;
-
-      const currentOrders = get().orders;
-      const pendingOrders = currentOrders.filter(o => !o.synced);
+      // Capture snapshot at start — work only with this snapshot to avoid race conditions
+      const snapshot = get().orders;
+      const pendingOrders = snapshot.filter(o => !o.synced);
 
       if (pendingOrders.length === 0) return { synced: 0, failed: 0 };
 
-      // Mark all as syncing
-      const syncingOrders = currentOrders.map(o =>
+      // Mark snapshot orders as syncing (don't re-read from store)
+      const syncingSnapshot = snapshot.map(o =>
         o.synced ? o : { ...o, status: "syncing" as const }
       );
-      set({ orders: syncingOrders });
-      await writeQueue(syncingOrders);
+      // Merge with any new orders added after snapshot
+      const currentOrders = get().orders;
+      const newOrders = currentOrders.filter(o => !syncingSnapshot.some(s => s.id === o.id));
+      const mergedForWrite = [...syncingSnapshot, ...newOrders];
+      set({ orders: mergedForWrite });
+      await writeQueue(mergedForWrite);
 
       const results = await Promise.allSettled(
         pendingOrders.map((order) => createOrder(order.input))
       );
 
-      const finalOrders = syncingOrders.map(o => {
-        if (o.synced) return o;
-        const idx = pendingOrders.findIndex((p) => p.id === o.id);
-        if (idx !== -1 && results[idx].status === "rejected") {
+      let synced = 0;
+      let failed = 0;
+
+      // Build result map from snapshot only (not from current store)
+      const resultMap = new Map<string, { status: "fulfilled" | "rejected"; reason?: unknown }>();
+      for (let i = 0; i < pendingOrders.length; i++) {
+        resultMap.set(pendingOrders[i].id, results[i]);
+      }
+
+      // Update only snapshot orders, preserve any new orders added during sync
+      const finalSnapshot = syncingSnapshot.map(o => {
+        const result = resultMap.get(o.id);
+        if (!result) return o; // shouldn't happen
+        if (result.status === "rejected") {
+          failed++;
           return {
             ...o,
             status: "failed" as const,
-            error: results[idx].reason instanceof Error
-              ? (results[idx].reason as Error).message
+            error: result.reason instanceof Error
+              ? (result.reason as Error).message
               : "Sync failed",
-            retryable: isRetryableError(results[idx].reason),
+            retryable: isRetryableError(result.reason),
           };
         }
+        synced++;
         return { ...o, synced: true, status: "pending" as const };
       });
+
+      // Merge updated snapshot with any new orders added during sync
+      const latestOrders = get().orders;
+      const addedDuringSync = latestOrders.filter(o => !finalSnapshot.some(s => s.id === o.id));
+      const finalOrders = [...finalSnapshot, ...addedDuringSync];
 
       set({ orders: finalOrders });
       await writeQueue(finalOrders);

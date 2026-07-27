@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { Typography, Spacing, Radii } from "../theme";
 import { useThemeColors } from "../store/theme";
@@ -13,7 +13,7 @@ interface State {
   error: Error | null;
 }
 
-function ErrorFallback({ error }: { error: Error | null }) {
+function ErrorFallback({ onRetry }: { onRetry: () => void }) {
   const colors = useThemeColors();
   return (
     <View
@@ -58,8 +58,22 @@ function ErrorFallback({ error }: { error: Error | null }) {
           maxWidth: 280,
         }}
       >
-        {error?.message ?? "Неожиданная ошибка. Перезапустите приложение."}
+        {"Неожиданная ошибка. Попробуйте ещё раз."}
       </Text>
+      <TouchableOpacity
+        onPress={onRetry}
+        style={{
+          backgroundColor: colors.accent.primary,
+          borderRadius: Radii.md,
+          paddingVertical: 12,
+          paddingHorizontal: 24,
+          marginTop: 8,
+        }}
+      >
+        <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>
+          Повторить
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -78,9 +92,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (__DEV__) console.error("[ErrorBoundary]", error.message, errorInfo.componentStack);
   }
 
+  resetError = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   render() {
     if (this.state.hasError) {
-      return <ErrorFallback error={this.state.error} />;
+      return <ErrorFallback onRetry={this.resetError} />;
     }
     return this.props.children;
   }

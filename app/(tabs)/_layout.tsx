@@ -106,7 +106,7 @@ function CustomTabBar(props: BottomTabBarProps) {
               <Text
                 style={{
                   fontSize: 10,
-                  fontFamily: isFocused ? Typography.fontSemiBold : Typography.fontMedium,
+                  fontFamily: isFocused ? Typography.fontSemibold : Typography.fontMedium,
                   color: isFocused ? colors.tab.active : colors.tab.inactive,
                   marginTop: 3,
                 }}

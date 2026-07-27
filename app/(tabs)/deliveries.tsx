@@ -126,9 +126,18 @@ export default function DeliveriesScreen() {
   const delivered = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "delivered");
   const totalDeliveries = (deliveries ?? []).length;
 
-  const openMap = (address: string) => {
+  const openMap = async (address: string) => {
     const url = `https://yandex.ru/maps/?text=${encodeURIComponent(address)}`;
-    Linking.openURL(url);
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        notify.error("Не удалось открыть карты");
+      }
+    } catch {
+      notify.error("Не удалось открыть карты");
+    }
   };
 
   if (isLoading) {

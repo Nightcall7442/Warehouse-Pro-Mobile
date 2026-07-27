@@ -1,5 +1,4 @@
 // Warehouse Pro — Theme contrast tests
-import { describe, it, expect } from "vitest";
 import { DarkColors, LightColors } from "../theme";
 
 describe("Theme Contrast", () => {
