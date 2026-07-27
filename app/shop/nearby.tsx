@@ -14,7 +14,8 @@ import * as Haptics from "expo-haptics";
 import { useLocation, getDistanceKm, getEstimatedTime } from "../../src/hooks/useLocation";
 
 function DistanceBadge({ distance }: { distance: number }) {
-  const color = distance < 1 ? "#10b981" : distance < 3 ? "#f59e0b" : "#6b7280";
+  const colors = useThemeColors();
+  const color = distance < 1 ? colors.status.success : distance < 3 ? colors.status.warning : colors.text.muted;
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: color + "15" }}>
       <Feather name="map-pin" size={10} color={color} />

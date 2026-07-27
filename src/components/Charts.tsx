@@ -97,7 +97,7 @@ export function NeumorphicProgressBar({ value, height = 8, color, style }: {
   const pct = Math.min(Math.max(value, 0), 100);
 
   return (
-    <View style={[{ height, borderRadius: Radii.full, backgroundColor: colors.bg.elevated, overflow: "hidden", shadowColor: "#a3b1c6", shadowOffset: { width: -2, height: -2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: -1 }, style]}>
+    <View style={[{ height, borderRadius: Radii.full, backgroundColor: colors.bg.elevated, overflow: "hidden", shadowColor: "#a0988c", shadowOffset: { width: -2, height: -2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: -1 }, style]}>
       <View style={{ height: "100%", width: `${pct}%`, borderRadius: Radii.full, backgroundColor: barColor }} />
     </View>
   );

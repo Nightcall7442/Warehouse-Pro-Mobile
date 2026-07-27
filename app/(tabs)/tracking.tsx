@@ -80,7 +80,7 @@ export default function TrackingScreen() {
           lat: Number(l.lat),
           lng: Number(l.lng),
           label: l.agentName ?? `Agent #${l.agentId}`,
-          color: isOnline(l.createdAt) ? KpiColors.teal : "#98a0b8",
+          color: isOnline(l.createdAt) ? KpiColors.teal : colors.text.muted,
           online: isOnline(l.createdAt),
           batteryLevel: l.batteryLevel ?? null,
         })),

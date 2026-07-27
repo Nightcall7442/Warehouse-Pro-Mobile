@@ -24,11 +24,12 @@ interface ChecklistItem {
 
 // ── CardDots (matches web) ───────────────────────────────────────────────────
 function CardDots() {
+  const colors = useThemeColors();
   return (
     <View style={{ flexDirection: "row", gap: 6, marginBottom: 8 }}>
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f06895" }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f5a825" }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#2ec4b0" }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.danger }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.warning }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.success }} />
     </View>
   );
 }

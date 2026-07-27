@@ -13,11 +13,12 @@ import { useBiometricAuth } from "../../src/hooks/useBiometricAuth";
 
 // ── CardDots (matches web) ───────────────────────────────────────────────────
 function CardDots() {
+  const colors = useThemeColors();
   return (
     <View style={{ flexDirection: "row", gap: 6, marginBottom: 16 }}>
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f06895" }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#f5a825" }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#2ec4b0" }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.danger }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.warning }} />
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.success }} />
     </View>
   );
 }
@@ -71,7 +72,7 @@ export default function LoginScreen() {
 
           {/* Gradient hero header */}
           <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 180 }}>
-            <LinearGradient colors={isDark ? ["#1c1a17", "#221f1c"] : ["#5b6d8a", "#4a5c78"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+            <LinearGradient colors={isDark ? ["#1c1a17", "#221f1c"] : [colors.brand.primary, colors.brand.primaryLight]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
           </View>
 
           {/* Logo */}

@@ -2,7 +2,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, ViewStyle, TextStyle, ActivityIndicator } from "react-native";
 import * as Haptics from "expo-haptics";
-import { useThemeStore } from "../store/theme";
+import { useThemeStore, useThemeColors } from "../store/theme";
 import { Radii } from "../theme";
 
 // ── FadeInItem → plain View (no animation) ──────────────────────────────────
@@ -177,7 +177,7 @@ export function AnimatedGradient({
 
 // ── PulseGlow → static dot ──────────────────────────────────────────────────
 export function PulseGlow({
-  color = "#4b6cf6",
+  color,
   size = 8,
   style,
 }: {
@@ -185,8 +185,9 @@ export function PulseGlow({
   size?: number;
   style?: ViewStyle;
 }) {
+  const colors = useThemeColors();
   return (
-    <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }, style]} />
+    <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color ?? colors.brand.primary }, style]} />
   );
 }
 
@@ -200,7 +201,8 @@ export function OnlineIndicator({
   size?: number;
   style?: ViewStyle;
 }) {
-  const color = online ? "#22c55e" : "#94a3b8";
+  const colors = useThemeColors();
+  const color = online ? colors.status.success : colors.text.muted;
   return (
     <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }, style]} />
   );
@@ -245,7 +247,7 @@ export function AnimatedCard({
 export function FloatingActionButton({
   icon,
   onPress,
-  color = "#4b6cf6",
+  color,
   style,
 }: {
   icon: React.ReactNode;
@@ -253,6 +255,8 @@ export function FloatingActionButton({
   color?: string;
   style?: ViewStyle;
 }) {
+  const colors = useThemeColors();
+  const bgColor = color ?? colors.brand.primary;
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -262,7 +266,7 @@ export function FloatingActionButton({
           width: 56,
           height: 56,
           borderRadius: 28,
-          backgroundColor: color,
+          backgroundColor: bgColor,
           alignItems: "center",
           justifyContent: "center",
         },
@@ -279,7 +283,7 @@ export function ProgressRing({
   progress,
   size = 64,
   strokeWidth = 6,
-  color = "#4b6cf6",
+  color,
   bgColor = "rgba(255,255,255,0.1)",
   style,
 }: {
@@ -290,6 +294,8 @@ export function ProgressRing({
   bgColor?: string;
   style?: ViewStyle;
 }) {
+  const colors = useThemeColors();
+  const ringColor = color ?? colors.brand.primary;
   return (
     <View style={[{ width: size, height: size }, style]}>
       <View
@@ -308,10 +314,10 @@ export function ProgressRing({
           height: size,
           borderRadius: size / 2,
           borderWidth: strokeWidth,
-          borderColor: color,
-          borderRightColor: progress < 50 ? bgColor : color,
-          borderBottomColor: progress < 75 ? bgColor : color,
-          borderLeftColor: progress < 100 ? bgColor : color,
+          borderColor: ringColor,
+          borderRightColor: progress < 50 ? bgColor : ringColor,
+          borderBottomColor: progress < 75 ? bgColor : ringColor,
+          borderLeftColor: progress < 100 ? bgColor : ringColor,
         }}
       />
     </View>
@@ -321,7 +327,7 @@ export function ProgressRing({
 // ── GlowBorder → plain View ──────────────────────────────────────────────────
 export function GlowBorder({
   children,
-  color = "#4b6cf6",
+  color,
   intensity = 0.4,
   style,
 }: {
@@ -330,11 +336,13 @@ export function GlowBorder({
   intensity?: number;
   style?: ViewStyle;
 }) {
+  const colors = useThemeColors();
+  const glowColor = color ?? colors.brand.primary;
   return (
     <View
       style={[
         {
-          shadowColor: color,
+          shadowColor: glowColor,
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: intensity,
           shadowRadius: 16,
@@ -437,10 +445,11 @@ export function PullRefreshIndicator({
   progress: number;
   style?: ViewStyle;
 }) {
+  const colors = useThemeColors();
   if (!refreshing) return null;
   return (
     <View style={[{ alignItems: "center", marginVertical: 8 }, style]}>
-      <ActivityIndicator size="small" color="#4b6cf6" />
+      <ActivityIndicator size="small" color={colors.brand.primary} />
     </View>
   );
 }

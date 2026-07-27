@@ -6,7 +6,7 @@ describe('Theme', () => {
   });
 
   it('LightColors should have primary background', () => {
-    expect(LightColors.bg.primary).toBe('#e7ebf1');
+    expect(LightColors.bg.primary).toBe('#e8e6e1');
   });
 
   it('Typography should define font sizes', () => {

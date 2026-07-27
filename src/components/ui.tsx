@@ -29,7 +29,7 @@ export function Card({ children, style, onPress, variant = "default", haptic = t
   const cardStyle: ViewStyle = {
     backgroundColor: variant === "accent" ? colors.brand.primaryDim : colors.bg.card,
     borderRadius: Radii.xxl,
-    padding: Spacing.base,
+    padding: Spacing["2xl"],
     borderWidth: 1,
     borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.6)",
     shadowColor,
@@ -208,7 +208,7 @@ interface SearchInputProps {
 export function SearchInput({ value, onChangeText, placeholder = "Поиск…", autoFocus }: SearchInputProps) {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const shadowColor = isDark ? DarkShadowColor : "#a3b1c6";
+  const shadowColor = isDark ? DarkShadowColor : "#a0988c";
   return (
     <View style={{
       flexDirection: "row", alignItems: "center", gap: 10,
@@ -248,7 +248,7 @@ export function ScreenHeader({ title, subtitle, right, style }: {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const shadowColor = isDark ? DarkShadowColor : "#a3b1c6";
+  const shadowColor = isDark ? DarkShadowColor : "#a0988c";
   return (
     <View style={[{
       paddingTop: insets.top + 8, paddingBottom: 12, paddingHorizontal: 16,
