@@ -283,28 +283,35 @@ export default function PlanScreen() {
         </View>
 
         {/* Debts section */}
-        {debtShops.length > 0 && (
-          <FadeInItem delay={160}>
-            <Card style={{ marginTop: Spacing.base, marginBottom: Spacing.base }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>ДОЛГИ</Text>
+        <FadeInItem delay={160}>
+          <Card style={{ marginTop: Spacing.base, marginBottom: Spacing.base }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>ДОЛГИ</Text>
+              {debtShops.length > 0 ? (
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.danger }}>
                   {debtShops.length} маг. · {totalDebt.toLocaleString("ru")} сум
                 </Text>
-              </View>
-              {debtShops.slice(0, 5).map(p => (
-                <View key={p.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }} numberOfLines={1}>{p.shopName ?? "Магазин"}</Text>
-                  </View>
-                  <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.danger }}>
-                    {Number(p.shopDebt).toLocaleString("ru")} сум
-                  </Text>
+              ) : (
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.success }}>Нет долгов</Text>
+              )}
+            </View>
+            {debtShops.length > 0 ? debtShops.slice(0, 5).map(p => (
+              <View key={p.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }} numberOfLines={1}>{p.shopName ?? "Магазин"}</Text>
                 </View>
-              ))}
-            </Card>
-          </FadeInItem>
-        )}
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.danger }}>
+                  {Number(p.shopDebt).toLocaleString("ru")} сум
+                </Text>
+              </View>
+            )) : (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 }}>
+                <Feather name="check-circle" size={16} color={colors.status.success} />
+                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted }}>Все магазины без задолженности</Text>
+              </View>
+            )}
+          </Card>
+        </FadeInItem>
 
         {/* KPI Summary */}
         <FadeInItem delay={200}>
