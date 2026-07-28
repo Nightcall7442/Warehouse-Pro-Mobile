@@ -60,7 +60,7 @@ export default function DeliveriesScreen() {
       }
       qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Доставлено!");
+      notify.success("Взято в доставку!");
     },
     onError: (e: Error) => notify.error(e.message),
   });
@@ -116,7 +116,7 @@ export default function DeliveriesScreen() {
       }
       qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      notify.success("Отмечено как недоставлено");
+      notify.warning("Отмечено как недоставлено");
     },
     onError: (e: Error) => notify.error(e.message),
   });

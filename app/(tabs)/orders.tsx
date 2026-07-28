@@ -63,7 +63,7 @@ export default function OrdersScreen() {
   useEffect(() => {
     const s = useOfflineStore.getState();
     if (s.orders.some(o => !o.synced)) s.syncAll();
-    if (s.deliveryActions.some(a => !a.synced)) s.syncDeliveryActions();
+    // deliveryActions sync handled by AutoSync in _layout.tsx
   }, []);
 
   const items = useMemo<ListItem[]>(() => {

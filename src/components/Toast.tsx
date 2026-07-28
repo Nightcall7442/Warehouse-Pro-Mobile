@@ -12,6 +12,7 @@ const ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   success: "check-circle",
   error:   "alert-circle",
   info:    "info",
+  warning: "alert-triangle",
 };
 
 /**
@@ -56,6 +57,7 @@ export function ToastHost() {
   const accentColor =
     toast.variant === "success" ? colors.accent.success :
     toast.variant === "error"   ? colors.accent.danger :
+    toast.variant === "warning" ? colors.accent.warning :
     colors.accent.info;
 
   return (

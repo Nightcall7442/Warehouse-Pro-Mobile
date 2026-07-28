@@ -9,7 +9,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, safeBottomPadding } from "../../src/theme";
-import { getProducts, submitVisitReport, uploadFile, type Product } from "../../src/api";
+import { getProducts, submitVisitReport, updatePlanStatus, uploadFile, type Product } from "../../src/api";
 import { notify } from "../../src/store/toast";
 import { Card, Badge, Button, IconCircle } from "../../src/components/ui";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
@@ -56,7 +56,13 @@ export default function MerchandiserVisitScreen() {
 
   const submitReport = useMutation({
     mutationFn: () => submitVisitReport({ planId: Number(planId), shopId: Number(shopId), photos, checklist, competitorNotes: competitorNotes || undefined }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["plans"] }); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); notify.success("Отчёт отправлен!"); router.back(); },
+    onSuccess: async () => {
+      try { await updatePlanStatus(Number(planId), "visited"); } catch { /* plan status update is best-effort */ }
+      qc.invalidateQueries({ queryKey: ["plans"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notify.success("Отчёт отправлен!");
+      router.back();
+    },
     onError: (e: Error) => notify.error(e.message),
   });
 
