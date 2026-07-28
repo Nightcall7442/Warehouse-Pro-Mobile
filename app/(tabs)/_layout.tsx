@@ -18,6 +18,7 @@ const TAB_ICONS: Record<string, IconName> = {
   orders: "clipboard",
   plan: "target",
   plans: "calendar",
+  targets: "trending-up",
   deliveries: "truck",
 };
 
@@ -28,6 +29,7 @@ const TAB_LABELS: Record<string, string> = {
   orders: "Заказы",
   plan: "План",
   plans: "Планы",
+  targets: "Нормы",
   deliveries: "Доставки",
 };
 
@@ -54,6 +56,10 @@ function CustomTabBar(props: BottomTabBarProps) {
     if (route.name === "plan") return !isSupervisor && !isCourier;
     // "plans" — supervisor visit management
     if (route.name === "plans") return isSupervisor;
+    // "targets" — supervisor quotas tracking
+    if (route.name === "targets") return isSupervisor;
+    // "orders" — hide for supervisors (they use dashboard activity)
+    if (route.name === "orders") return !isSupervisor;
     return true;
   });
 
@@ -162,6 +168,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="plans"
         options={{ title: "Планы", headerShown: false }}
+      />
+      <Tabs.Screen
+        name="targets"
+        options={{ title: "Нормы", headerShown: false }}
       />
       <Tabs.Screen
         name="deliveries"

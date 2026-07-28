@@ -1,9 +1,9 @@
 import { useState, useMemo } from "react";
-import { View, Text, FlatList, SectionList, RefreshControl, TextInput } from "react-native";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { View, Text, FlatList, SectionList, RefreshControl } from "react-native";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getPlans, getAgentsList, createSalesTarget, Plan } from "../../api";
+import { getPlans, getAgentsList, Plan } from "../../api";
 import { useThemeColors, useThemeStore } from "../../store/theme";
 import { Typography, Spacing, Radii } from "../../theme";
 import { ScreenHeader, EmptyState } from "../ui";
@@ -14,7 +14,6 @@ import { PlanRow } from "./PlanRow";
 import { DateNav } from "./DateNav";
 import { CreatePlanModal } from "./CreatePlanModal";
 import { BottomSheet, SelectRow } from "./PlanHelpers";
-import { notify } from "../../store/toast";
 
 export function SupervisorPlansView() {
   const insets = useSafeAreaInsets();
@@ -25,7 +24,6 @@ export function SupervisorPlansView() {
   const [filterAgentId, setFilterAgentId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
-  const [showCreateTarget, setShowCreateTarget] = useState(false);
 
   const dateStr = fmtDate(date);
   const isToday = dateStr === fmtDate(new Date());
@@ -62,18 +60,11 @@ export function SupervisorPlansView() {
       <ScreenHeader
         title="Планы визитов"
         right={
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <PressableScale onPress={() => setShowCreateTarget(true)} haptic="light">
-              <View style={{ backgroundColor: colors.accent.warning, borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="target" size={18} color="#fff" />
-              </View>
-            </PressableScale>
-            <PressableScale onPress={() => setShowCreate(true)} haptic="light">
-              <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus" size={20} color="#fff" />
-              </View>
-            </PressableScale>
-          </View>
+          <PressableScale onPress={() => setShowCreate(true)} haptic="light">
+            <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="plus" size={20} color="#fff" />
+            </View>
+          </PressableScale>
         }
       />
 
@@ -182,146 +173,6 @@ export function SupervisorPlansView() {
           }
         }}
       />
-
-      {/* Create monthly target modal */}
-      <CreateTargetModal
-        visible={showCreateTarget}
-        agents={agents ?? []}
-        onClose={() => setShowCreateTarget(false)}
-        onCreated={() => {
-          setShowCreateTarget(false);
-          notify.success("Месячный план создан");
-        }}
-      />
-    </View>
-  );
-}
-
-// ── Create Monthly Target Modal ─────────────────────────────────────────────
-function CreateTargetModal({ visible, agents, onClose, onCreated }: {
-  visible: boolean;
-  agents: Array<{ id: number; name: string }>;
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const colors = useThemeColors();
-  const { isDark } = useThemeStore();
-  const insets = useSafeAreaInsets();
-  const [agentId, setAgentId] = useState<number | null>(null);
-  const [targetAmount, setTargetAmount] = useState("");
-  const [visitTarget, setVisitTarget] = useState("");
-  const [showAgentPicker, setShowAgentPicker] = useState(false);
-
-  const selectedAgent = agents.find(a => a.id === agentId);
-  const now = new Date();
-  const periodStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const periodEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${lastDay}`;
-
-  const mutation = useMutation({
-    mutationFn: () => createSalesTarget({
-      userId: agentId!,
-      periodType: "monthly",
-      periodStart,
-      periodEnd,
-      targetAmount: Number(targetAmount.replace(/\s/g, "")),
-      visitTarget: visitTarget ? Number(visitTarget) : undefined,
-    }),
-    onSuccess: () => {
-      onCreated();
-      setAgentId(null);
-      setTargetAmount("");
-      setVisitTarget("");
-    },
-    onError: (e: Error) => notify.error(e.message),
-  });
-
-  if (!visible) return null;
-
-  return (
-    <View style={{ position: "absolute", inset: 0, backgroundColor: colors.bg.overlay, justifyContent: "flex-end" }}>
-      <PressableScale onPress={onClose} haptic="light" style={{ flex: 1 }}>
-        <View style={{ flex: 1 }} />
-      </PressableScale>
-      <View style={{
-        backgroundColor: colors.bg.card, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl,
-        padding: Spacing.lg, paddingBottom: insets.bottom + Spacing.lg,
-      }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.lg }}>
-          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>Месячный план</Text>
-          <PressableScale onPress={onClose} haptic="light">
-            <Feather name="x" size={20} color={colors.text.muted} />
-          </PressableScale>
-        </View>
-
-        <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginBottom: 6 }}>Агент</Text>
-        <PressableScale onPress={() => setShowAgentPicker(true)} haptic="light">
-          <View style={{
-            flexDirection: "row", alignItems: "center", gap: Spacing.sm,
-            backgroundColor: colors.bg.input, borderRadius: Radii.md, borderWidth: 1,
-            borderColor: agentId ? colors.accent.primary : colors.border.default, padding: 12, marginBottom: Spacing.md,
-          }}>
-            <Feather name="user" size={15} color={agentId ? colors.accent.primary : colors.text.muted} />
-            <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: agentId ? colors.text.primary : colors.text.muted }}>
-              {selectedAgent?.name ?? "Выберите агента"}
-            </Text>
-            <Feather name="chevron-down" size={16} color={colors.text.muted} />
-          </View>
-        </PressableScale>
-
-        <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginBottom: 6 }}>Норма выручки (сум)</Text>
-        <TextInput
-          style={{
-            backgroundColor: colors.bg.input, borderRadius: Radii.md, borderWidth: 1,
-            borderColor: colors.border.default, padding: 12, fontFamily: Typography.fontMedium,
-            fontSize: Typography.size.base, color: colors.text.primary, marginBottom: Spacing.md,
-          }}
-          placeholder="5 000 000" placeholderTextColor={colors.text.muted}
-          value={targetAmount} onChangeText={setTargetAmount} keyboardType="numeric"
-        />
-
-        <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginBottom: 6 }}>Норма визитов (%)</Text>
-        <TextInput
-          style={{
-            backgroundColor: colors.bg.input, borderRadius: Radii.md, borderWidth: 1,
-            borderColor: colors.border.default, padding: 12, fontFamily: Typography.fontMedium,
-            fontSize: Typography.size.base, color: colors.text.primary, marginBottom: Spacing.lg,
-          }}
-          placeholder="80" placeholderTextColor={colors.text.muted}
-          value={visitTarget} onChangeText={setVisitTarget} keyboardType="numeric"
-        />
-
-        <PressableScale
-          onPress={() => {
-            if (!agentId) { notify.error("Выберите агента"); return; }
-            if (!targetAmount) { notify.error("Введите норму выручки"); return; }
-            mutation.mutate();
-          }}
-          disabled={mutation.isPending}
-          haptic="medium"
-        >
-          <View style={{
-            backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingVertical: 14,
-            alignItems: "center", opacity: mutation.isPending ? 0.7 : 1,
-          }}>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: "#fff" }}>
-              {mutation.isPending ? "Создание..." : "Создать план"}
-            </Text>
-          </View>
-        </PressableScale>
-      </View>
-
-      <BottomSheet visible={showAgentPicker} onClose={() => setShowAgentPicker(false)} title="Выберите агента" colors={colors}>
-        <FlatList
-          data={agents}
-          keyExtractor={a => String(a.id)}
-          contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingBottom: insets.bottom + Spacing.lg }}
-          renderItem={({ item: agent }) => (
-            <SelectRow label={agent.name} icon="user" selected={agentId === agent.id} colors={colors} isDark={isDark}
-              onPress={() => { setAgentId(agent.id); setShowAgentPicker(false); }} />
-          )}
-        />
-      </BottomSheet>
     </View>
   );
 }
