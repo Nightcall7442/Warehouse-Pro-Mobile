@@ -320,12 +320,8 @@ function SupervisorHome() {
   const [refreshing, setRefreshing] = useState(false);
   const [range, setRange] = useState<"7d" | "30d" | "month">("7d");
 
-  // Premium dashboard queries
-  const { data: kpis, isLoading, isError, refetch } = useQuery({
-    queryKey: ["dashboardKpis"], queryFn: getDashboardKpis, retry: false,
-  });
-
-  const { data: trends } = useQuery({
+  // Dashboard queries
+  const { data: trends, refetch } = useQuery({
     queryKey: ["dashboardTrends", range], queryFn: () => getDashboardTrends(range), retry: false,
   });
 
@@ -344,18 +340,8 @@ function SupervisorHome() {
   // Derived data
   const revenueTrend = (trends ?? []).slice(-7).map(t => Number(t.revenue));
   const ordersTrend = (trends ?? []).slice(-7).map(t => t.orderCount);
-  const prev7 = (trends ?? []).slice(-14, -7);
-  const calcDelta = (curr: number[], prev: number[]) => {
-    const sP = prev.reduce((a, b) => a + b, 0);
-    const sC = curr.reduce((a, b) => a + b, 0);
-    if (sP === 0) return sC > 0 ? 100 : 0;
-    return Math.round(((sC - sP) / sP) * 1000) / 10;
-  };
-  const revenueDelta = calcDelta(revenueTrend, prev7.map(t => Number(t.revenue)));
-  const ordersDelta = calcDelta(ordersTrend, prev7.map(t => t.orderCount));
   const statusTotal = (statusData ?? []).reduce((s, d) => s + d.count, 0) || 1;
 
-  // Pie chart segments
   const donutSegments = (statusData ?? []).map((s, i) => ({
     value: s.count,
     color: STATUS_COLOR[s.status] ?? "#5b6d8a",
@@ -394,92 +380,9 @@ function SupervisorHome() {
         </View>
       </FadeInItem>
 
-      {/* ── KPI Cards (4 cards in 2x2 grid) ─────────────────────────────── */}
-      <FadeInItem delay={60}>
-        {isLoading ? (
-          <View style={{ gap: Spacing.sm, marginBottom: Spacing.base }}>
-            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
-            </View>
-            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
-            </View>
-          </View>
-        ) : isError ? (
-          <PressableScale onPress={() => refetch()} haptic="light" style={{ marginBottom: Spacing.base }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 64, borderRadius: Radii.lg, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "30" }}>
-              <Feather name="wifi-off" size={14} color={colors.status.danger} />
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger }}>Ошибка — тап для обновления</Text>
-            </View>
-          </PressableScale>
-        ) : (
-          <View style={{ gap: Spacing.sm, marginBottom: Spacing.base }}>
-            {/* Row 1: Revenue + Orders */}
-            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-              {/* Revenue */}
-              <Card style={{ flex: 1, padding: Spacing.md }}>
-                <CardDots />
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Выручка</Text>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xl, color: colors.text.primary, marginTop: 6 }} numberOfLines={1}>
-                  {(kpis?.todayRevenue ?? 0).toLocaleString("ru")}
-                </Text>
-                {revenueDelta !== 0 && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 }}>
-                    <Feather name={revenueDelta > 0 ? "trending-up" : "trending-down"} size={12} color={revenueDelta > 0 ? "#34c473" : "#d45050"} />
-                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: revenueDelta > 0 ? "#34c473" : "#d45050" }}>{Math.abs(revenueDelta).toFixed(1)}%</Text>
-                  </View>
-                )}
-                {revenueTrend.length > 0 && (
-                  <View style={{ marginTop: 8 }}>
-                    <MiniBarChart data={revenueTrend} color="#34c473" width={100} height={32} />
-                  </View>
-                )}
-              </Card>
-              {/* Orders */}
-              <Card style={{ flex: 1, padding: Spacing.md }}>
-                <CardDots />
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Заказы</Text>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xl, color: colors.text.primary, marginTop: 6 }}>{kpis?.todayOrders ?? 0}</Text>
-                {ordersDelta !== 0 && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 }}>
-                    <Feather name={ordersDelta > 0 ? "trending-up" : "trending-down"} size={12} color={ordersDelta > 0 ? "#34c473" : "#d45050"} />
-                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: ordersDelta > 0 ? "#34c473" : "#d45050" }}>{Math.abs(ordersDelta).toFixed(1)}%</Text>
-                  </View>
-                )}
-                {ordersTrend.length > 0 && (
-                  <View style={{ marginTop: 8 }}>
-                    <MiniBarChart data={ordersTrend} color="#5b6d8a" width={100} height={32} />
-                  </View>
-                )}
-              </Card>
-            </View>
-            {/* Row 2: Debt + Margin */}
-            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-              {/* Customer Debt */}
-              <Card style={{ flex: 1, padding: Spacing.md }}>
-                <CardDots />
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Долг клиентов</Text>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xl, color: "#d4973a", marginTop: 6 }} numberOfLines={1}>
-                  {(kpis?.customerDebt ?? 0).toLocaleString("ru")}
-                </Text>
-                <Text style={{ fontFamily: Typography.fontRegular, fontSize: 10, color: colors.text.muted, marginTop: 4 }}>сум</Text>
-              </Card>
-              {/* Gross Margin */}
-              <Card style={{ flex: 1, padding: Spacing.md, alignItems: "center" }}>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Маржа</Text>
-                <ProgressRing value={Math.max(0, Math.min(100, kpis?.grossMargin ?? 0))} size={60} strokeWidth={6} color="#5b6d8a" />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.primary, marginTop: 6 }}>{(kpis?.grossMargin ?? 0).toFixed(1)}%</Text>
-              </Card>
-            </View>
-          </View>
-        )}
-      </FadeInItem>
-
       {/* ── Smart Alerts ────────────────────────────────────────────────── */}
       {alerts && alerts.length > 0 && (
-        <FadeInItem delay={100}>
+        <FadeInItem delay={60}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.base }} contentContainerStyle={{ gap: Spacing.sm }}>
             {alerts.slice(0, 4).map((alert, i) => {
               const alertColors: Record<string, { bg: string; border: string }> = {
@@ -507,39 +410,29 @@ function SupervisorHome() {
       )}
 
       {/* ── Sales Dynamics Chart ─────────────────────────────────────────── */}
-      <FadeInItem delay={140}>
+      <FadeInItem delay={100}>
         <Card style={{ marginBottom: Spacing.base }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <View>
               <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>Динамика продаж</Text>
               <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>Выручка и заказы</Text>
             </View>
-            {/* Range pills */}
             <View style={{ flexDirection: "row", backgroundColor: colors.bg.elevated, borderRadius: Radii.full, padding: 2 }}>
               {(["7d", "30d", "month"] as const).map(r => (
                 <PressableScale key={r} onPress={() => setRange(r)} haptic="light" scaleTo={0.95}>
-                  <View style={{
-                    paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radii.full,
-                    backgroundColor: range === r ? colors.brand.primary : "transparent",
-                  }}>
-                    <Text style={{
-                      fontFamily: Typography.fontSemibold, fontSize: 11,
-                      color: range === r ? "#fff" : colors.text.tertiary,
-                    }}>{r === "7d" ? "7д" : r === "30d" ? "30д" : "Месяц"}</Text>
+                  <View style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radii.full, backgroundColor: range === r ? colors.brand.primary : "transparent" }}>
+                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: range === r ? "#fff" : colors.text.tertiary }}>{r === "7d" ? "7д" : r === "30d" ? "30д" : "Месяц"}</Text>
                   </View>
                 </PressableScale>
               ))}
             </View>
           </View>
-          {/* Revenue sparkline */}
           <View style={{ marginBottom: 12 }}>
             <Sparkline data={revenueTrend.length ? revenueTrend : [0]} color="#5b6d8a" width={320} height={50} />
           </View>
-          {/* Orders sparkline */}
           <View>
             <Sparkline data={ordersTrend.length ? ordersTrend : [0]} color="#34c473" width={320} height={40} />
           </View>
-          {/* Legend */}
           <View style={{ flexDirection: "row", justifyContent: "center", gap: 20, marginTop: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#5b6d8a" }} />
@@ -554,7 +447,7 @@ function SupervisorHome() {
       </FadeInItem>
 
       {/* ── Order Status Donut ───────────────────────────────────────────── */}
-      <FadeInItem delay={180}>
+      <FadeInItem delay={140}>
         <Card style={{ marginBottom: Spacing.base }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
             <Feather name="pie-chart" size={16} color={colors.accent.primary} />
@@ -562,7 +455,6 @@ function SupervisorHome() {
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
             <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel="заказов" />
-            {/* Legend */}
             <View style={{ flex: 1, gap: 8 }}>
               {donutSegments.map((seg, i) => (
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -576,8 +468,8 @@ function SupervisorHome() {
         </Card>
       </FadeInItem>
 
-      {/* ── Quick Actions ────────────────────────────────────────────────── */}
-      <FadeInItem delay={220}>
+      {/* ── Quick Actions (no create order) ──────────────────────────────── */}
+      <FadeInItem delay={180}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           <PressableScale onPress={() => router.push("/(tabs)/tracking")} haptic="light" style={{ flex: 1 }}>
             <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -598,14 +490,6 @@ function SupervisorHome() {
           </PressableScale>
         </View>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
-          <PressableScale onPress={() => router.push("/order/new")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 6, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
-              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.successDim, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus-circle" size={16} color={colors.status.success} />
-              </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>ЗАКАЗ</Text>
-            </View>
-          </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/shops")} haptic="light" style={{ flex: 1 }}>
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 6, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
               <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
@@ -626,7 +510,7 @@ function SupervisorHome() {
       </FadeInItem>
 
       {/* ── Recent Orders ────────────────────────────────────────────────── */}
-      <FadeInItem delay={260}>
+      <FadeInItem delay={220}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Feather name="clipboard" size={16} color={colors.accent.primary} />
@@ -643,7 +527,7 @@ function SupervisorHome() {
               <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.muted }}>Заказов пока нет</Text>
             </View>
           ) : (
-            activity.slice(0, 8).map((order, idx) => (
+            activity.slice(0, 10).map((order, idx) => (
               <TouchableOpacity key={order.id} activeOpacity={0.7} onPress={() => router.push(`/order/${order.id}`)}>
                 <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 12 }}>
                   <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: STATUS_COLOR[order.status] ?? colors.border.default }} />
@@ -657,7 +541,7 @@ function SupervisorHome() {
                     {Number(order.total).toLocaleString("ru")}
                   </Text>
                 </View>
-                {idx < Math.min(activity.length, 8) - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 36 }} />}
+                {idx < Math.min(activity.length, 10) - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 36 }} />}
               </TouchableOpacity>
             ))
           )}
