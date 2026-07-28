@@ -738,6 +738,25 @@ export async function getMyQuota(month?: string): Promise<MyQuota | null> {
   return trpcQuery<MyQuota | null>("salesTarget.myQuota", month ? { month } : undefined);
 }
 
+export interface CreateSalesTargetInput {
+  userId: number;
+  periodType: "monthly";
+  periodStart: string;
+  periodEnd: string;
+  targetAmount: number;
+  orderCountTarget?: number;
+  visitTarget?: number;
+  notes?: string;
+}
+
+export async function createSalesTarget(input: CreateSalesTargetInput): Promise<{ success: boolean; id: number }> {
+  return trpcMutation("salesTarget.upsert", input);
+}
+
+export async function bulkCreateSalesTargets(periodStart: string, periodEnd: string, targets: Array<{ userId: number; targetAmount: number; orderCountTarget?: number; visitTarget?: number }>): Promise<{ success: boolean; created: number; updated: number }> {
+  return trpcMutation("salesTarget.bulkUpsert", { periodStart, periodEnd, targets });
+}
+
 // ── Agent KPI ────────────────────────────────────────────────────────────────
 export interface AgentKpiData {
   kpiScore: number;
