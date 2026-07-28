@@ -1,10 +1,10 @@
-// Warehouse Pro — Targets/Quotas + Visit Plans tracking (supervisor only)
-import { useState, useMemo, useCallback } from "react";
-import { View, Text, FlatList, SectionList, RefreshControl, TextInput, KeyboardAvoidingView, Platform, ScrollView, Modal } from "react-native";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+// Warehouse Pro — Targets dashboard (READ-ONLY view of all metrics)
+import { useState, useMemo } from "react";
+import { View, Text, FlatList, SectionList, RefreshControl } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getSalesTargetSummary, createSalesTarget, getAgentsList, getPlans, Plan } from "../../src/api";
+import { getSalesTargetSummary, getPlans, getAgentsList, Plan } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Spacing, Radii } from "../../src/theme";
 import { Card, EmptyState } from "../../src/components/ui";
@@ -13,7 +13,6 @@ import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/component
 import { PlanRow } from "../../src/components/plans/PlanRow";
 import { DateNav } from "../../src/components/plans/DateNav";
 import { fmtDate } from "../../src/components/plans/PlanHelpers";
-import { notify } from "../../src/store/toast";
 import { LinearGradient } from "expo-linear-gradient";
 
 type Section = "targets" | "visits";
@@ -22,30 +21,26 @@ export default function TargetsScreen() {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const qc = useQueryClient();
   const [section, setSection] = useState<Section>("targets");
-  const [showCreate, setShowCreate] = useState(false);
   const [date, setDate] = useState(new Date());
   const [filterAgentId, setFilterAgentId] = useState<number | null>(null);
 
   const dateStr = fmtDate(date);
   const isToday = dateStr === fmtDate(new Date());
+  const currentMonth = new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
 
-  // Targets query
+  // Targets data
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery({
-    queryKey: ["salesTargetSummary"],
-    queryFn: getSalesTargetSummary,
-    enabled: section === "targets",
+    queryKey: ["salesTargetSummary"], queryFn: getSalesTargetSummary, enabled: section === "targets",
   });
 
-  // Visit plans query
+  // Visit plans data
   const { data: agents } = useQuery({ queryKey: ["agentsList"], queryFn: getAgentsList });
   const selectedAgent = agents?.find(a => a.id === filterAgentId);
 
   const { data: plans, isLoading: plansLoading, refetch: refetchPlans } = useQuery({
     queryKey: ["supervisorPlans", dateStr, filterAgentId],
     queryFn: () => getPlans(filterAgentId ?? undefined, dateStr),
-    refetchInterval: 60_000,
     enabled: section === "visits",
   });
 
@@ -64,7 +59,10 @@ export default function TargetsScreen() {
     return Object.entries(groups).map(([agentName, items]) => ({ title: agentName, data: items }));
   }, [plans, filterAgentId]);
 
-  const currentMonth = new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  // Summary stats
+  const totalTarget = (summary ?? []).reduce((s, a) => s + Number(a.targetAmount), 0);
+  const totalActual = (summary ?? []).reduce((s, a) => s + Number(a.actualAmount), 0);
+  const avgCompletion = summary && summary.length > 0 ? Math.round(summary.reduce((s, a) => s + a.completion, 0) / summary.length) : 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
@@ -73,16 +71,9 @@ export default function TargetsScreen() {
         style={{ paddingTop: insets.top + 16, paddingBottom: 16, paddingHorizontal: Spacing.base }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <View>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: "#fff" }}>Нормы</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: "#fff" }}>Показатели</Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>{currentMonth}</Text>
           </View>
-          {section === "targets" && (
-            <PressableScale onPress={() => setShowCreate(true)} haptic="light">
-              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus" size={20} color="#fff" />
-              </View>
-            </PressableScale>
-          )}
         </View>
 
         {/* Section switcher */}
@@ -108,31 +99,38 @@ export default function TargetsScreen() {
           contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.md, paddingBottom: insets.bottom + 100 }}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
           refreshControl={<RefreshControl refreshing={summaryLoading} onRefresh={refetchSummary} tintColor={colors.accent.primary} />}
-          ListHeaderComponent={
-            summary && summary.length > 0 ? (
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary }}>{summary.length} агентов</Text>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: 13, color: colors.accent.primary }}>
-                  Итого: {summary.reduce((s, a) => s + Number(a.targetAmount), 0).toLocaleString("ru")} сум
-                </Text>
+          ListHeaderComponent={summary && summary.length > 0 ? (
+            <View style={{ marginBottom: Spacing.md }}>
+              {/* Summary cards */}
+              <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md }}>
+                <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>План</Text>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.text.primary, marginTop: 4 }}>{totalTarget.toLocaleString("ru")}</Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.muted }}>сум</Text>
+                </Card>
+                <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Факт</Text>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: "#34c473", marginTop: 4 }}>{totalActual.toLocaleString("ru")}</Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.muted }}>сум</Text>
+                </Card>
+                <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Среднее</Text>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: avgCompletion >= 80 ? "#34c473" : avgCompletion >= 50 ? "#d4973a" : "#d45050", marginTop: 4 }}>{avgCompletion}%</Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.muted }}>выполнение</Text>
+                </Card>
               </View>
-            ) : null
-          }
-          ListEmptyComponent={
-            summaryLoading ? (
-              <View style={{ gap: Spacing.md }}>{[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={120} radius={Radii.xxl} />)}</View>
-            ) : (
-              <View style={{ alignItems: "center", paddingTop: 60, gap: 12 }}>
-                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="target" size={28} color={colors.text.muted} />
-                </View>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>Нет норм</Text>
-                <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.muted, textAlign: "center", paddingHorizontal: 40 }}>
-                  Нажмите + чтобы создать месячный план
-                </Text>
-              </View>
-            )
-          }
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary }}>{summary.length} агентов</Text>
+            </View>
+          ) : null}
+          ListEmptyComponent={summaryLoading ? (
+            <View style={{ gap: Spacing.md }}>{[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={120} radius={Radii.xxl} />)}</View>
+          ) : (
+            <View style={{ alignItems: "center", paddingTop: 60, gap: 12 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}><Feather name="target" size={28} color={colors.text.muted} /></View>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>Нет норм</Text>
+              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.muted, textAlign: "center" }}>Создайте нормы в табе «Планы»</Text>
+            </View>
+          )}
           renderItem={({ item, index }) => {
             const revPct = Math.min(100, item.completion);
             const color = revPct >= 100 ? "#34c473" : revPct >= 60 ? "#d4973a" : "#d45050";
@@ -145,9 +143,7 @@ export default function TargetsScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{item.userName}</Text>
-                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.tertiary, marginTop: 2 }}>
-                        План: {Number(item.targetAmount).toLocaleString("ru")} сум
-                      </Text>
+                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.tertiary, marginTop: 2 }}>План: {Number(item.targetAmount).toLocaleString("ru")} сум</Text>
                     </View>
                     <View style={{ alignItems: "center" }}>
                       <ProgressRing value={revPct} size={56} strokeWidth={5} color={color} />
@@ -168,25 +164,14 @@ export default function TargetsScreen() {
       {/* ── SECTION: Visit Plans ─────────────────────────────────────────── */}
       {section === "visits" && (
         <>
-          {/* Filters */}
           <View style={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.md, gap: Spacing.sm }}>
-            <DateNav
-              date={date}
-              isToday={isToday}
-              colors={colors}
+            <DateNav date={date} isToday={isToday} colors={colors}
               onPrev={() => setDate(d => new Date(d.getTime() - 86_400_000))}
-              onNext={() => setDate(d => new Date(d.getTime() + 86_400_000))}
-            />
-            <PressableScale onPress={() => {}} haptic="selection">
-              <View style={{
-                flexDirection: "row", alignItems: "center", gap: Spacing.sm,
-                backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1,
-                borderColor: filterAgentId ? colors.accent.primary : colors.border.default, padding: 10,
-              }}>
+              onNext={() => setDate(d => new Date(d.getTime() + 86_400_000))} />
+            <PressableScale onPress={() => setFilterAgentId(null)} haptic="selection">
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: filterAgentId ? colors.accent.primary : colors.border.default, padding: 10 }}>
                 <Feather name="user" size={15} color={filterAgentId ? colors.accent.primary : colors.text.muted} />
-                <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 13, color: filterAgentId ? colors.text.primary : colors.text.muted }}>
-                  {selectedAgent?.name ?? "Все агенты"}
-                </Text>
+                <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 13, color: filterAgentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? "Все агенты"}</Text>
                 <Feather name="chevron-down" size={16} color={colors.text.muted} />
               </View>
             </PressableScale>
@@ -198,175 +183,32 @@ export default function TargetsScreen() {
               </View>
             )}
           </View>
-
           {plansLoading ? (
-            <View style={{ paddingTop: Spacing.lg, paddingHorizontal: Spacing.base, gap: Spacing.md }}>
-              {[1, 2, 3, 4].map(i => <ShimmerSkeleton key={i} height={110} radius={Radii.xxl} />)}
-            </View>
+            <View style={{ paddingTop: Spacing.lg, paddingHorizontal: Spacing.base, gap: Spacing.md }}>{[1, 2, 3, 4].map(i => <ShimmerSkeleton key={i} height={110} radius={Radii.xxl} />)}</View>
           ) : !filterAgentId && groupedPlans ? (
-            <SectionList
-              sections={groupedPlans}
-              keyExtractor={item => String(item.id)}
+            <SectionList sections={groupedPlans} keyExtractor={item => String(item.id)}
               contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }}
-              stickySectionHeadersEnabled
-              ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
+              stickySectionHeadersEnabled ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
               refreshControl={<RefreshControl refreshing={plansLoading} onRefresh={refetchPlans} tintColor={colors.accent.primary} />}
               renderSectionHeader={({ section }) => (
                 <View style={{ backgroundColor: colors.bg.primary, paddingVertical: Spacing.sm }}>
-                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 13, color: colors.accent.primary, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    {section.title} · {section.data.length}
-                  </Text>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 13, color: colors.accent.primary, textTransform: "uppercase", letterSpacing: 0.5 }}>{section.title} · {section.data.length}</Text>
                 </View>
               )}
-              renderItem={({ item: plan, index }) => (
-                <FadeInItem delay={index * 30}>
-                  <PlanRow plan={plan} showCity colors={colors} isDark={isDark} />
-                </FadeInItem>
-              )}
+              renderItem={({ item: plan, index }) => <FadeInItem delay={index * 30}><PlanRow plan={plan} showCity colors={colors} isDark={isDark} /></FadeInItem>}
               ListEmptyComponent={<EmptyState icon="calendar" title="На этот день планов нет" />}
             />
           ) : (
-            <FlatList
-              data={plans ?? []}
-              keyExtractor={p => String(p.id)}
+            <FlatList data={plans ?? []} keyExtractor={p => String(p.id)}
               contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }}
               ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
               refreshControl={<RefreshControl refreshing={plansLoading} onRefresh={refetchPlans} tintColor={colors.accent.primary} />}
-              ListEmptyComponent={<EmptyState icon="calendar" title="На этот день планов нет" description="Создайте план в табе «Планы»" />}
-              renderItem={({ item: plan, index }) => (
-                <FadeInItem delay={index * 30}>
-                  <PlanRow plan={plan} showAgent={!filterAgentId} showCity colors={colors} isDark={isDark} />
-                </FadeInItem>
-              )}
+              ListEmptyComponent={<EmptyState icon="calendar" title="На этот день планов нет" />}
+              renderItem={({ item: plan, index }) => <FadeInItem delay={index * 30}><PlanRow plan={plan} showAgent={!filterAgentId} showCity colors={colors} isDark={isDark} /></FadeInItem>}
             />
           )}
         </>
       )}
-
-      {/* Create target modal */}
-      <CreateTargetModal
-        visible={showCreate}
-        onClose={() => setShowCreate(false)}
-        onCreated={() => {
-          setShowCreate(false);
-          qc.invalidateQueries({ queryKey: ["salesTargetSummary"] });
-        }}
-      />
     </View>
-  );
-}
-
-// ── Create Monthly Target Modal ─────────────────────────────────────────────
-function CreateTargetModal({ visible, onClose, onCreated }: {
-  visible: boolean;
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const colors = useThemeColors();
-  const insets = useSafeAreaInsets();
-  const [agentId, setAgentId] = useState<number | null>(null);
-  const [targetAmount, setTargetAmount] = useState("");
-  const [visitTarget, setVisitTarget] = useState("");
-  const [showAgentPicker, setShowAgentPicker] = useState(false);
-
-  const { data: agents = [] } = useQuery({ queryKey: ["agentsList"], queryFn: getAgentsList, enabled: visible });
-  const selectedAgent = agents.find(a => a.id === agentId);
-
-  const now = new Date();
-  const periodStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const periodEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${lastDay}`;
-
-  const mutation = useMutation({
-    mutationFn: () => createSalesTarget({
-      userId: agentId!, periodType: "monthly", periodStart, periodEnd,
-      targetAmount: Number(targetAmount.replace(/\s/g, "")),
-      visitTarget: visitTarget ? Number(visitTarget) : undefined,
-    }),
-    onSuccess: () => { notify.success("План создан"); onCreated(); setAgentId(null); setTargetAmount(""); setVisitTarget(""); },
-    onError: (e: Error) => notify.error(e.message),
-  });
-
-  if (!visible) return null;
-
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: insets.top + 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: 20, color: colors.text.primary }}>Месячный план</Text>
-            <PressableScale onPress={onClose} haptic="light">
-              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="x" size={16} color={colors.text.muted} />
-              </View>
-            </PressableScale>
-          </View>
-
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Агент</Text>
-            <PressableScale onPress={() => setShowAgentPicker(true)} haptic="light">
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.bg.input, borderRadius: 12, borderWidth: 1, borderColor: agentId ? colors.accent.primary : colors.border.default, padding: 14, marginBottom: 20 }}>
-                {selectedAgent ? (
-                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontFamily: Typography.fontBold, fontSize: 14, color: colors.brand.primary }}>{selectedAgent.name.charAt(0)}</Text>
-                  </View>
-                ) : <Feather name="user" size={18} color={colors.text.muted} />}
-                <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 15, color: agentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? "Выберите агента"}</Text>
-                <Feather name="chevron-down" size={18} color={colors.text.muted} />
-              </View>
-            </PressableScale>
-
-            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Норма выручки (сум)</Text>
-            <TextInput style={{ backgroundColor: colors.bg.input, borderRadius: 12, borderWidth: 1, borderColor: colors.border.default, padding: 14, fontFamily: Typography.fontMedium, fontSize: 18, color: colors.text.primary, marginBottom: 20 }}
-              placeholder="5 000 000" placeholderTextColor={colors.text.muted} value={targetAmount} onChangeText={setTargetAmount} keyboardType="numeric" returnKeyType="done" />
-
-            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Норма визитов (%)</Text>
-            <TextInput style={{ backgroundColor: colors.bg.input, borderRadius: 12, borderWidth: 1, borderColor: colors.border.default, padding: 14, fontFamily: Typography.fontMedium, fontSize: 18, color: colors.text.primary, marginBottom: 24 }}
-              placeholder="80" placeholderTextColor={colors.text.muted} value={visitTarget} onChangeText={setVisitTarget} keyboardType="numeric" returnKeyType="done" />
-
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 24, padding: 12, backgroundColor: colors.bg.elevated, borderRadius: 12 }}>
-              <Feather name="calendar" size={16} color={colors.text.muted} />
-              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.tertiary }}>
-                {new Date(periodStart).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} — {new Date(periodEnd).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
-              </Text>
-            </View>
-
-            <PressableScale onPress={() => { if (!agentId) { notify.error("Выберите агента"); return; } if (!targetAmount) { notify.error("Введите норму"); return; } mutation.mutate(); }} disabled={mutation.isPending} haptic="medium">
-              <LinearGradient colors={["#5b6d8a", "#7a8fa8"]} style={{ borderRadius: 12, paddingVertical: 16, alignItems: "center", opacity: mutation.isPending ? 0.7 : 1 }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: "#fff" }}>{mutation.isPending ? "Создание..." : "Создать план"}</Text>
-              </LinearGradient>
-            </PressableScale>
-          </ScrollView>
-
-          {/* Agent picker */}
-          <Modal visible={showAgentPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAgentPicker(false)}>
-            <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: insets.top + 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: 20, color: colors.text.primary }}>Выберите агента</Text>
-                <PressableScale onPress={() => setShowAgentPicker(false)} haptic="light">
-                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
-                    <Feather name="x" size={16} color={colors.text.muted} />
-                  </View>
-                </PressableScale>
-              </View>
-              <FlatList data={agents} keyExtractor={a => String(a.id)} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 20 }}
-                ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border.subtle }} />}
-                renderItem={({ item: agent }) => (
-                  <PressableScale onPress={() => { setAgentId(agent.id); setShowAgentPicker(false); }} haptic="light">
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14 }}>
-                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: agentId === agent.id ? colors.accent.primary : colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: agentId === agent.id ? "#fff" : colors.brand.primary }}>{agent.name.charAt(0)}</Text>
-                      </View>
-                      <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 15, color: colors.text.primary }}>{agent.name}</Text>
-                      {agentId === agent.id && <Feather name="check" size={20} color={colors.accent.primary} />}
-                    </View>
-                  </PressableScale>
-                )}
-              />
-            </View>
-          </Modal>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
   );
 }
