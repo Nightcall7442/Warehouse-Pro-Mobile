@@ -9,7 +9,7 @@ import { router } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Radii, Gradients, ThemeColors } from "../../src/theme";
+import { Typography, Radii, Gradients, ThemeColors, safeBottomPadding } from "../../src/theme";
 import { Card, Button } from "../../src/components/ui";
 import { createShop, uploadFile, getTerritories, Territory } from "../../src/api";
 import { useQuery } from "@tanstack/react-query";
@@ -129,7 +129,7 @@ export default function NewShopScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: safeBottomPadding(insets.bottom, 32) }} showsVerticalScrollIndicator={false}>
         <FadeInItem delay={0}>
         {/* Photo */}
         <PressableScale onPress={pickPhoto} haptic="light">

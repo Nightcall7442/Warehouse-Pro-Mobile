@@ -88,6 +88,85 @@ export function Sparkline({ data, width = 160, height = 48, color }: {
   );
 }
 
+// ── DonutChart ────────────────────────────────────────────────────────────────
+// Multi-segment donut chart with center label. Matches web PieChart.
+export function DonutChart({ segments, size = 140, strokeWidth = 20, centerLabel, centerSublabel }: {
+  segments: Array<{ value: number; color: string; label: string }>;
+  size?: number; strokeWidth?: number; centerLabel?: string; centerSublabel?: string;
+}) {
+  const colors = useThemeColors();
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;
+
+  let accumulated = 0;
+  const arcs = segments.map((seg) => {
+    const pct = seg.value / total;
+    const offset = circumference * (1 - pct);
+    const rotation = (accumulated / total) * 360 - 90;
+    accumulated += seg.value;
+    return { ...seg, pct, offset, rotation };
+  });
+
+  return (
+    <View style={{ alignItems: "center" }}>
+      <View style={{ width: size, height: size, position: "relative" }}>
+        <Svg width={size} height={size}>
+          {/* Background ring */}
+          <Circle cx={size / 2} cy={size / 2} r={radius}
+            fill="none" stroke={colors.bg.elevated} strokeWidth={strokeWidth} />
+          {/* Segments */}
+          {arcs.map((arc, i) => (
+            <Circle key={i}
+              cx={size / 2} cy={size / 2} r={radius}
+              fill="none" stroke={arc.color} strokeWidth={strokeWidth - 2}
+              strokeDasharray={circumference} strokeDashoffset={arc.offset}
+              strokeLinecap="butt"
+              transform={`rotate(${arc.rotation} ${size / 2} ${size / 2})`} />
+          ))}
+        </Svg>
+        {/* Center label */}
+        <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
+          {centerLabel && (
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: size * 0.18, color: colors.text.primary }}>
+              {centerLabel}
+            </Text>
+          )}
+          {centerSublabel && (
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: size * 0.08, color: colors.text.tertiary, marginTop: 2 }}>
+              {centerSublabel}
+            </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ── MiniBarChart (for KPI cards) ──────────────────────────────────────────────
+// Simple vertical bars using View (no SVG dependency).
+export function MiniBarChart({ data, color, width = 120, height = 40 }: {
+  data: number[]; color: string; width?: number; height?: number;
+}) {
+  const max = Math.max(...data, 1);
+  const barWidth = Math.max(4, (width - (data.length - 1) * 3) / data.length);
+
+  return (
+    <View style={{ width, height, flexDirection: "row", alignItems: "flex-end", gap: 3 }}>
+      {data.map((v, i) => {
+        const barH = Math.max(4, (v / max) * height);
+        const opacity = 0.3 + (i / data.length) * 0.7;
+        return (
+          <View key={i} style={{
+            width: barWidth, height: barH, borderRadius: 3,
+            backgroundColor: color, opacity,
+          }} />
+        );
+      })}
+    </View>
+  );
+}
+
 // ── NeumorphicProgressBar ─────────────────────────────────────────────────────
 // Inset track + gradient fill. Matches reference inset progress bars.
 export function NeumorphicProgressBar({ value, height = 8, color, style }: {

@@ -7,9 +7,9 @@ import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
-import { getAgentDashboard, getSupervisorDashboard, getPlans, updatePlanStatus, getRevenueTrend, Plan } from "../../src/api";
+import { getAgentDashboard, getSupervisorDashboard, getPlans, updatePlanStatus, getRevenueTrend, getDashboardKpis, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, Plan } from "../../src/api";
 import { Card, SectionHeader } from "../../src/components/ui";
-import { ProgressRing, Sparkline, NeumorphicProgressBar } from "../../src/components/Charts";
+import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
 import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors, Gradients } from "../../src/theme";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -93,7 +93,7 @@ function PlanRow({ plan, onDone, onSkip, onPress, colors, isDark, index }: {
   );
 }
 
-// ── Agent Home ────────────────────────────────────────────────────────────────
+// ── Agent Home (Premium — matching web Dashboard.tsx style) ────────────────────
 function AgentHome() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -121,159 +121,250 @@ function AgentHome() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    try {
-      await refetchKpis();
-    } finally {
-      setRefreshing(false);
-    }
+    try { await refetchKpis(); } finally { setRefreshing(false); }
   }, [refetchKpis]);
 
-  const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand.primary} />;
+  const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#5b6d8a" />;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
-      {/* Header — cold palette, avatar style */}
+    <ScrollView style={{ flex: 1, backgroundColor: isDark ? "#1c1a17" : "#e8e6e1" }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
+      {/* ── Header (matching web) ────────────────────────────────────────── */}
       <FadeInItem delay={0}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: Spacing.lg }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <View style={{ flex: 1 }}>
             <CardDots />
-            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
-            <Text style={{ fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, color: colors.text.primary, marginTop: 2 }}>Мой день</Text>
-            <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBody, color: colors.text.tertiary, marginTop: 2, textTransform: "capitalize" }}>
-              {format(new Date(), "EEEE, d MMMM", { locale: ru })}
+            <Text style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: "500", color: "#5b6d8a" }}>{greeting}, {firstName}</Text>
+            <Text style={{ fontFamily: "DM Sans", fontSize: 26, fontWeight: "700", color: isDark ? "#ede9e3" : "#2d3748", marginTop: 4, letterSpacing: -0.5 }}>Мой день</Text>
+            <Text style={{ fontFamily: "DM Sans", fontSize: 13, color: isDark ? "#8a8478" : "#5a6a7f", marginTop: 4, textTransform: "capitalize" }}>
+              {format(new Date(), "EEEE, d MMMM yyyy", { locale: ru })}
             </Text>
           </View>
           <PressableScale onPress={() => router.push("/profile")} haptic="light">
-            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.brand.primary }}>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.brand.primary }}>{firstName.charAt(0).toUpperCase()}</Text>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isDark ? "rgba(0,153,204,0.12)" : "rgba(91,109,138,0.1)", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#5b6d8a" }}>
+              <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 18, color: "#5b6d8a" }}>{firstName.charAt(0).toUpperCase()}</Text>
             </View>
           </PressableScale>
         </View>
       </FadeInItem>
 
-      {/* KPI rings — 2 donuts + revenue sparkline card */}
-      <FadeInItem delay={80}>
-        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
-          {kpisLoading ? (
-            <>
-              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
-            </>
-          ) : kpisError ? (
-            <PressableScale onPress={() => refetchKpis()} haptic="light" style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 64, borderRadius: Radii.lg, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "30" }}>
-                <Feather name="wifi-off" size={14} color={colors.status.danger} />
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger }}>Ошибка — тап</Text>
+      {/* ── KPI Cards (matching web kpi-hero style) ──────────────────────── */}
+      <FadeInItem delay={60}>
+        {kpisLoading ? (
+          <View style={{ gap: 12, marginBottom: 16 }}>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+            </View>
+          </View>
+        ) : kpisError ? (
+          <PressableScale onPress={() => refetchKpis()} haptic="light" style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 64, borderRadius: 16, backgroundColor: isDark ? "rgba(255,77,106,0.12)" : "rgba(212,80,80,0.08)", borderWidth: 1, borderColor: isDark ? "rgba(255,77,106,0.3)" : "rgba(212,80,80,0.2)" }}>
+              <Feather name="wifi-off" size={14} color="#d45050" />
+              <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 13, color: "#d45050" }}>Ошибка — тап</Text>
+            </View>
+          </PressableScale>
+        ) : (
+          <View style={{ gap: 12, marginBottom: 16 }}>
+            {/* Row 1: Orders + Revenue */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              {/* Orders card (matching web kpi-hero) */}
+              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+                <CardDots />
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 9, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>ЗАКАЗЫ</Text>
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 28, color: isDark ? "#ede9e3" : "#2d3748", marginTop: 8 }}>{kpis?.todayOrders ?? 0}</Text>
+                {revenueTrend && revenueTrend.length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    <MiniBarChart data={revenueTrend.slice(-7)} color="#5b6d8a" width={100} height={32} />
+                  </View>
+                )}
               </View>
-            </PressableScale>
-          ) : (
-            <>
-              {/* Orders ring */}
-              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
-                <ProgressRing value={kpis?.todayOrders ? Math.min(kpis.todayOrders * 10, 100) : 0} size={70} strokeWidth={7} color={KpiColors.blue} />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 8 }}>{kpis?.todayOrders ?? 0}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Заказов</Text>
-              </Card>
-              {/* Shops ring */}
-              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
-                <ProgressRing value={kpis?.assignedShops ? Math.min(kpis.assignedShops * 10, 100) : 0} size={70} strokeWidth={7} color={KpiColors.teal} />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 8 }}>{kpis?.assignedShops ?? 0}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Магазинов</Text>
-              </Card>
-            </>
-          )}
+              {/* Revenue card */}
+              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+                <CardDots />
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 9, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>ВЫРУЧКА</Text>
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 22, color: isDark ? "#ede9e3" : "#2d3748", marginTop: 8 }} numberOfLines={1}>{(kpis?.todayRevenue ?? 0).toLocaleString("ru")}</Text>
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 11, color: isDark ? "#8a8478" : "#5a6a7f", marginTop: 4 }}>сум</Text>
+              </View>
+            </View>
+            {/* Row 2: Shops + Margin */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              {/* Shops card */}
+              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+                <CardDots />
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 9, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>МАГАЗИНОВ</Text>
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 28, color: isDark ? "#ede9e3" : "#2d3748", marginTop: 8 }}>{kpis?.assignedShops ?? 0}</Text>
+              </View>
+              {/* Margin ring */}
+              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+                <ProgressRing value={kpis?.todayRevenue ? Math.min((kpis.todayRevenue / 1000000) * 100, 100) : 0} size={64} strokeWidth={6} color="#34c473" />
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 10, color: isDark ? "#8a8478" : "#5a6a7f", marginTop: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Цель дня</Text>
+              </View>
+            </View>
+          </View>
+        )}
+      </FadeInItem>
+
+      {/* ── Revenue sparkline card (matching web) ────────────────────────── */}
+      <FadeInItem delay={120}>
+        <View style={{ backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <View>
+              <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 16, color: isDark ? "#ede9e3" : "#2d3748" }}>Динамика продаж</Text>
+              <Text style={{ fontFamily: "DM Sans", fontSize: 12, color: isDark ? "#8a8478" : "#8b9bb4", marginTop: 3 }}>Выручка за 7 дней</Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#c06080" }} />
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#c49530" }} />
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#3a9a8a" }} />
+            </View>
+          </View>
+          <Sparkline data={revenueTrend?.length ? revenueTrend : [0]} color="#5b6d8a" width={320} height={60} />
         </View>
       </FadeInItem>
 
-      {/* Revenue card with sparkline */}
-      <FadeInItem delay={120}>
-        <Card style={{ marginBottom: Spacing.base }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <View>
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Выручка сегодня</Text>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xxl, color: colors.text.primary, marginTop: 4, fontVariant: ["tabular-nums"] }}>
-                {(kpis?.todayRevenue ?? 0).toLocaleString("ru")} сум
-              </Text>
-            </View>
-            <ProgressRing value={kpis?.todayRevenue ? Math.min((kpis.todayRevenue / 1000000) * 100, 100) : 0} size={56} strokeWidth={6} color={KpiColors.green} />
-          </View>
-          <Sparkline data={revenueTrend?.length ? revenueTrend : [0]} color={KpiColors.blue} width={280} height={40} />
-        </Card>
-      </FadeInItem>
-
-      {/* Quick actions — 2x2 grid */}
-      <FadeInItem delay={200}>
-        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+      {/* ── Quick Actions (matching web style) ────────────────────────────── */}
+      <FadeInItem delay={180}>
+        <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
           <PressableScale onPress={() => router.push("/order/new")} haptic="light" style={{ flex: 1 }}>
-            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
-              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus-circle" size={18} color="#fff" />
+            <LinearGradient colors={["#5b6d8a", "#7a8fa8"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="plus-circle" size={20} color="#fff" />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>НОВЫЙ ЗАКАЗ</Text>
+              <Text style={{ fontSize: 11, fontFamily: "DM Sans", fontWeight: "700", color: "#fff", letterSpacing: 1 }}>НОВЫЙ ЗАКАЗ</Text>
             </LinearGradient>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/shops")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
-              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="shopping-bag" size={18} color={colors.brand.primaryLight} />
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: isDark ? "#221f1c" : "#efedea", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: isDark ? "rgba(0,153,204,0.12)" : "rgba(91,109,138,0.1)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="shopping-bag" size={20} color="#5b6d8a" />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>МАГАЗИНЫ</Text>
+              <Text style={{ fontSize: 11, fontFamily: "DM Sans", fontWeight: "700", color: isDark ? "#ede9e3" : "#2d3748", letterSpacing: 1 }}>МАГАЗИНЫ</Text>
             </View>
           </PressableScale>
         </View>
-        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+        <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
           <PressableScale onPress={() => router.push("/(tabs)/gps")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
-              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.successDim, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="navigation" size={16} color={colors.status.success} />
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: isDark ? "#221f1c" : "#efedea", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: isDark ? "rgba(0,230,138,0.12)" : "rgba(52,196,115,0.1)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="navigation" size={16} color="#34c473" />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>GPS</Text>
+              <Text style={{ fontSize: 10, fontFamily: "DM Sans", fontWeight: "700", color: isDark ? "#ede9e3" : "#2d3748", letterSpacing: 0.5 }}>GPS</Text>
             </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/barcode")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
-              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="maximize" size={16} color={colors.accent.primary} />
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: isDark ? "#221f1c" : "#efedea", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: isDark ? "rgba(0,153,204,0.12)" : "rgba(91,109,138,0.1)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="maximize" size={16} color="#5b6d8a" />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>БАРКОД</Text>
+              <Text style={{ fontSize: 10, fontFamily: "DM Sans", fontWeight: "700", color: isDark ? "#ede9e3" : "#2d3748", letterSpacing: 0.5 }}>БАРКОД</Text>
             </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
-              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="user" size={16} color={colors.status.info} />
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: isDark ? "#221f1c" : "#efedea", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: isDark ? "rgba(0,180,255,0.12)" : "rgba(74,157,232,0.1)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="user" size={16} color="#4a9de8" />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>ПРОФИЛЬ</Text>
+              <Text style={{ fontSize: 10, fontFamily: "DM Sans", fontWeight: "700", color: isDark ? "#ede9e3" : "#2d3748", letterSpacing: 0.5 }}>ПРОФИЛЬ</Text>
             </View>
           </PressableScale>
+        </View>
+      </FadeInItem>
+
+      {/* ── Recent Orders (matching web) ─────────────────────────────────── */}
+      <FadeInItem delay={240}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Feather name="clipboard" size={16} color="#5b6d8a" />
+            <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 16, color: isDark ? "#ede9e3" : "#2d3748" }}>Мои заказы сегодня</Text>
+          </View>
+          <PressableScale onPress={() => router.push("/(tabs)/orders")} haptic="light">
+            <Feather name="arrow-right" size={16} color={isDark ? "#8a8478" : "#8b9bb4"} />
+          </PressableScale>
+        </View>
+        <View style={{ backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+          <View style={{ padding: 24, alignItems: "center", gap: 8 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", alignItems: "center", justifyContent: "center" }}>
+              <Feather name="clipboard" size={20} color={isDark ? "#8a8478" : "#8b9bb4"} />
+            </View>
+            <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 13, color: isDark ? "#8a8478" : "#5a6a7f" }}>Создайте первый заказ</Text>
+          </View>
         </View>
       </FadeInItem>
     </ScrollView>
   );
 }
 
-// ── Supervisor Home ───────────────────────────────────────────────────────────
+// ── Status colors (matching web Dashboard.tsx) ────────────────────────────────
+const STATUS_COLOR: Record<string, string> = {
+  new: "#5b6d8a", processing: "#d4973a", completed: "#34c473", cancelled: "#d45050",
+};
+const STATUS_LABEL: Record<string, string> = {
+  new: "Новые", processing: "В работе", completed: "Выполнены", cancelled: "Отменены",
+};
+
+// ── Alert icon mapping ────────────────────────────────────────────────────────
+function AlertIcon({ severity, size = 14 }: { severity: string; size?: number }) {
+  if (severity === "danger") return <Feather name="alert-circle" size={size} color="#d45050" />;
+  if (severity === "warning") return <Feather name="trending-down" size={size} color="#d4973a" />;
+  return <Feather name="trending-up" size={size} color="#4a9de8" />;
+}
+
+// ── Supervisor Home (Premium — matching web Dashboard.tsx) ─────────────────────
 function SupervisorHome() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [range, setRange] = useState<"7d" | "30d" | "month">("7d");
 
+  // Premium dashboard queries
   const { data: kpis, isLoading, isError, refetch } = useQuery({
-    queryKey: ["supervisorDashboard"], queryFn: getSupervisorDashboard, retry: false,
+    queryKey: ["dashboardKpis"], queryFn: getDashboardKpis, retry: false,
   });
 
-  const { data: revenueTrend } = useQuery({
-    queryKey: ["revenueTrend"],
-    queryFn: () => getRevenueTrend(7),
-    retry: false,
+  const { data: trends } = useQuery({
+    queryKey: ["dashboardTrends", range], queryFn: () => getDashboardTrends(range), retry: false,
   });
+
+  const { data: statusData } = useQuery({
+    queryKey: ["dashboardStatus"], queryFn: getDashboardStatusBreakdown, retry: false,
+  });
+
+  const { data: activity } = useQuery({
+    queryKey: ["dashboardActivity"], queryFn: getDashboardActivity, retry: false,
+  });
+
+  const { data: alerts } = useQuery({
+    queryKey: ["smartAlerts"], queryFn: getSmartAlerts, retry: false,
+  });
+
+  // Derived data
+  const revenueTrend = (trends ?? []).slice(-7).map(t => Number(t.revenue));
+  const ordersTrend = (trends ?? []).slice(-7).map(t => t.orderCount);
+  const prev7 = (trends ?? []).slice(-14, -7);
+  const calcDelta = (curr: number[], prev: number[]) => {
+    const sP = prev.reduce((a, b) => a + b, 0);
+    const sC = curr.reduce((a, b) => a + b, 0);
+    if (sP === 0) return sC > 0 ? 100 : 0;
+    return Math.round(((sC - sP) / sP) * 1000) / 10;
+  };
+  const revenueDelta = calcDelta(revenueTrend, prev7.map(t => Number(t.revenue)));
+  const ordersDelta = calcDelta(ordersTrend, prev7.map(t => t.orderCount));
+  const statusTotal = (statusData ?? []).reduce((s, d) => s + d.count, 0) || 1;
+
+  // Pie chart segments
+  const donutSegments = (statusData ?? []).map((s, i) => ({
+    value: s.count,
+    color: STATUS_COLOR[s.status] ?? "#5b6d8a",
+    label: STATUS_LABEL[s.status] ?? s.status,
+  }));
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
-  const firstName = (user?.name ?? user?.email ?? "Супервайзер").split(" ")[0];
+  const firstName = (user?.name ?? user?.email ?? "").split(" ")[0];
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -284,69 +375,209 @@ function SupervisorHome() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
-      {/* Header */}
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <FadeInItem delay={0}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: Spacing.lg }}>
           <View style={{ flex: 1 }}>
             <CardDots />
             <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
             <Text style={{ fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, color: colors.text.primary, marginTop: 2 }}>Главная</Text>
+            <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBody, color: colors.text.tertiary, marginTop: 2, textTransform: "capitalize" }}>
+              {format(new Date(), "EEEE, d MMMM yyyy", { locale: ru })}
+            </Text>
           </View>
-        </View>
-      </FadeInItem>
-
-      {/* KPI rings + revenue card */}
-      <FadeInItem delay={80}>
-        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
-          {isLoading ? (
-            <>
-              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
-            </>
-          ) : isError ? (
-            <PressableScale onPress={() => refetch()} haptic="light" style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 64, borderRadius: Radii.lg, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "30" }}>
-                <Feather name="wifi-off" size={14} color={colors.status.danger} />
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger }}>Ошибка — тап</Text>
-              </View>
-            </PressableScale>
-          ) : (
-            <>
-              {/* Orders ring */}
-              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
-                <ProgressRing value={kpis?.todayOrders ? Math.min(kpis.todayOrders * 10, 100) : 0} size={70} strokeWidth={7} color={KpiColors.blue} />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 8 }}>{kpis?.todayOrders ?? 0}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Заказов</Text>
-              </Card>
-              {/* Agents ring */}
-              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
-                <ProgressRing value={kpis?.activeAgents ? Math.round((kpis.onlineAgents ?? 0) / Math.max(kpis.activeAgents, 1) * 100) : 0} size={70} strokeWidth={7} color={KpiColors.teal} />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 8 }}>{kpis?.onlineAgents ?? 0}/{kpis?.activeAgents ?? 0}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Агенты онлайн</Text>
-              </Card>
-            </>
-          )}
-        </View>
-      </FadeInItem>
-
-      {/* Revenue card with sparkline */}
-      <FadeInItem delay={120}>
-        <Card style={{ marginBottom: Spacing.base }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <View>
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Выручка сегодня</Text>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xxl, color: colors.text.primary, marginTop: 4, fontVariant: ["tabular-nums"] }}>
-                {(kpis?.todayRevenue ?? 0).toLocaleString("ru")} сум
-              </Text>
+          <PressableScale onPress={() => router.push("/profile")} haptic="light">
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.brand.primary }}>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.brand.primary }}>{firstName.charAt(0).toUpperCase()}</Text>
             </View>
-            <ProgressRing value={kpis?.todayRevenue ? Math.min((kpis.todayRevenue / 5000000) * 100, 100) : 0} size={56} strokeWidth={6} color={KpiColors.green} />
+          </PressableScale>
+        </View>
+      </FadeInItem>
+
+      {/* ── KPI Cards (4 cards in 2x2 grid) ─────────────────────────────── */}
+      <FadeInItem delay={60}>
+        {isLoading ? (
+          <View style={{ gap: Spacing.sm, marginBottom: Spacing.base }}>
+            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+            </View>
+            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+            </View>
           </View>
-          <Sparkline data={revenueTrend?.length ? revenueTrend : [0]} color={KpiColors.blue} width={280} height={40} />
+        ) : isError ? (
+          <PressableScale onPress={() => refetch()} haptic="light" style={{ marginBottom: Spacing.base }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 64, borderRadius: Radii.lg, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "30" }}>
+              <Feather name="wifi-off" size={14} color={colors.status.danger} />
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger }}>Ошибка — тап для обновления</Text>
+            </View>
+          </PressableScale>
+        ) : (
+          <View style={{ gap: Spacing.sm, marginBottom: Spacing.base }}>
+            {/* Row 1: Revenue + Orders */}
+            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+              {/* Revenue */}
+              <Card style={{ flex: 1, padding: Spacing.md }}>
+                <CardDots />
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Выручка</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xl, color: colors.text.primary, marginTop: 6 }} numberOfLines={1}>
+                  {(kpis?.todayRevenue ?? 0).toLocaleString("ru")}
+                </Text>
+                {revenueDelta !== 0 && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 }}>
+                    <Feather name={revenueDelta > 0 ? "trending-up" : "trending-down"} size={12} color={revenueDelta > 0 ? "#34c473" : "#d45050"} />
+                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: revenueDelta > 0 ? "#34c473" : "#d45050" }}>{Math.abs(revenueDelta).toFixed(1)}%</Text>
+                  </View>
+                )}
+                {revenueTrend.length > 0 && (
+                  <View style={{ marginTop: 8 }}>
+                    <MiniBarChart data={revenueTrend} color="#34c473" width={100} height={32} />
+                  </View>
+                )}
+              </Card>
+              {/* Orders */}
+              <Card style={{ flex: 1, padding: Spacing.md }}>
+                <CardDots />
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Заказы</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xl, color: colors.text.primary, marginTop: 6 }}>{kpis?.todayOrders ?? 0}</Text>
+                {ordersDelta !== 0 && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 }}>
+                    <Feather name={ordersDelta > 0 ? "trending-up" : "trending-down"} size={12} color={ordersDelta > 0 ? "#34c473" : "#d45050"} />
+                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: ordersDelta > 0 ? "#34c473" : "#d45050" }}>{Math.abs(ordersDelta).toFixed(1)}%</Text>
+                  </View>
+                )}
+                {ordersTrend.length > 0 && (
+                  <View style={{ marginTop: 8 }}>
+                    <MiniBarChart data={ordersTrend} color="#5b6d8a" width={100} height={32} />
+                  </View>
+                )}
+              </Card>
+            </View>
+            {/* Row 2: Debt + Margin */}
+            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+              {/* Customer Debt */}
+              <Card style={{ flex: 1, padding: Spacing.md }}>
+                <CardDots />
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>Долг клиентов</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xl, color: "#d4973a", marginTop: 6 }} numberOfLines={1}>
+                  {(kpis?.customerDebt ?? 0).toLocaleString("ru")}
+                </Text>
+                <Text style={{ fontFamily: Typography.fontRegular, fontSize: 10, color: colors.text.muted, marginTop: 4 }}>сум</Text>
+              </Card>
+              {/* Gross Margin */}
+              <Card style={{ flex: 1, padding: Spacing.md, alignItems: "center" }}>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Маржа</Text>
+                <ProgressRing value={Math.max(0, Math.min(100, kpis?.grossMargin ?? 0))} size={60} strokeWidth={6} color="#5b6d8a" />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.primary, marginTop: 6 }}>{(kpis?.grossMargin ?? 0).toFixed(1)}%</Text>
+              </Card>
+            </View>
+          </View>
+        )}
+      </FadeInItem>
+
+      {/* ── Smart Alerts ────────────────────────────────────────────────── */}
+      {alerts && alerts.length > 0 && (
+        <FadeInItem delay={100}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.base }} contentContainerStyle={{ gap: Spacing.sm }}>
+            {alerts.slice(0, 4).map((alert, i) => {
+              const alertColors: Record<string, { bg: string; border: string }> = {
+                info: { bg: colors.status.infoDim, border: colors.status.info },
+                warning: { bg: colors.status.warningDim, border: colors.status.warning },
+                danger: { bg: colors.status.dangerDim, border: colors.status.danger },
+              };
+              const ac = alertColors[alert.severity] ?? alertColors.info;
+              return (
+                <Card key={i} style={{ minWidth: 220, padding: 14, borderLeftWidth: 3, borderLeftColor: ac.border }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: ac.bg, alignItems: "center", justifyContent: "center" }}>
+                      <AlertIcon severity={alert.severity} size={14} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }} numberOfLines={1}>{alert.title}</Text>
+                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }} numberOfLines={2}>{alert.message}</Text>
+                    </View>
+                  </View>
+                </Card>
+              );
+            })}
+          </ScrollView>
+        </FadeInItem>
+      )}
+
+      {/* ── Sales Dynamics Chart ─────────────────────────────────────────── */}
+      <FadeInItem delay={140}>
+        <Card style={{ marginBottom: Spacing.base }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <View>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>Динамика продаж</Text>
+              <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>Выручка и заказы</Text>
+            </View>
+            {/* Range pills */}
+            <View style={{ flexDirection: "row", backgroundColor: colors.bg.elevated, borderRadius: Radii.full, padding: 2 }}>
+              {(["7d", "30d", "month"] as const).map(r => (
+                <PressableScale key={r} onPress={() => setRange(r)} haptic="light" scaleTo={0.95}>
+                  <View style={{
+                    paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radii.full,
+                    backgroundColor: range === r ? colors.brand.primary : "transparent",
+                  }}>
+                    <Text style={{
+                      fontFamily: Typography.fontSemibold, fontSize: 11,
+                      color: range === r ? "#fff" : colors.text.tertiary,
+                    }}>{r === "7d" ? "7д" : r === "30d" ? "30д" : "Месяц"}</Text>
+                  </View>
+                </PressableScale>
+              ))}
+            </View>
+          </View>
+          {/* Revenue sparkline */}
+          <View style={{ marginBottom: 12 }}>
+            <Sparkline data={revenueTrend.length ? revenueTrend : [0]} color="#5b6d8a" width={320} height={50} />
+          </View>
+          {/* Orders sparkline */}
+          <View>
+            <Sparkline data={ordersTrend.length ? ordersTrend : [0]} color="#34c473" width={320} height={40} />
+          </View>
+          {/* Legend */}
+          <View style={{ flexDirection: "row", justifyContent: "center", gap: 20, marginTop: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#5b6d8a" }} />
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>Выручка</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#34c473" }} />
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>Заказы</Text>
+            </View>
+          </View>
         </Card>
       </FadeInItem>
 
-      {/* Quick actions */}
-      <FadeInItem delay={160}>
+      {/* ── Order Status Donut ───────────────────────────────────────────── */}
+      <FadeInItem delay={180}>
+        <Card style={{ marginBottom: Spacing.base }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <Feather name="pie-chart" size={16} color={colors.accent.primary} />
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>Статусы заказов</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
+            <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel="заказов" />
+            {/* Legend */}
+            <View style={{ flex: 1, gap: 8 }}>
+              {donutSegments.map((seg, i) => (
+                <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: seg.color }} />
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, flex: 1 }} numberOfLines={1}>{seg.label}</Text>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 12, color: colors.text.primary }}>{seg.value}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </Card>
+      </FadeInItem>
+
+      {/* ── Quick Actions ────────────────────────────────────────────────── */}
+      <FadeInItem delay={220}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           <PressableScale onPress={() => router.push("/(tabs)/tracking")} haptic="light" style={{ flex: 1 }}>
             <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -366,22 +597,87 @@ function SupervisorHome() {
             </View>
           </PressableScale>
         </View>
+        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          <PressableScale onPress={() => router.push("/order/new")} haptic="light" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 6, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.successDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="plus-circle" size={16} color={colors.status.success} />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>ЗАКАЗ</Text>
+            </View>
+          </PressableScale>
+          <PressableScale onPress={() => router.push("/(tabs)/shops")} haptic="light" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 6, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="shopping-bag" size={16} color={colors.accent.primary} />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>МАГАЗИНЫ</Text>
+            </View>
+          </PressableScale>
+          <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 6, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+              <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="user" size={16} color={colors.status.info} />
+              </View>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>ПРОФИЛЬ</Text>
+            </View>
+          </PressableScale>
+        </View>
+      </FadeInItem>
+
+      {/* ── Recent Orders ────────────────────────────────────────────────── */}
+      <FadeInItem delay={260}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Feather name="clipboard" size={16} color={colors.accent.primary} />
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>Последние заказы</Text>
+          </View>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{activity?.length ?? 0} заказов</Text>
+        </View>
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          {!activity?.length ? (
+            <View style={{ padding: Spacing.xl, alignItems: "center", gap: 8 }}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="clipboard" size={20} color={colors.text.muted} />
+              </View>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.muted }}>Заказов пока нет</Text>
+            </View>
+          ) : (
+            activity.slice(0, 8).map((order, idx) => (
+              <TouchableOpacity key={order.id} activeOpacity={0.7} onPress={() => router.push(`/order/${order.id}`)}>
+                <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 12 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: STATUS_COLOR[order.status] ?? colors.border.default }} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{order.agentName ?? "—"}</Text>
+                    <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
+                      #{order.orderNumber} · {order.createdAt ? format(new Date(order.createdAt), "HH:mm") : ""}
+                    </Text>
+                  </View>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>
+                    {Number(order.total).toLocaleString("ru")}
+                  </Text>
+                </View>
+                {idx < Math.min(activity.length, 8) - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 36 }} />}
+              </TouchableOpacity>
+            ))
+          )}
+        </Card>
       </FadeInItem>
     </ScrollView>
   );
 }
 
-// ── Courier Home ──────────────────────────────────────────────────────────────
-const COURIER_STATUS: Record<string, { icon: IconName; variant: string; label: string }> = {
-  assigned:         { icon: "package",    variant: "info",    label: "Назначен" },
-  out_for_delivery: { icon: "truck",      variant: "warning", label: "В пути" },
-  delivered:        { icon: "check-circle", variant: "success", label: "Доставлен" },
-  failed:           { icon: "x-circle",   variant: "danger",  label: "Ошибка" },
+// ── Courier Home (Premium — matching web Dashboard.tsx style) ──────────────────
+const COURIER_STATUS: Record<string, { icon: IconName; label: string; color: string }> = {
+  assigned:         { icon: "package",     label: "Назначен",   color: "#4a9de8" },
+  out_for_delivery: { icon: "truck",       label: "В пути",     color: "#d4973a" },
+  delivered:        { icon: "check-circle", label: "Доставлен", color: "#34c473" },
+  failed:           { icon: "x-circle",    label: "Ошибка",     color: "#d45050" },
 };
 
 function CourierHome() {
   const router = useRouter();
-  const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 
@@ -407,129 +703,166 @@ function CourierHome() {
     try { await refetch(); } finally { setRefreshing(false); }
   }, [refetch]);
 
-  const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand.primary} />;
+  const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#5b6d8a" />;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg.primary }} contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
-      {/* Header */}
+    <ScrollView style={{ flex: 1, backgroundColor: isDark ? "#1c1a17" : "#e8e6e1" }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }} refreshControl={scrollRefresh} showsVerticalScrollIndicator={false}>
+      {/* ── Header (matching web) ────────────────────────────────────────── */}
       <FadeInItem delay={0}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: Spacing.lg }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <View style={{ flex: 1 }}>
             <CardDots />
-            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
-            <Text style={{ fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, color: colors.text.primary, marginTop: 2 }}>Доставки</Text>
-          </View>
-        </View>
-      </FadeInItem>
-
-      {/* KPI rings — 3 donuts */}
-      <FadeInItem delay={80}>
-        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
-          {isLoading ? (
-            <>
-              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={120} style={{ flex: 1 }} radius={Radii.xl} />
-            </>
-          ) : (
-            <>
-              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.sm }}>
-                <ProgressRing value={total > 0 ? Math.round(assigned / Math.max(total, 1) * 100) : 0} size={60} strokeWidth={6} color={KpiColors.blue} />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{assigned}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Ожидают</Text>
-              </Card>
-              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.sm }}>
-                <ProgressRing value={total > 0 ? Math.round(inTransit / Math.max(total, 1) * 100) : 0} size={60} strokeWidth={6} color={KpiColors.amber} />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{inTransit}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>В пути</Text>
-              </Card>
-              <Card style={{ flex: 1, alignItems: "center", padding: Spacing.sm }}>
-                <ProgressRing value={deliveryPct} size={60} strokeWidth={6} color={KpiColors.green} />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{delivered}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Доставлено</Text>
-              </Card>
-            </>
-          )}
-        </View>
-      </FadeInItem>
-
-      {/* Progress — NeumorphicProgressBar */}
-      <FadeInItem delay={120}>
-        <Card style={{ marginBottom: Spacing.base }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ПРОГРЕСС ДНЯ</Text>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: deliveryPct >= 80 ? colors.status.success : colors.accent.primary, fontVariant: ["tabular-nums"] }}>
-              {delivered}/{total} · {deliveryPct}%
+            <Text style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: "500", color: "#5b6d8a" }}>{greeting}, {firstName}</Text>
+            <Text style={{ fontFamily: "DM Sans", fontSize: 26, fontWeight: "700", color: isDark ? "#ede9e3" : "#2d3748", marginTop: 4, letterSpacing: -0.5 }}>Доставки</Text>
+            <Text style={{ fontFamily: "DM Sans", fontSize: 13, color: isDark ? "#8a8478" : "#5a6a7f", marginTop: 4, textTransform: "capitalize" }}>
+              {format(new Date(), "EEEE, d MMMM yyyy", { locale: ru })}
             </Text>
           </View>
-          <NeumorphicProgressBar value={deliveryPct} height={8} color={deliveryPct >= 80 ? colors.status.success : colors.brand.primary} />
-          <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 8 }}>
-            {total === 0 ? "Нет заказов на сегодня" : delivered === total ? "Все доставлены!" : `Осталось ${total - delivered}`}
-          </Text>
-        </Card>
-      </FadeInItem>
-
-      {/* Quick actions */}
-      <FadeInItem delay={160}>
-        <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
-          <PressableScale onPress={() => router.push("/(tabs)/deliveries")} haptic="none" style={{ flex: 1 }}>
-            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
-              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="truck" size={18} color="#fff" />
-              </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>ДОСТАВКИ</Text>
-            </LinearGradient>
-          </PressableScale>
-          <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="none" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
-              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="user" size={18} color={colors.status.info} />
-              </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>ПРОФИЛЬ</Text>
+          <PressableScale onPress={() => router.push("/profile")} haptic="light">
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: isDark ? "rgba(0,153,204,0.12)" : "rgba(91,109,138,0.1)", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#5b6d8a" }}>
+              <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 18, color: "#5b6d8a" }}>{firstName.charAt(0).toUpperCase()}</Text>
             </View>
           </PressableScale>
         </View>
       </FadeInItem>
 
-      {/* Recent deliveries */}
-      <FadeInItem delay={200}>
-        <SectionHeader title="Последние доставки" />
-      </FadeInItem>
-      <Card style={{ padding: 0, overflow: "hidden" }}>
+      {/* ── KPI Cards (matching web kpi-hero style) ──────────────────────── */}
+      <FadeInItem delay={60}>
         {isLoading ? (
-          <View style={{ padding: Spacing.base, gap: 10 }}>
-            {[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={56} radius={Radii.lg} />)}
-          </View>
-        ) : !deliveries?.length ? (
-          <View style={{ padding: Spacing.xl, alignItems: "center", gap: 8 }}>
-            <Feather name="truck" size={28} color={colors.text.muted} />
-            <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>Доставок пока нет</Text>
+          <View style={{ gap: 12, marginBottom: 16 }}>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+            </View>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
+            </View>
           </View>
         ) : (
-          deliveries.slice(0, 5).map((d, idx) => {
-            const cfg = COURIER_STATUS[d.deliveryStatus] ?? COURIER_STATUS.assigned;
-            return (
-              <View key={d.id}>
-                <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(tabs)/deliveries")}
-                  style={{ flexDirection: "row", alignItems: "center", padding: Spacing.base, gap: Spacing.md }}>
-                  <View style={{ width: 36, height: 36, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
-                    <Feather name="truck" size={16} color={colors.accent.primary} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{d.orderNumber}</Text>
-                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>{d.shopName ?? "—"}</Text>
-                  </View>
-                  <View style={{ backgroundColor: cfg.variant === "success" ? colors.status.successDim : cfg.variant === "warning" ? colors.status.warningDim : cfg.variant === "danger" ? colors.status.dangerDim : colors.status.infoDim, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Text style={{ fontSize: 11, fontFamily: Typography.fontSemibold, color: cfg.variant === "success" ? colors.status.success : cfg.variant === "warning" ? colors.status.warning : cfg.variant === "danger" ? colors.status.danger : colors.status.info }}>{cfg.label}</Text>
-                  </View>
-                </TouchableOpacity>
-                {idx < Math.min(deliveries.length, 5) - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 52 }} />}
+          <View style={{ gap: 12, marginBottom: 16 }}>
+            {/* Row 1: Assigned + In Transit */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              {/* Assigned */}
+              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+                <CardDots />
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 9, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>ОЖИДАЮТ</Text>
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 28, color: "#4a9de8", marginTop: 8 }}>{assigned}</Text>
+                <View style={{ marginTop: 8 }}>
+                  <MiniBarChart data={[assigned, inTransit, delivered]} color="#4a9de8" width={100} height={28} />
+                </View>
               </View>
-            );
-          })
+              {/* In Transit */}
+              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+                <CardDots />
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 9, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>В ПУТИ</Text>
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 28, color: "#d4973a", marginTop: 8 }}>{inTransit}</Text>
+                <View style={{ marginTop: 8 }}>
+                  <MiniBarChart data={[assigned, inTransit, delivered]} color="#d4973a" width={100} height={28} />
+                </View>
+              </View>
+            </View>
+            {/* Row 2: Delivered + Progress */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              {/* Delivered */}
+              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+                <CardDots />
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 9, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>ДОСТАВЛЕНО</Text>
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 28, color: "#34c473", marginTop: 8 }}>{delivered}</Text>
+              </View>
+              {/* Progress ring */}
+              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+                <ProgressRing value={deliveryPct} size={64} strokeWidth={6} color={deliveryPct >= 80 ? "#34c473" : "#5b6d8a"} />
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 10, color: isDark ? "#8a8478" : "#5a6a7f", marginTop: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Прогресс</Text>
+              </View>
+            </View>
+          </View>
         )}
-      </Card>
+      </FadeInItem>
+
+      {/* ── Progress bar card (matching web) ──────────────────────────────── */}
+      <FadeInItem delay={120}>
+        <View style={{ backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 10, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>ПРОГРЕСС ДНЯ</Text>
+            <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 13, color: deliveryPct >= 80 ? "#34c473" : "#5b6d8a" }}>
+              {delivered}/{total} · {deliveryPct}%
+            </Text>
+          </View>
+          <NeumorphicProgressBar value={deliveryPct} height={10} color={deliveryPct >= 80 ? "#34c473" : "#5b6d8a"} />
+          <Text style={{ fontFamily: "DM Sans", fontSize: 12, color: isDark ? "#8a8478" : "#5a6a7f", marginTop: 10 }}>
+            {total === 0 ? "Нет заказов на сегодня" : delivered === total ? "Все доставлены!" : `Осталось ${total - delivered}`}
+          </Text>
+        </View>
+      </FadeInItem>
+
+      {/* ── Quick Actions (matching web) ───────────────────────────────────── */}
+      <FadeInItem delay={160}>
+        <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
+          <PressableScale onPress={() => router.push("/(tabs)/deliveries")} haptic="light" style={{ flex: 1 }}>
+            <LinearGradient colors={["#5b6d8a", "#7a8fa8"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="truck" size={20} color="#fff" />
+              </View>
+              <Text style={{ fontSize: 11, fontFamily: "DM Sans", fontWeight: "700", color: "#fff", letterSpacing: 1 }}>ДОСТАВКИ</Text>
+            </LinearGradient>
+          </PressableScale>
+          <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: isDark ? "#221f1c" : "#efedea", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: isDark ? "rgba(0,180,255,0.12)" : "rgba(74,157,232,0.1)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="user" size={20} color="#4a9de8" />
+              </View>
+              <Text style={{ fontSize: 11, fontFamily: "DM Sans", fontWeight: "700", color: isDark ? "#ede9e3" : "#2d3748", letterSpacing: 1 }}>ПРОФИЛЬ</Text>
+            </View>
+          </PressableScale>
+        </View>
+      </FadeInItem>
+
+      {/* ── Recent deliveries (matching web recent orders style) ───────────── */}
+      <FadeInItem delay={200}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Feather name="truck" size={16} color="#5b6d8a" />
+            <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 16, color: isDark ? "#ede9e3" : "#2d3748" }}>Последние доставки</Text>
+          </View>
+          <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 12, color: isDark ? "#8a8478" : "#8b9bb4" }}>{total} заказов</Text>
+        </View>
+        <View style={{ backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+          {isLoading ? (
+            <View style={{ padding: 16, gap: 10 }}>
+              {[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={56} radius={Radii.lg} />)}
+            </View>
+          ) : !deliveries?.length ? (
+            <View style={{ padding: 32, alignItems: "center", gap: 8 }}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="truck" size={20} color={isDark ? "#8a8478" : "#8b9bb4"} />
+              </View>
+              <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 13, color: isDark ? "#8a8478" : "#5a6a7f" }}>Доставок пока нет</Text>
+            </View>
+          ) : (
+            deliveries.slice(0, 5).map((d, idx) => {
+              const cfg = COURIER_STATUS[d.deliveryStatus] ?? COURIER_STATUS.assigned;
+              return (
+                <View key={d.id}>
+                  <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(tabs)/deliveries")}
+                    style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 12 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cfg.color }} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 14, color: isDark ? "#ede9e3" : "#2d3748" }} numberOfLines={1}>{d.orderNumber}</Text>
+                      <Text style={{ fontFamily: "DM Sans", fontSize: 11, color: isDark ? "#8a8478" : "#8b9bb4", marginTop: 2 }}>{d.shopName ?? "—"}</Text>
+                    </View>
+                    <View style={{ backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 11, color: cfg.color }}>{cfg.label}</Text>
+                    </View>
+                  </TouchableOpacity>
+                  {idx < Math.min(deliveries.length, 5) - 1 && <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.05)", marginLeft: 34 }} />}
+                </View>
+              );
+            })
+          )}
+        </View>
+      </FadeInItem>
     </ScrollView>
   );
 }

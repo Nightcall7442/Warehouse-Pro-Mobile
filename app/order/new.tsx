@@ -10,7 +10,7 @@ import { getMyShops, getProducts, createOrder, Shop } from "../../src/api";
 import { useOfflineStore } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding } from "../../src/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card, SearchInput, Skeleton } from "../../src/components/ui";
 import { PressableScale } from "../../src/components/Animated";
@@ -556,7 +556,7 @@ export default function NewOrderScreen() {
       </ScrollView>
 
       {/* Bottom CTA */}
-      <View style={{ padding: Spacing.base, paddingBottom: insets.bottom + Spacing.lg, borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
+      <View style={{ padding: Spacing.base, paddingBottom: safeBottomPadding(insets.bottom, 16), borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
         {step < 3 ? (
           <PressableScale onPress={() => { setStep(s => s + 1); }} disabled={!canNext} haptic="medium">
             <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: canNext ? 1 : 0.45 }}>

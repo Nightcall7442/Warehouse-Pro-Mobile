@@ -393,3 +393,14 @@ const buildGradients = (isDark: boolean) => ({
 // `Gradients` directly (without the theme hook) still pick up the cyan
 // (dark) / blue (light) brand gradient after a theme toggle re-render.
 export let Gradients: ReturnType<typeof buildGradients> = buildGradients(true);
+
+// ── Safe bottom padding for Android navigation bar ────────────────────────────
+// On Android, insets.bottom can be 0 with 3-button nav, but the nav bar still
+// takes ~48px. This helper ensures buttons are always above the nav bar.
+import { Platform } from "react-native";
+export function safeBottomPadding(insetsBottom: number, extra = 16): number {
+  if (Platform.OS === "android") {
+    return Math.max(insetsBottom, 24) + extra;
+  }
+  return insetsBottom + extra;
+}

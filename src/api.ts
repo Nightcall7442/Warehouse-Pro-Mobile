@@ -194,6 +194,43 @@ export interface SupervisorKpis {
   pendingPlans: number;
 }
 
+// Premium dashboard types (matching web Dashboard.tsx)
+export interface DashboardKpis {
+  todayOrders: number;
+  todayRevenue: number;
+  activeAgents: number;
+  totalStock: number;
+  customerDebt: number;
+  grossMargin: number;
+}
+
+export interface TrendPoint {
+  date: string;
+  orderCount: number;
+  revenue: string;
+}
+
+export interface StatusBreakdown {
+  status: string;
+  count: number;
+}
+
+export interface ActivityOrder {
+  id: number;
+  orderNumber: string;
+  status: string;
+  total: string;
+  createdAt: string;
+  shopName: string | null;
+  agentName: string | null;
+}
+
+export interface SmartAlert {
+  severity: "info" | "warning" | "danger";
+  title: string;
+  message: string;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -410,6 +447,27 @@ export async function getSupervisorDashboard(): Promise<SupervisorKpis> {
 
 export async function getRevenueTrend(days: number = 7): Promise<number[]> {
   return trpcQuery<number[]>("dashboard.revenueTrend", { days });
+}
+
+// Premium dashboard APIs
+export async function getDashboardKpis(): Promise<DashboardKpis> {
+  return trpcQuery<DashboardKpis>("dashboard.kpis");
+}
+
+export async function getDashboardTrends(range: "7d" | "30d" | "month" = "7d"): Promise<TrendPoint[]> {
+  return trpcQuery<TrendPoint[]>("dashboard.trends", { range });
+}
+
+export async function getDashboardStatusBreakdown(): Promise<StatusBreakdown[]> {
+  return trpcQuery<StatusBreakdown[]>("dashboard.statusBreakdown");
+}
+
+export async function getDashboardActivity(): Promise<ActivityOrder[]> {
+  return trpcQuery<ActivityOrder[]>("dashboard.activity");
+}
+
+export async function getSmartAlerts(): Promise<SmartAlert[]> {
+  return trpcQuery<SmartAlert[]>("notification.smartAlerts");
 }
 
 export async function getProducts(search?: string): Promise<Product[]> {

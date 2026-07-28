@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii } from "../../src/theme";
+import { Typography, Spacing, Radii, safeBottomPadding } from "../../src/theme";
 import { getProducts, submitVisitReport, uploadFile, type Product } from "../../src/api";
 import { notify } from "../../src/store/toast";
 import { Card, Badge, Button, IconCircle } from "../../src/components/ui";
@@ -178,7 +178,7 @@ export default function MerchandiserVisitScreen() {
       </ScrollView>
 
       {/* Submit */}
-      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: Spacing.base, paddingBottom: insets.bottom + 16, paddingTop: 12, backgroundColor: colors.bg.primary, borderTopWidth: 1, borderTopColor: colors.border.default }}>
+      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: Spacing.base, paddingBottom: safeBottomPadding(insets.bottom, 16), paddingTop: 12, backgroundColor: colors.bg.primary, borderTopWidth: 1, borderTopColor: colors.border.default }}>
         <Button variant="primary" size="lg" fullWidth icon="send" loading={submitReport.isPending}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
