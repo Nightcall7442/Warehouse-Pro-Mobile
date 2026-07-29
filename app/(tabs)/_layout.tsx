@@ -47,27 +47,22 @@ function CustomTabBar(props: BottomTabBarProps) {
   const isCourier = user?.role === "courier";
   const isMerchandiser = user?.role === "merchandiser";
 
-  const ALWAYS_HIDDEN = ["gps", "barcode"]; // service screens, not tabs
-  const COURIER_HIDDEN = ["shops", "catalog", "orders"];
-  const MERCH_HIDDEN = ["orders", "catalog"];
+  // Agent: Главная, Магазины, Каталог, Заказы, Профиль
+  // Supervisor: Главная, Магазины, Планы, Нормы
+  const ALWAYS_HIDDEN = ["gps", "barcode", "tracking", "plan", "deliveries"];
 
   const visibleRoutes = state.routes.filter((route: { name: string }) => {
     if (ALWAYS_HIDDEN.includes(route.name)) return false;
-    if (isCourier && COURIER_HIDDEN.includes(route.name)) return false;
-    if (isMerchandiser && MERCH_HIDDEN.includes(route.name)) return false;
-    if (!isCourier && route.name === "deliveries") return false;
-    // "plans" — visit plans (supervisor: SupervisorPlansView, agent: AgentPlansView)
-    if (route.name === "plans") return !isCourier;
-    // "plan" — agent/merchandiser monthly norms + KPI (not for supervisor)
-    if (route.name === "plan") return !isSupervisor && !isCourier;
-    // "targets" — supervisor quotas tracking
-    if (route.name === "targets") return isSupervisor;
-    // "orders" — hide for supervisors (they use dashboard activity)
-    if (route.name === "orders") return !isSupervisor;
-    // "profile" — agent and merchandiser only (supervisor has settings elsewhere)
-    if (route.name === "profile") return !isSupervisor && !isCourier;
-    // "tracking" — supervisor only (map with all agent locations)
-    if (route.name === "tracking") return isSupervisor;
+    // Agent-only tabs
+    if (route.name === "catalog" || route.name === "orders" || route.name === "profile") {
+      return !isSupervisor && !isCourier && !isMerchandiser;
+    }
+    // Supervisor-only tabs
+    if (route.name === "plans" || route.name === "targets") {
+      return isSupervisor;
+    }
+    // Shops — visible for agent, supervisor, merchandiser
+    if (route.name === "shops") return !isCourier;
     return true;
   });
 
