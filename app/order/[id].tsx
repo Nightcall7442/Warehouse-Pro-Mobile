@@ -192,8 +192,8 @@ export default function OrderDetailScreen() {
 
   const canCancel = order.status === "new" || order.status === "processing";
   const canDelete = order.status === "new" || order.status === "processing" || order.status === "cancelled";
-  const subtotal = order.subtotal ?? order.total;
-  const discount = order.discount ?? 0;
+  const subtotal = Number(order.subtotal ?? order.total ?? 0);
+  const discount = Number(order.discount ?? 0);
 
   return (
     <View style={styles.root}>

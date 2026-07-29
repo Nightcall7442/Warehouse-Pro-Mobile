@@ -20,6 +20,8 @@ const TAB_ICONS: Record<string, IconName> = {
   plans: "calendar",
   targets: "trending-up",
   deliveries: "truck",
+  profile: "user",
+  tracking: "map",
 };
 
 const TAB_LABELS: Record<string, string> = {
@@ -31,6 +33,8 @@ const TAB_LABELS: Record<string, string> = {
   plans: "Планы",
   targets: "Нормы",
   deliveries: "Доставки",
+  profile: "Профиль",
+  tracking: "Слежение",
 };
 
 function CustomTabBar(props: BottomTabBarProps) {
@@ -43,7 +47,7 @@ function CustomTabBar(props: BottomTabBarProps) {
   const isCourier = user?.role === "courier";
   const isMerchandiser = user?.role === "merchandiser";
 
-  const ALWAYS_HIDDEN = ["tracking", "gps", "barcode", "profile"];
+  const ALWAYS_HIDDEN = ["gps", "barcode"]; // service screens, not tabs
   const COURIER_HIDDEN = ["shops", "catalog", "orders"];
   const MERCH_HIDDEN = ["orders", "catalog"];
 
@@ -60,6 +64,10 @@ function CustomTabBar(props: BottomTabBarProps) {
     if (route.name === "targets") return isSupervisor;
     // "orders" — hide for supervisors (they use dashboard activity)
     if (route.name === "orders") return !isSupervisor;
+    // "profile" — agent and merchandiser only (supervisor has settings elsewhere)
+    if (route.name === "profile") return !isSupervisor && !isCourier;
+    // "tracking" — supervisor only (map with all agent locations)
+    if (route.name === "tracking") return isSupervisor;
     return true;
   });
 

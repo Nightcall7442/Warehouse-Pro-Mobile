@@ -54,7 +54,7 @@ export default function ShopDetailScreen() {
   });
 
   // Initialize territoryId from shop data
-  const shopTerritoryId = (shop as Record<string, unknown>)?.territoryId as number | undefined;
+  const shopTerritoryId = shop ? (shop as unknown as Record<string, unknown>).territoryId as number | undefined : undefined;
   useEffect(() => {
     if (shopTerritoryId && territoryId === undefined) {
       setTerritoryId(shopTerritoryId);
@@ -135,7 +135,7 @@ export default function ShopDetailScreen() {
     </View>
   );
 
-  if (isError || (!shop && !isLoading)) return (
+  if (isError || !shop) return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary, alignItems: "center", justifyContent: "center", gap: Spacing.lg, paddingHorizontal: 32 }}>
       <Feather name={isError ? "wifi-off" : "search"} size={32} color={colors.text.muted} />
       <Text style={{ color: colors.text.secondary, fontFamily: Typography.fontMedium, textAlign: "center" }}>
@@ -149,6 +149,7 @@ export default function ShopDetailScreen() {
     </View>
   );
 
+  // After null guard, shop is guaranteed non-null
   const hasDebt = Number(shop.debt ?? 0) > 0;
 
   return (

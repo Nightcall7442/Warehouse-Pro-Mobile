@@ -97,7 +97,9 @@ export default function GpsScreen() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void locate();
       intervalRef.current = setInterval(locate, 5 * 60 * 1000);
-      startBackgroundTracking().then(ok => { if (!ok && __DEV__) console.warn("Background location permission not granted"); });
+      startBackgroundTracking().then(result => {
+        if (!result.success && __DEV__) console.warn("Background location permission not granted:", result.reason);
+      });
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
       stopBackgroundTracking();
