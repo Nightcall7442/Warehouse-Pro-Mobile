@@ -56,10 +56,10 @@ function CustomTabBar(props: BottomTabBarProps) {
     if (isCourier && COURIER_HIDDEN.includes(route.name)) return false;
     if (isMerchandiser && MERCH_HIDDEN.includes(route.name)) return false;
     if (!isCourier && route.name === "deliveries") return false;
-    // "plan" — agent/merchandiser combined tab (norms + visits + KPI)
+    // "plans" — visit plans (supervisor: SupervisorPlansView, agent: AgentPlansView)
+    if (route.name === "plans") return !isCourier;
+    // "plan" — agent/merchandiser monthly norms + KPI (not for supervisor)
     if (route.name === "plan") return !isSupervisor && !isCourier;
-    // "plans" — supervisor visit management
-    if (route.name === "plans") return isSupervisor;
     // "targets" — supervisor quotas tracking
     if (route.name === "targets") return isSupervisor;
     // "orders" — hide for supervisors (they use dashboard activity)
