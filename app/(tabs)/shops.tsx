@@ -1,11 +1,11 @@
 // Warehouse Pro — Agent Shops v2 (cold palette, Card from ui.tsx)
 import React, { useMemo, useState } from "react";
-import { View, Text, Image, RefreshControl, ScrollView } from "react-native";
+import { View, Text, Image, RefreshControl, ScrollView, Modal, Pressable, FlatList } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getMyShops, getAllShopsForSupervisor, Shop } from "../../src/api";
+import { getMyShops, getAvailableShops, getAllShopsForSupervisor, getMyWorkZones, Shop } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { useLocation, getDistanceKm, getEstimatedTime } from "../../src/hooks/useLocation";
@@ -98,10 +98,18 @@ export default function ShopsScreen() {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
+  const isAgent = user?.role === "agent";
   const [search, setSearch] = useState("");
   const [sortByDistance, setSortByDistance] = useState(false);
   const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
+  const [showWorkZones, setShowWorkZones] = useState(false);
   const { location } = useLocation();
+
+  const { data: workZones } = useQuery({
+    queryKey: ["myWorkZones"],
+    queryFn: getMyWorkZones,
+    enabled: isAgent,
+  });
 
   const { data: shops, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["shops"],
@@ -110,8 +118,17 @@ export default function ShopsScreen() {
     enabled: user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator" || user?.role === "merchandiser",
   });
 
+  // Fallback: if agent has no assigned shops, fetch all active shops
+  const { data: availableShops } = useQuery({
+    queryKey: ["availableShops"],
+    queryFn: getAvailableShops,
+    enabled: user?.role === "agent" && !isLoading && (shops ?? []).length === 0,
+  });
+
+  const effectiveShops = (shops ?? []).length > 0 ? shops : availableShops;
+
   const filtered = useMemo(() => {
-    let result: ShopWithDistance[] = (shops ?? []).filter(s =>
+    let result: ShopWithDistance[] = (effectiveShops ?? []).filter(s =>
       !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.ownerName?.toLowerCase().includes(search.toLowerCase()) || s.district?.toLowerCase().includes(search.toLowerCase())
     ).map(s => ({ ...s, _distance: Infinity, _estimatedTime: "" }));
 
@@ -123,7 +140,7 @@ export default function ShopsScreen() {
       }).sort((a, b) => a._distance - b._distance);
     }
     return result;
-  }, [shops, search, sortByDistance, location]);
+  }, [effectiveShops, search, sortByDistance, location]);
 
   // Group by territory (district || city)
   const territories = useMemo<TerritoryGroup[]>(() => {
@@ -192,6 +209,13 @@ export default function ShopsScreen() {
         title="Магазины"
         right={
           <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+            {isAgent && (workZones ?? []).length > 0 && (
+              <PressableScale onPress={() => setShowWorkZones(true)} haptic="light">
+                <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.full, borderWidth: 1, borderColor: colors.border.default, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
+                  <Feather name="map" size={18} color={colors.text.primary} />
+                </View>
+              </PressableScale>
+            )}
             {location && (
               <PressableScale onPress={() => { setSortByDistance(!sortByDistance); }} haptic="none">
                 <View style={{ backgroundColor: sortByDistance ? colors.accent.primary : colors.bg.elevated, borderRadius: Radii.full, borderWidth: sortByDistance ? 0 : 1, borderColor: colors.border.default, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
@@ -277,6 +301,42 @@ export default function ShopsScreen() {
           ))}
         </ScrollView>
       )}
+
+      {/* Work Zones Modal */}
+      <Modal visible={showWorkZones} animationType="slide" transparent>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => setShowWorkZones(false)}>
+          <Pressable style={{
+            position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "60%",
+            backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
+          }} onPress={e => e.stopPropagation()}>
+            <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
+            </View>
+            <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.lg }}>Мои рабочие зоны</Text>
+            <FlatList
+              data={workZones ?? []}
+              keyExtractor={z => String(z.id)}
+              style={{ maxHeight: 300 }}
+              renderItem={({ item: zone }) => (
+                <View style={{ flexDirection: "row", alignItems: "center", padding: Spacing.base, marginBottom: Spacing.sm, borderRadius: Radii.md, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: zone.color ? zone.color + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center", marginRight: Spacing.md }}>
+                    <Feather name="map-pin" size={16} color={zone.color || colors.accent.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text.primary, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold }}>{zone.name}</Text>
+                  </View>
+                </View>
+              )}
+              ListEmptyComponent={
+                <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                  <Feather name="map" size={32} color={colors.text.muted} />
+                  <Text style={{ color: colors.text.secondary, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, marginTop: Spacing.md }}>Нет рабочих зон</Text>
+                </View>
+              }
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

@@ -7,7 +7,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
-import { getProducts, getCategories, createOrder, getMyShops, getAllShopsForSupervisor, Product, Shop } from "../../src/api";
+import { getProducts, getCategories, createOrder, getMyShops, getAvailableShops, getAllShopsForSupervisor, Product, Shop } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
@@ -29,7 +29,7 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
   product: Product; colors: ThemeColors; isDark: boolean; onPress: () => void; onAdd: () => void;
   fmt: (v: number | string | null | undefined) => string; cardWidth: number;
 }) {
-  const hasPhoto = !!product.photoUrl && product.photoUrl.startsWith("http");
+  const hasPhoto = !!product.photoUrl;
   const inStock = Number(product.available) > 0;
   const imgHeight = cardWidth * 0.7;
 
@@ -256,7 +256,7 @@ export default function CatalogScreen() {
     queryFn: () => getProducts(search),
     enabled: canAccessAgent,
   });
-  const { data: shopsData } = useQuery({ queryKey: ["myShops"], queryFn: isSupervisor ? getAllShopsForSupervisor : getMyShops, enabled: canAccessAgent });
+  const { data: shopsData } = useQuery({ queryKey: ["availableShops"], queryFn: isSupervisor ? getAllShopsForSupervisor : getAvailableShops, enabled: canAccessAgent });
   const { data: serverCategories = [] } = useQuery({ queryKey: ["categories"], queryFn: getCategories, enabled: canAccessAgent });
 
   // Save products to cache on successful fetch

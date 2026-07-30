@@ -340,6 +340,10 @@ export async function getMyShops(): Promise<Shop[]> {
   return trpcQuery<Shop[]>("agent.myShops");
 }
 
+export async function getAvailableShops(): Promise<Shop[]> {
+  return trpcQuery<Shop[]>("agent.availableShops");
+}
+
 export async function getAllShopsForSupervisor(): Promise<Shop[]> {
   return trpcQuery<Shop[]>("agent.listAllShops");
 }
@@ -488,6 +492,10 @@ export interface Territory {
 
 export async function getTerritories(): Promise<Territory[]> {
   return trpcQuery<Territory[]>("territory.list");
+}
+
+export async function getMyWorkZones(): Promise<Territory[]> {
+  return trpcQuery<Territory[]>("agent.myWorkZones");
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<{ id: number }> {

@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -60,10 +60,14 @@ export default function OrdersScreen() {
     return deliveryActions.filter(a => !a.synced);
   }, [deliveryActions]);
 
+  const queryClient = useQueryClient();
   useEffect(() => {
     const s = useOfflineStore.getState();
-    if (s.orders.some(o => !o.synced)) s.syncAll();
-    // deliveryActions sync handled by AutoSync in _layout.tsx
+    if (s.orders.some(o => !o.synced)) {
+      s.syncAll().then(({ synced }: { synced: number }) => {
+        if (synced > 0) queryClient.invalidateQueries({ queryKey: ["myOrders"] });
+      });
+    }
   }, []);
 
   const items = useMemo<ListItem[]>(() => {

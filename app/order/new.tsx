@@ -6,7 +6,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
-import { getMyShops, getProducts, createOrder, Shop } from "../../src/api";
+import { getAvailableShops, getProducts, createOrder, Shop } from "../../src/api";
 import { useOfflineStore } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
 import { useThemeColors } from "../../src/store/theme";
@@ -58,7 +58,7 @@ function StepIndicator({ step, total, colors }: { step: number; total: number; c
 function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSelect: (s: Shop) => void; colors: ThemeColors }) {
   const [search, setSearch] = useState("");
   const [recentIds, setRecentIds] = useState<number[]>([]);
-  const { data: shops, isLoading } = useQuery({ queryKey: ["myShops"], queryFn: getMyShops });
+  const { data: shops, isLoading } = useQuery({ queryKey: ["availableShops"], queryFn: getAvailableShops });
 
   // Load recent shop IDs on mount
   useEffect(() => {
@@ -197,8 +197,8 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>СКИДКА (%)</Text>
                 <TextInput value={line.discount} onChangeText={v => {
-                  const next = [...lines]; next[idx] = { ...next[idx], discount: v }; onChange(next);
-                }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary}
+                  const next = [...lines]; next[idx] = { ...next[idx], discount: v.replace(",", ".") }; onChange(next);
+                }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
                   style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
               </View>
               <View style={{ flex: 1.2, gap: 4 }}>
@@ -234,7 +234,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
 
   const filtered = useMemo(() => {
     let list = (products ?? []).filter(p => !debouncedSearch || p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || (p.code ?? "").toLowerCase().includes(debouncedSearch.toLowerCase()));
-    if (onlyInStock) list = list.filter(p => Number(p.available) > 0);
+    if (onlyInStock) list = list.filter(p => p.available == null || Number(p.available) > 0);
     return list.sort((a, b) => (a.category ?? "").localeCompare(b.category ?? "") || a.name.localeCompare(b.name));
   }, [products, debouncedSearch, onlyInStock]);
 
@@ -390,7 +390,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
         })}
         {/* Total */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingVertical: 14, backgroundColor: colors.accent.primary + "10" }}>
-          <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.secondary, letterSpacing: 0.5 }}>ИТОГО — {lines.length} поз., {totalQty} кг</Text>
+          <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.secondary, letterSpacing: 0.5 }}>ИТОГО — {lines.length} поз., {totalQty} ед.</Text>
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{subtotal.toLocaleString("ru")} сум</Text>
         </View>
       </Card>
@@ -524,7 +524,7 @@ export default function NewOrderScreen() {
     if (!selectedShop) return;
     const input = {
       shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt",
-      items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })),
+      items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Math.max(0, Number(l.discount || 0)) })),
     };
     createMutation.mutate(input);
   };

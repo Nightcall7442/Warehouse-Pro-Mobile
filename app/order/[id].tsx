@@ -70,6 +70,7 @@ export default function OrderDetailScreen() {
     mutationFn: () => cancelOrder(Number(id)),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notify.success("Заказ отменён");
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
     },
