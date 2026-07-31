@@ -11,6 +11,7 @@ import { useAuthStore } from "../../src/store/auth";
 import { useLocation, getDistanceKm, getEstimatedTime } from "../../src/hooks/useLocation";
 import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { ScreenHeader, SearchInput, Card } from "../../src/components/ui";
+import { SecureImage } from "../../src/components/SecureImage";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 
 function ShopCard({ shop, isDark: _isDark, colors, index, distance, estimatedTime, onView, onOrder }: {
@@ -27,7 +28,7 @@ function ShopCard({ shop, isDark: _isDark, colors, index, distance, estimatedTim
           {/* Photo */}
           <View style={{ width: 56, height: 56, borderRadius: Radii.lg, overflow: "hidden", backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
             {shop.photoUrl ? (
-              <Image source={{ uri: shop.photoUrl }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+              <SecureImage uri={shop.photoUrl} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             ) : (
               <Feather name="shopping-bag" size={20} color={colors.accent.primary} />
             )}

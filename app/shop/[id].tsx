@@ -14,6 +14,7 @@ import { useAuthStore } from "../../src/store/auth";
 import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
 import { getShop, getShopForSupervisor, updateShop, uploadShopPhoto, uploadFile, getTerritories, Territory } from "../../src/api";
 import { Card, Badge, Button } from "../../src/components/ui";
+import { SecureImage } from "../../src/components/SecureImage";
 import { PressableScale, FadeInItem, ShimmerSkeleton } from "../../src/components/Animated";
 
 function InfoRow({ icon, label, value, onPress, colors }: { icon: string; label: string; value: string; onPress?: () => void; colors: ThemeColors }) {
@@ -157,7 +158,7 @@ export default function ShopDetailScreen() {
       {/* Hero photo */}
       <TouchableOpacity activeOpacity={0.9} onPress={pickPhoto} disabled={photoMutation.isPending} style={{ height: 200 }}>
         {shop.photoUrl ? (
-          <Image source={{ uri: shop.photoUrl }} style={{ width: "100%", height: "100%", position: "absolute" }} resizeMode="cover" />
+          <SecureImage uri={shop.photoUrl} style={{ width: "100%", height: "100%", position: "absolute" }} resizeMode="cover" />
         ) : (
           <LinearGradient colors={Gradients.primary} style={{ flex: 1 }} />
         )}

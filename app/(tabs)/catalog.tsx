@@ -13,6 +13,7 @@ import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
 import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { SearchInput, Card } from "../../src/components/ui";
+import { SecureImage } from "../../src/components/SecureImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -39,7 +40,7 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
         {/* Big photo */}
         <View style={{ width: "100%", height: imgHeight, backgroundColor: colors.bg.elevated }}>
           {hasPhoto ? (
-            <Image source={{ uri: product.photoUrl ?? undefined }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+            <SecureImage uri={product.photoUrl} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
           ) : (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
               <Feather name="package" size={40} color={colors.text.muted} />
@@ -94,7 +95,7 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
           {/* Big photo — full width, 55% of screen height */}
           <View style={{ width: "100%", height: SCREEN_H * 0.45, backgroundColor: colors.bg.elevated }}>
             {product.photoUrl ? (
-              <Image source={{ uri: product.photoUrl ?? undefined }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+              <SecureImage uri={product.photoUrl} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             ) : (
               <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="package" size={64} color={colors.text.muted} />
