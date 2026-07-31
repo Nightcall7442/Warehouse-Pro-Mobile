@@ -57,6 +57,7 @@ function StepIndicator({ step, total, colors }: { step: number; total: number; c
 // ── Step 1: Shop Picker ──────────────────────────────────────────────────────
 function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSelect: (s: Shop) => void; colors: ThemeColors }) {
   const [search, setSearch] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
   const [recentIds, setRecentIds] = useState<number[]>([]);
   const { data: shops, isLoading } = useQuery({ queryKey: ["availableShops"], queryFn: getAvailableShops });
 
@@ -65,15 +66,29 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
     import("../../src/store/recentShops").then(m => m.getRecentShopIds()).then(setRecentIds);
   }, []);
 
+  // Unique cities for quick filter
+  const cities = useMemo(() => {
+    const set = new Set<string>();
+    (shops ?? []).forEach(s => { if (s.city) set.add(s.city); });
+    return Array.from(set).sort();
+  }, [shops]);
+
+  const matchSearch = (s: Shop) => {
+    if (cityFilter && s.city !== cityFilter) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (s.name?.toLowerCase().includes(q) || s.ownerName?.toLowerCase().includes(q) || s.address?.toLowerCase().includes(q) || s.district?.toLowerCase().includes(q));
+  };
+
   const { recentShops, otherShops } = useMemo(() => {
-    const all = (shops ?? []).filter(s => !search || s.name?.toLowerCase().includes(search.toLowerCase()) || s.ownerName?.toLowerCase().includes(search.toLowerCase()));
-    if (recentIds.length === 0 || search) return { recentShops: [], otherShops: all };
+    const all = (shops ?? []).filter(matchSearch);
+    if (recentIds.length === 0 || search || cityFilter) return { recentShops: [], otherShops: all };
     const recent = recentIds.map(id => all.find(s => s.id === id)).filter(Boolean) as Shop[];
     const other = all.filter(s => !recentIds.includes(s.id));
     return { recentShops: recent, otherShops: other };
-  }, [shops, search, recentIds]);
+  }, [shops, search, cityFilter, recentIds]);
 
-  const filtered = search ? (shops ?? []).filter(s => !search || s.name?.toLowerCase().includes(search.toLowerCase()) || s.ownerName?.toLowerCase().includes(search.toLowerCase())) : otherShops;
+  const filtered = search || cityFilter ? (shops ?? []).filter(matchSearch) : otherShops;
 
   const renderShopItem = ({ item: shop }: { item: Shop }) => {
     const selected = shop.id === selectedId;
@@ -104,8 +119,21 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
   };
 
   return (
-    <View style={{ padding: Spacing.base, gap: Spacing.md }}>
-      <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск магазинов…" autoFocus />
+    <View style={{ padding: Spacing.base, gap: Spacing.md, flex: 1 }}>
+      <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск по имени, адресу, району…" autoFocus />
+      {/* City quick filter */}
+      {cities.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+          <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: !cityFilter ? colors.accent.primary : colors.border.default }}>
+            <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>Все города</Text>
+          </TouchableOpacity>
+          {cities.map(c => (
+            <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: cityFilter === c ? colors.accent.primary : colors.border.default }}>
+              <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: cityFilter === c ? "#fff" : colors.text.secondary }}>{c}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
       {isLoading ? (
         <View style={{ gap: 10 }}>{[1, 2, 3, 4].map(i => <Skeleton key={i} height={64} radius={Radii.lg} />)}</View>
       ) : filtered.length === 0 && recentShops.length === 0 ? (
@@ -116,16 +144,17 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
       ) : (
         <>
           {/* Recent shops */}
-          {!search && recentShops.length > 0 && (
+          {!search && !cityFilter && recentShops.length > 0 && (
             <View style={{ marginBottom: Spacing.sm }}>
               <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5, marginBottom: 8 }}>НЕДАВНИЕ</Text>
-              <FlatList data={recentShops} keyExtractor={s => `recent-${s.id}`} scrollEnabled={false} renderItem={renderShopItem} />
+              {recentShops.map(s => <View key={`recent-${s.id}`}>{renderShopItem({ item: s })}</View>)}
             </View>
           )}
           {/* All shops */}
-          {!search && recentShops.length > 0 && filtered.length > 0 && (
+          {!search && !cityFilter && recentShops.length > 0 && filtered.length > 0 && (
             <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5, marginBottom: 4 }}>ВСЕ МАГАЗИНЫ</Text>
           )}
+          <Text style={{ fontSize: 11, color: colors.text.muted, marginBottom: 4 }}>{filtered.length} магазинов</Text>
           <FlatList data={filtered} keyExtractor={s => String(s.id)} scrollEnabled={false} renderItem={renderShopItem} />
         </>
       )}
