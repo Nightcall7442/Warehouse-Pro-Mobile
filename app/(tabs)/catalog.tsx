@@ -148,18 +148,50 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
   visible: boolean; shops: Shop[]; onSelect: (shopId: number) => void; onClose: () => void; colors: ThemeColors;
 }) {
   const [selected, setSelected] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+
+  const cities = useMemo(() => {
+    const set = new Set<string>();
+    shops.forEach(s => { if (s.city) set.add(s.city); });
+    return Array.from(set).sort();
+  }, [shops]);
+
+  const filtered = useMemo(() => {
+    return shops.filter(s => {
+      if (cityFilter && s.city !== cityFilter) return false;
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return s.name?.toLowerCase().includes(q) || s.ownerName?.toLowerCase().includes(q) || s.address?.toLowerCase().includes(q) || s.district?.toLowerCase().includes(q);
+    });
+  }, [shops, search, cityFilter]);
+
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
         <Pressable style={{
-          position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "60%",
+          position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "80%",
           backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
         }} onPress={e => e.stopPropagation()}>
           <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
           </View>
-          <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.lg }}>Выберите магазин</Text>
-          <FlatList data={shops} keyExtractor={s => String(s.id)} style={{ maxHeight: 300 }}
+          <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.md }}>Выберите магазин</Text>
+          <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск по имени, адресу…" />
+          {cities.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: Spacing.sm, marginBottom: Spacing.sm }}>
+              <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: !cityFilter ? colors.accent.primary : colors.border.default }}>
+                <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>Все</Text>
+              </TouchableOpacity>
+              {cities.map(c => (
+                <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: cityFilter === c ? colors.accent.primary : colors.border.default }}>
+                  <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: cityFilter === c ? "#fff" : colors.text.secondary }}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+          <Text style={{ fontSize: 11, color: colors.text.muted, marginTop: 4, marginBottom: 8 }}>{filtered.length} магазинов</Text>
+          <FlatList data={filtered} keyExtractor={s => String(s.id)} style={{ maxHeight: 300 }}
             renderItem={({ item: shop }) => (
               <TouchableOpacity onPress={() => setSelected(shop.id)}
                 style={{ flexDirection: "row", alignItems: "center", padding: Spacing.base, marginBottom: Spacing.sm, borderRadius: Radii.md, backgroundColor: selected === shop.id ? colors.accent.primary + "12" : colors.bg.card, borderWidth: 1.5, borderColor: selected === shop.id ? colors.accent.primary : colors.border.default }}>
@@ -168,7 +200,7 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.text.primary, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold }}>{shop.name}</Text>
-                  {shop.district && <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.xs }}>{shop.district}</Text>}
+                  <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.xs }} numberOfLines={1}>{[shop.ownerName, shop.city, shop.district].filter(Boolean).join(" · ")}</Text>
                 </View>
                 {selected === shop.id && <Feather name="check-circle" size={20} color={colors.accent.primary} />}
               </TouchableOpacity>
