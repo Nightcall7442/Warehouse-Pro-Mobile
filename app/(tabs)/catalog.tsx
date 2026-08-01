@@ -1,5 +1,5 @@
 // Warehouse Pro — Catalog v2 (cold palette, Card from ui.tsx)
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, Modal, Pressable,
   Image, ScrollView, useWindowDimensions,
@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getProducts, getCategories, createOrder, getMyShops, getAvailableShops, getAllShopsForSupervisor, Product, Shop } from "../../src/api";
+import { uuidv4 } from "../../src/store/offline";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
@@ -279,6 +280,10 @@ export default function CatalogScreen() {
   const [pendingQty, setPendingQty] = useState(1);
   const [pendingShopId, setPendingShopId] = useState<number | null>(null);
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
+  // One key per "add to order" attempt, reused if the payment step is retried
+  // after a failure — this quick-add flow has no offline queue, so without an
+  // idempotency key a lost response + manual retry creates a duplicate order.
+  const pendingIdempotencyKeyRef = useRef<string | null>(null);
   const [cachedProducts, setCachedProducts] = useState<Product[]>([]);
   const [isFromCache, setIsFromCache] = useState(false);
 
@@ -333,13 +338,14 @@ export default function CatalogScreen() {
   }, []);
 
   const createOrderMutation = useMutation({
-    mutationFn: (input: { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[]; paymentMethod?: "cash" | "card" | "transfer" | "debt" }) => createOrder(input),
-    onSuccess: () => { notify.success("Заказ создан!"); setShowShopPicker(false); setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null); queryClient.invalidateQueries({ queryKey: ["myOrders"] }); },
+    mutationFn: (input: { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[]; paymentMethod?: "cash" | "card" | "transfer" | "debt"; idempotencyKey?: string }) => createOrder(input),
+    onSuccess: () => { notify.success("Заказ создан!"); pendingIdempotencyKeyRef.current = null; setShowShopPicker(false); setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null); queryClient.invalidateQueries({ queryKey: ["myOrders"] }); },
     onError: (e: Error) => notify.error(e.message || "Ошибка"),
   });
 
   const handleAdd = useCallback((product: Product, qty: number) => {
     if (shops.length === 0) { notify.error("Нет магазинов"); return; }
+    pendingIdempotencyKeyRef.current = uuidv4();
     if (shops.length === 1) {
       setPendingProduct(product); setPendingQty(qty); setPendingShopId(shops[0].id); setShowPaymentPicker(true);
     } else {
@@ -427,7 +433,7 @@ export default function CatalogScreen() {
         onAdd={(qty) => { if (selectedProduct) { handleAdd(selectedProduct, qty); setShowDetail(false); setSelectedProduct(null); } }} />
 
       <ShopPicker visible={showShopPicker} shops={shops} colors={colors}
-        onClose={() => { setShowShopPicker(false); setPendingProduct(null); }}
+        onClose={() => { setShowShopPicker(false); setPendingProduct(null); pendingIdempotencyKeyRef.current = null; }}
         onSelect={(shopId) => {
           setShowShopPicker(false);
           setPendingShopId(shopId);
@@ -435,10 +441,10 @@ export default function CatalogScreen() {
         }} />
 
       <PaymentPicker visible={showPaymentPicker} colors={colors}
-        onClose={() => { setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null); }}
+        onClose={() => { setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null); pendingIdempotencyKeyRef.current = null; }}
         onSelect={(method) => {
           if (pendingProduct && pendingShopId) {
-            createOrderMutation.mutate({ shopId: pendingShopId, items: [{ productId: pendingProduct.id, quantity: pendingQty, unitPrice: Number(pendingProduct.unitPrice) }], paymentMethod: method });
+            createOrderMutation.mutate({ shopId: pendingShopId, items: [{ productId: pendingProduct.id, quantity: pendingQty, unitPrice: Number(pendingProduct.unitPrice) }], paymentMethod: method, idempotencyKey: pendingIdempotencyKeyRef.current ?? undefined });
           }
         }} />
     </View>

@@ -1,5 +1,5 @@
 // Warehouse Pro — New Order (matches web NewOrder.tsx — 3-step wizard)
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useDebounce } from "../../src/hooks/useDebounce";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, ActivityIndicator, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -7,7 +7,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getAvailableShops, getProducts, createOrder, Shop } from "../../src/api";
-import { useOfflineStore } from "../../src/store/offline";
+import { useOfflineStore, uuidv4 } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding } from "../../src/theme";
@@ -494,6 +494,11 @@ export default function NewOrderScreen() {
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [draftChecked, setDraftChecked] = useState(false);
+  // Generated once per order attempt and reused for both the initial online
+  // submission and any offline-queue retry — if the server actually created
+  // the order but the response was lost (timeout/network blip), retrying with
+  // the SAME key makes the backend return the existing order instead of a duplicate.
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   // Check for saved draft on mount
   useEffect(() => {
@@ -528,13 +533,25 @@ export default function NewOrderScreen() {
     return () => clearTimeout(timer);
   }, [selectedShop, lines, notes, paymentMethod, draftChecked]);
 
+  // The backend only accepts one order-level discount percentage (per-line
+  // discounts aren't stored server-side) and recomputes subtotal itself from
+  // current catalog prices. Collapse the per-line percents shown on screen
+  // into the single equivalent percentage, so the amount actually charged
+  // matches the discounted total the agent showed the shop owner. Shared by
+  // both the online submit and the offline-queue fallback below.
+  const overallDiscountPercent = useMemo(() => {
+    const rawSubtotal = lines.reduce((s, l) => s + l.unitPrice * Number(l.quantity || 0), 0);
+    const discountedSubtotal = lines.reduce((s, l) => s + l.unitPrice * Number(l.quantity || 0) * (1 - Math.max(0, Number(l.discount || 0)) / 100), 0);
+    return rawSubtotal > 0 ? ((rawSubtotal - discountedSubtotal) / rawSubtotal) * 100 : 0;
+  }, [lines]);
+
   const createMutation = useMutation({
     mutationFn: createOrder,
     onSuccess: () => { clearDraft(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); notify.success("Заказ создан!"); router.back(); },
     onError: async (e: Error) => {
       const isNetworkError = !e.message || e.message.includes("Network") || e.message.includes("timeout") || e.message.includes("fetch") || e.message.includes("status 5");
       if (isNetworkError && selectedShop) {
-        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false };
+        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false };
         await addOrder(offlineOrder);
         clearDraft();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -551,8 +568,11 @@ export default function NewOrderScreen() {
 
   const handleSubmit = async () => {
     if (!selectedShop) return;
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = uuidv4();
     const input = {
       shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt",
+      idempotencyKey: idempotencyKeyRef.current,
+      discount: overallDiscountPercent,
       items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Math.max(0, Number(l.discount || 0)) })),
     };
     createMutation.mutate(input);

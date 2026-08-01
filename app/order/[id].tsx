@@ -169,7 +169,12 @@ export default function OrderDetailScreen() {
 
   function handleEditOpen() {
     setEditNotes(order?.notes ?? "");
-    setEditDiscount(order?.discount != null ? String(order.discount) : "");
+    // order.discount is stored as a money amount server-side; the edit field
+    // is labeled "%", so convert back to the percentage it represents.
+    const subtotalNum = Number(order?.subtotal ?? 0);
+    const discountAmount = Number(order?.discount ?? 0);
+    const pct = subtotalNum > 0 ? (discountAmount / subtotalNum) * 100 : 0;
+    setEditDiscount(pct > 0 ? String(Number(pct.toFixed(2))) : "");
     setShowEditModal(true);
   }
 
@@ -194,7 +199,10 @@ export default function OrderDetailScreen() {
   const canCancel = order.status === "new" || order.status === "processing";
   const canDelete = order.status === "new" || order.status === "processing" || order.status === "cancelled";
   const subtotal = Number(order.subtotal ?? order.total ?? 0);
-  const discount = Number(order.discount ?? 0);
+  const discountAmount = Number(order.discount ?? 0);
+  // OrderFinancialSummary renders this as "−{discount}%" — order.discount is
+  // stored as money, so convert to the percentage it represents for display.
+  const discount = subtotal > 0 ? (discountAmount / subtotal) * 100 : 0;
 
   return (
     <View style={styles.root}>

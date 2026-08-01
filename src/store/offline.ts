@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed } from "../api";
 
 const S4 = () => ((1 + Math.random()) * 0x10000 | 0).toString(16).substring(1);
-function uuidv4() {
+export function uuidv4() {
   return `${S4()}${S4()}-${S4()}-4${S4().slice(0, 3)}-${S4()}-${S4()}${S4()}${S4()}`;
 }
 
@@ -115,9 +115,12 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   },
 
   addOrder: async (order) => {
+    // Reuse the key from the failed online attempt if one was already generated —
+    // regenerating here would let a lost-response case (server created the order,
+    // client saw a network error) submit as a genuinely new, duplicate order.
     const withKey = {
       ...order,
-      input: { ...order.input, idempotencyKey: uuidv4() },
+      input: { ...order.input, idempotencyKey: order.input.idempotencyKey ?? uuidv4() },
       status: "pending" as const,
     };
     const orders = [...get().orders, withKey];
