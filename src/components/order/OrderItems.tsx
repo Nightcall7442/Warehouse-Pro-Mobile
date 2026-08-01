@@ -11,18 +11,33 @@ import { Card, IconCircle } from "../ui";
 import { FadeInItem } from "../Animated";
 import { money, makeStyles } from "./OrderStyles";
 
+const UNIT_LABELS: Record<string, string> = {
+  kg: "кг", l: "л", pcs: "шт", box: "блок", pack: "упак", m: "м", block: "блок",
+};
+
 /** Single product line in the order */
-function ItemRow({ name, code, qty, price, discount, total, colors }: {
+function ItemRow({ name, code, qty, price, discount, total, colors, unit, deliveredQty, returnReason }: {
   name: string; code?: string; qty: number; price: number; discount?: number; total: number; colors: ThemeColors;
+  unit?: string; deliveredQty?: number | null; returnReason?: string | null;
 }) {
   const styles = makeStyles(colors);
+  const unitLabel = UNIT_LABELS[unit ?? "pcs"] ?? "шт";
+  const hasPartial = deliveredQty != null && deliveredQty < qty;
   return (
     <View style={styles.itemRow}>
       <View style={styles.itemLeft}>
         <Text style={styles.itemName} numberOfLines={2}>{name}</Text>
         {code && <Text style={styles.itemCode}>{code}</Text>}
         <View style={styles.itemMeta}>
-          <Text style={styles.itemQty}>{qty} шт.</Text>
+          {hasPartial ? (
+            <View>
+              <Text style={[styles.itemQty, { textDecorationLine: "line-through", color: colors.text.muted }]}>{qty} {unitLabel}</Text>
+              <Text style={[styles.itemQty, { color: colors.status.warning, fontFamily: Typography.fontBold }]}>Отдано: {deliveredQty} {unitLabel}</Text>
+              {returnReason && <Text style={[styles.itemCode, { color: colors.status.danger, marginTop: 2 }]}>{returnReason}</Text>}
+            </View>
+          ) : (
+            <Text style={styles.itemQty}>{qty} {unitLabel}</Text>
+          )}
           {!!discount && discount > 0 && (
             <View style={styles.discountChip}>
               <Feather name="tag" size={10} color={colors.status.success} />
@@ -33,7 +48,7 @@ function ItemRow({ name, code, qty, price, discount, total, colors }: {
       </View>
       <View style={styles.itemRight}>
         <Text style={styles.itemTotal}>{money(total)}</Text>
-        <Text style={styles.itemPrice}>{money(price)} / шт.</Text>
+        <Text style={styles.itemPrice}>{money(price)} / {unitLabel}</Text>
       </View>
     </View>
   );
@@ -60,6 +75,9 @@ export function OrderItemsList({ order, colors }: { order: any; colors: ThemeCol
                 discount={item.discount}
                 total={Number(item.subtotal) || 0}
                 colors={colors}
+                unit={item.unit}
+                deliveredQty={item.deliveredQuantity}
+                returnReason={item.returnReason}
               />
               {idx < order.items.length - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />}
             </View>

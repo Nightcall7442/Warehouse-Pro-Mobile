@@ -159,6 +159,7 @@ export default function RootLayout() {
               <Stack.Screen name="shop/[id]" options={{ headerShown: false }} />
               <Stack.Screen name="shop/nearby" options={{ headerShown: false, presentation: "modal" }} />
               <Stack.Screen name="order/[id]" options={{ headerShown: false }} />
+              <Stack.Screen name="order/deliver" options={{ headerShown: false }} />
               <Stack.Screen name="merchandiser/visit" options={{ headerShown: false, presentation: "modal" }} />
             </Stack>
           </AuthGate>

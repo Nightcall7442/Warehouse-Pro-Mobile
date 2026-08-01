@@ -20,10 +20,12 @@ export const STATUS_CONFIG: Record<
     step: number;
   }
 > = {
-  new:        { label: "Новый",       gradient: ["#4a9de8","#4b6cf6"], icon: "file-text",    badgeVariant: "info",    step: 0 },
-  processing: { label: "В обработке", gradient: ["#e8a830","#f09050"], icon: "loader",       badgeVariant: "warning", step: 1 },
-  completed:  { label: "Выполнен",    gradient: ["#34c473","#2ec4b0"], icon: "check-circle", badgeVariant: "success", step: 2 },
-  cancelled:  { label: "Отменён",     gradient: ["#e85050","#f06895"], icon: "x-circle",     badgeVariant: "danger",  step: -1 },
+  new:                  { label: "Новый",            gradient: ["#4a9de8","#4b6cf6"], icon: "file-text",    badgeVariant: "info",    step: 0 },
+  processing:           { label: "В обработке",      gradient: ["#e8a830","#f09050"], icon: "loader",       badgeVariant: "warning", step: 1 },
+  completed:            { label: "Выполнен",         gradient: ["#34c473","#2ec4b0"], icon: "check-circle", badgeVariant: "success", step: 2 },
+  cancelled:            { label: "Отменён",          gradient: ["#e85050","#f06895"], icon: "x-circle",     badgeVariant: "danger",  step: -1 },
+  partially_delivered:  { label: "Част. доставка",   gradient: ["#d4973a","#f09858"], icon: "package",      badgeVariant: "warning", step: 1 },
+  partially_paid:       { label: "Част. оплата",     gradient: ["#5b6d8a","#7b94f8"], icon: "credit-card",  badgeVariant: "warning", step: 1 },
 };
 
 export const PIPELINE_STEPS = ["Новый", "В обработке", "Выполнен"];

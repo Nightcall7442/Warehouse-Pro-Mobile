@@ -278,7 +278,7 @@ export interface Order {
   orderNumber: string;
   shopName?: string;
   total: string;
-  status: "new" | "processing" | "completed" | "cancelled";
+  status: "new" | "processing" | "completed" | "cancelled" | "partially_delivered" | "partially_paid";
   createdAt: string;
 }
 
@@ -291,11 +291,14 @@ export interface OrderDetail extends Order {
     unitPrice: number;
     discount?: number;
     subtotal: number;
+    unit?: string;
+    deliveredQuantity?: number | null;
+    returnReason?: string | null;
   }>;
   notes?: string;
   discount?: number;
   subtotal: string;
-  shop?: { id: number; name: string; address?: string; city?: string; phone?: string } | null;
+  shop?: { id: number; name: string; address?: string; city?: string; phone?: string; debt?: string; ownerName?: string } | null;
   agent?: { id: number; name: string } | null;
 }
 
@@ -921,4 +924,82 @@ export interface OptimizedRoute {
 
 export async function getOptimizedRoute(currentLat: number, currentLng: number, date?: string): Promise<{ plans: OptimizedRoute[]; totalDistance: number; totalStops: number }> {
   return trpcQuery("agent.getOptimizedRoute", { currentLat, currentLng, date });
+}
+
+// ── Partial Payment ──────────────────────────────────────────────────────────
+
+export interface RecordPartialPaymentInput {
+  orderId: number;
+  paidAmount: string;
+  method: "cash" | "card" | "transfer";
+  debtDueDate?: string;
+  notes?: string;
+}
+
+export async function recordPartialPayment(input: RecordPartialPaymentInput): Promise<{ success: boolean }> {
+  return trpcMutation("order.recordPartialPayment", input);
+}
+
+// ── Partial Delivery ─────────────────────────────────────────────────────────
+
+export interface RecordPartialDeliveryInput {
+  orderId: number;
+  items: Array<{ itemId: number; deliveredQuantity: number; returnReason?: string }>;
+  photos?: string[];
+}
+
+export async function recordPartialDelivery(input: RecordPartialDeliveryInput): Promise<{ success: boolean }> {
+  return trpcMutation("order.recordPartialDelivery", input);
+}
+
+// ── Combined Delivery + Payment ──────────────────────────────────────────────
+
+export interface RecordDeliveryAndPaymentInput {
+  orderId: number;
+  deliveredItems: Array<{ itemId: number; deliveredQuantity: number; returnReason?: string }>;
+  payment: { paidAmount: string; method: "cash" | "card" | "transfer"; debtDueDate?: string; notes?: string };
+  photos?: string[];
+}
+
+export async function recordDeliveryAndPayment(input: RecordDeliveryAndPaymentInput): Promise<{ success: boolean }> {
+  return trpcMutation("order.recordDeliveryAndPayment", input);
+}
+
+// ── Order Adjustments ────────────────────────────────────────────────────────
+
+export interface OrderAdjustment {
+  id: number;
+  type: string;
+  oldValue: unknown;
+  newValue: unknown;
+  reason: string | null;
+  photos: string[] | null;
+  createdAt: string;
+  adjustedByName: string | null;
+}
+
+export async function getOrderAdjustments(orderId: number): Promise<OrderAdjustment[]> {
+  return trpcQuery("order.getAdjustments", { orderId });
+}
+
+// ── Order Payments ───────────────────────────────────────────────────────────
+
+export interface OrderPayment {
+  id: number;
+  amount: string;
+  type: string;
+  paymentMethod: string | null;
+  status: string | null;
+  totalOrderAmount: string | null;
+  paidAmount: string | null;
+  debtAmount: string | null;
+  debtDueDate: string | null;
+  paidAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  createdByName: string | null;
+}
+
+export async function getOrderPayments(orderId: number): Promise<OrderPayment[]> {
+  return trpcQuery("order.getOrderPayments", { orderId });
 }
