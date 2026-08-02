@@ -23,6 +23,7 @@ import {
   cancelOrder,
   deleteOrder,
   updateOrder,
+  updateOrderItems,
   type OrderDetail,
 } from "../../src/api";
 import {
@@ -109,6 +110,20 @@ export default function OrderDetailScreen() {
     onError: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       notify.error("Не удалось обновить заказ");
+    },
+  });
+
+  const updateItemsMutation = useMutation({
+    mutationFn: (items: Array<{ itemId: number; quantity: number }>) => updateOrderItems(Number(id), items),
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notify.success("Количество товаров обновлено");
+      queryClient.invalidateQueries({ queryKey: ["order", id] });
+      queryClient.invalidateQueries({ queryKey: ["myOrders"] });
+    },
+    onError: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      notify.error("Не удалось обновить количество");
     },
   });
 
@@ -252,9 +267,18 @@ export default function OrderDetailScreen() {
         visible={showEditModal}
         notes={editNotes}
         discount={editDiscount}
-        saving={updateMutation.isPending}
+        items={(order?.items ?? []).map(item => ({
+          id: item.id,
+          productName: item.productName,
+          productCode: item.productCode,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice) || 0,
+          unit: item.unit,
+        }))}
+        saving={updateMutation.isPending || updateItemsMutation.isPending}
         onNotesChange={setEditNotes}
         onDiscountChange={setEditDiscount}
+        onSaveItems={(items) => updateItemsMutation.mutate(items)}
         onSave={() => updateMutation.mutate()}
         onClose={() => setShowEditModal(false)}
         colors={colors}

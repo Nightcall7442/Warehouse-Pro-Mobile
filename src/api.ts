@@ -547,6 +547,10 @@ export async function updateOrder(id: number, data: { notes?: string; discount?:
   return trpcMutation<void>("order.update", { id, ...data });
 }
 
+export async function updateOrderItems(id: number, items: Array<{ itemId: number; quantity: number }>): Promise<void> {
+  return trpcMutation<void>("order.updateItems", { id, items });
+}
+
 export async function listAllOrders(params?: { page?: number; pageSize?: number; status?: string; showDeleted?: boolean }): Promise<{ data: Order[]; total: number }> {
   return trpcQuery<{ data: Order[]; total: number }>("order.list", params ?? {});
 }

@@ -93,7 +93,7 @@ export default function OrdersScreen() {
     const arr = Array.isArray(orders) ? orders : [];
     const newCount = arr.filter(o => o.status === "new").length;
     const processingCount = arr.filter(o => o.status === "processing").length;
-    const completedCount = arr.filter(o => o.status === "completed").length;
+    const completedCount = arr.filter(o => o.status === "delivered" || o.status === "partial_return_kept").length;
     const cancelledCount = arr.filter(o => o.status === "cancelled").length;
     return { total: arr.length, newCount, processingCount, completedCount, cancelledCount };
   }, [orders]);
