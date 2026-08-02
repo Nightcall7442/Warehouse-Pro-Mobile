@@ -20,15 +20,18 @@ export const STATUS_CONFIG: Record<
     step: number;
   }
 > = {
-  new:                  { label: "Новый",            gradient: ["#4a9de8","#4b6cf6"], icon: "file-text",    badgeVariant: "info",    step: 0 },
-  processing:           { label: "В обработке",      gradient: ["#e8a830","#f09050"], icon: "loader",       badgeVariant: "warning", step: 1 },
-  completed:            { label: "Выполнен",         gradient: ["#34c473","#2ec4b0"], icon: "check-circle", badgeVariant: "success", step: 2 },
-  cancelled:            { label: "Отменён",          gradient: ["#e85050","#f06895"], icon: "x-circle",     badgeVariant: "danger",  step: -1 },
-  partially_delivered:  { label: "Част. доставка",   gradient: ["#d4973a","#f09858"], icon: "package",      badgeVariant: "warning", step: 1 },
-  partially_paid:       { label: "Част. оплата",     gradient: ["#5b6d8a","#7b94f8"], icon: "credit-card",  badgeVariant: "warning", step: 1 },
+  new:                  { label: "Новый",              gradient: ["#4a9de8","#4b6cf6"], icon: "file-text",    badgeVariant: "info",    step: 0 },
+  processing:           { label: "В обработке",        gradient: ["#e8a830","#f09050"], icon: "loader",       badgeVariant: "warning", step: 1 },
+  shipped:              { label: "Отгружён",           gradient: ["#9b59b6","#8e44ad"], icon: "truck",        badgeVariant: "info",    step: 2 },
+  pending:              { label: "В ожидании",         gradient: ["#f09050","#e8a830"], icon: "clock",        badgeVariant: "warning", step: 2 },
+  delivered:            { label: "Доставлен",          gradient: ["#34c473","#2ec4b0"], icon: "check-circle", badgeVariant: "success", step: 3 },
+  cancelled:            { label: "Отменён",            gradient: ["#e85050","#f06895"], icon: "x-circle",     badgeVariant: "danger",  step: -1 },
+  returned:             { label: "Возврат",            gradient: ["#e85050","#c0392b"], icon: "rotate-ccw",   badgeVariant: "danger",  step: -1 },
+  partially_returned:   { label: "Возврат частично",  gradient: ["#f09050","#e8a830"], icon: "rotate-ccw",   badgeVariant: "warning", step: 2 },
+  partial_return_kept:  { label: "Возврат (магазин)",  gradient: ["#d4973a","#f09858"], icon: "package",      badgeVariant: "warning", step: 2 },
 };
 
-export const PIPELINE_STEPS = ["Новый", "В обработке", "Выполнен"];
+export const PIPELINE_STEPS = ["Новый", "В обработке", "Отгружён", "Доставлен"];
 
 export function fmt(dateStr: string) {
   try { return format(parseISO(dateStr), "d MMMM yyyy, HH:mm", { locale: ru }); }

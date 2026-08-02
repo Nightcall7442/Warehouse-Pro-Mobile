@@ -278,7 +278,7 @@ export interface Order {
   orderNumber: string;
   shopName?: string;
   total: string;
-  status: "new" | "processing" | "completed" | "cancelled" | "partially_delivered" | "partially_paid";
+  status: "new" | "processing" | "shipped" | "pending" | "delivered" | "cancelled" | "returned" | "partially_returned" | "partial_return_kept";
   createdAt: string;
 }
 
@@ -300,6 +300,8 @@ export interface OrderDetail extends Order {
   subtotal: string;
   shop?: { id: number; name: string; address?: string; city?: string; phone?: string; debt?: string; ownerName?: string } | null;
   agent?: { id: number; name: string } | null;
+  deliveryResult?: string | null;
+  deliveryNotes?: string | null;
 }
 
 // ──────────────────────────────────────
@@ -644,6 +646,21 @@ export async function markDelivered(orderId: number, cashAmount?: string): Promi
 
 export async function markFailed(orderId: number, reason?: string): Promise<void> {
   await trpcMutation("courier.markFailed", { orderId, reason });
+}
+
+export interface CompleteDeliveryInput {
+  orderId: number;
+  result: "paid" | "partial_paid" | "returned" | "partial_returned";
+  paidAmount?: string;
+  paymentMethod?: "cash" | "card" | "transfer";
+  debtDueDate?: string;
+  returnReason?: string;
+  returnedItems?: Array<{ itemId: number; returnedQty: number }>;
+  notes?: string;
+}
+
+export async function completeDelivery(input: CompleteDeliveryInput): Promise<{ success: boolean; result: string; finalStatus: string }> {
+  return trpcMutation("courier.completeDelivery", input);
 }
 
 // ── Merchandiser / Visit Reports ──────────────────────────────────────────────

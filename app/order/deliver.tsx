@@ -7,11 +7,20 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { getOrderById, recordDeliveryAndPayment, type OrderDetail } from "../../src/api";
+import { getOrderById, completeDelivery, type OrderDetail } from "../../src/api";
 import { Typography, Radii } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
 import { notify } from "../../src/store/toast";
 import { useBrandingStore } from "../../src/store/branding";
+
+type DeliveryResult = "paid" | "partial_paid" | "returned" | "partial_returned";
+
+const RESULT_OPTIONS: Array<{ value: DeliveryResult; icon: string; label: string; color: string }> = [
+  { value: "paid", icon: "check-circle", label: "100% оплачен", color: "#34c473" },
+  { value: "partial_paid", icon: "clock", label: "Частично оплачен", color: "#d4973a" },
+  { value: "returned", icon: "rotate-ccw", label: "Возврат", color: "#d45050" },
+  { value: "partial_returned", icon: "package", label: "Частичный возврат", color: "#f09050" },
+];
 
 const RETURN_REASONS = [
   { value: "changed_mind", label: "Передумал" },
@@ -21,16 +30,6 @@ const RETURN_REASONS = [
   { value: "wrong_client", label: "Клиент не тот" },
   { value: "other", label: "Свой вариант" },
 ];
-
-interface DeliveryItem {
-  itemId: number;
-  productName: string;
-  productCode: string;
-  orderedQty: number;
-  unitPrice: number;
-  deliveredQty: number;
-  returnReason: string;
-}
 
 export default function DeliveryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -46,34 +45,27 @@ export default function DeliveryScreen() {
     enabled: !!id,
   });
 
-  const [items, setItems] = useState<DeliveryItem[]>([]);
+  const [result, setResult] = useState<DeliveryResult>("paid");
   const [paidAmount, setPaidAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer">("cash");
   const [debtDueDate, setDebtDueDate] = useState("");
+  const [returnReason, setReturnReason] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Initialize items when order loads
-  useState(() => {
-    if (order?.items) {
-      setItems(order.items.map(item => ({
-        itemId: item.id,
-        productName: item.productName,
-        productCode: item.productCode ?? "",
-        orderedQty: Number(item.quantity),
-        unitPrice: Number(item.unitPrice),
-        deliveredQty: Number(item.quantity),
-        returnReason: "",
-      })));
-    }
-  });
-
   const mutation = useMutation({
-    mutationFn: recordDeliveryAndPayment,
-    onSuccess: () => {
+    mutationFn: completeDelivery,
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["order", id] });
-      notify.success("Доставка зафиксирована");
+      queryClient.invalidateQueries({ queryKey: ["myDeliveries"] });
+      const labels: Record<string, string> = {
+        paid: "100% оплачен",
+        partial_paid: "Частично оплачен",
+        returned: "Возврат",
+        partial_returned: "Частичный возврат",
+      };
+      notify.success(`Доставка: ${labels[data.result] ?? data.result}`);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     },
@@ -84,40 +76,31 @@ export default function DeliveryScreen() {
     onSettled: () => setSubmitting(false),
   });
 
-  const computedTotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + item.unitPrice * item.deliveredQty, 0);
-  }, [items]);
-
-  const debt = useMemo(() => {
-    return Math.max(0, computedTotal - Number(paidAmount || 0));
-  }, [computedTotal, paidAmount]);
-
-  const updateItem = (idx: number, field: keyof DeliveryItem, value: number | string) => {
-    setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
-  };
+  const orderTotal = useMemo(() => Number(order?.total ?? 0), [order]);
+  const debt = useMemo(() => Math.max(0, orderTotal - Number(paidAmount || 0)), [orderTotal, paidAmount]);
 
   const handleSubmit = () => {
     if (submitting) return;
 
-    const hasPartial = items.some(i => i.deliveredQty < i.orderedQty);
-    const paid = Number(paidAmount || 0);
-
-    if (paid > computedTotal) {
-      Alert.alert("Ошибка", "Сумма оплаты не может превышать сумму доставки");
+    if ((result === "paid" || result === "partial_paid") && Number(paidAmount || 0) <= 0) {
+      Alert.alert("Ошибка", "Укажите сумму оплаты");
+      return;
+    }
+    if (result === "partial_paid" && Number(paidAmount) >= orderTotal) {
+      Alert.alert("Ошибка", "При частичной оплате сумма должна быть меньше итого");
       return;
     }
 
-    if (hasPartial) {
-      const missingReasons = items.filter(i => i.deliveredQty < i.orderedQty && !i.returnReason);
-      if (missingReasons.length > 0) {
-        Alert.alert("Ошибка", "Укажите причину для товаров, которых клиент не забрал");
-        return;
-      }
-    }
+    const labels: Record<string, string> = {
+      paid: `100% оплата: ${orderTotal.toLocaleString("ru")} ${branding.currencySymbol}`,
+      partial_paid: `Оплата: ${Number(paidAmount).toLocaleString("ru")} ${branding.currencySymbol}, долг: ${debt.toLocaleString("ru")} ${branding.currencySymbol}`,
+      returned: "Полный возврат — товар вернётся на склад",
+      partial_returned: "Частичный возврат",
+    };
 
     Alert.alert(
-      "Подтверждение",
-      `Доставка: ${computedTotal.toLocaleString("ru")} ${branding.currencySymbol}\nОплата: ${paid.toLocaleString("ru")} ${branding.currencySymbol}\nДолг: ${debt.toLocaleString("ru")} ${branding.currencySymbol}`,
+      "Подтверждение доставки",
+      labels[result],
       [
         { text: "Отмена", style: "cancel" },
         {
@@ -126,17 +109,12 @@ export default function DeliveryScreen() {
             setSubmitting(true);
             mutation.mutate({
               orderId: Number(id),
-              deliveredItems: items.map(i => ({
-                itemId: i.itemId,
-                deliveredQuantity: i.deliveredQty,
-                returnReason: i.returnReason || undefined,
-              })),
-              payment: {
-                paidAmount: paid.toFixed(2),
-                method: paymentMethod,
-                debtDueDate: debtDueDate || undefined,
-                notes: notes || undefined,
-              },
+              result,
+              paidAmount: result === "paid" ? String(orderTotal) : result === "partial_paid" ? paidAmount : undefined,
+              paymentMethod,
+              debtDueDate: debtDueDate || undefined,
+              returnReason: returnReason || undefined,
+              notes: notes || undefined,
             });
           },
         },
@@ -154,6 +132,9 @@ export default function DeliveryScreen() {
     );
   }
 
+  const showPaymentFields = result === "paid" || result === "partial_paid";
+  const showReturnFields = result === "returned" || result === "partial_returned";
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
       <ScrollView
@@ -170,182 +151,180 @@ export default function DeliveryScreen() {
             Доставка: {order.orderNumber}
           </Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2 }}>
-            {order.shop?.name ?? "Магазин"}
+            {order.shop?.name ?? "Магазин"} • Итого: {orderTotal.toLocaleString("ru")} {branding.currencySymbol}
           </Text>
         </View>
 
-        {/* Items Section */}
+        {/* Result Selection */}
         <View style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
           <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 12 }}>
-            ТОВАРЫ
+            РЕЗУЛЬТАТ ДОСТАВКИ
           </Text>
-          {items.map((item, idx) => {
-            const hasReturn = item.deliveredQty < item.orderedQty;
-            return (
-              <View key={item.itemId} style={{ marginBottom: 16, paddingBottom: 16, borderBottomWidth: idx < items.length - 1 ? 1 : 0, borderBottomColor: colors.border.default }}>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.primary }}>
-                  {item.productName} {item.productCode ? `(${item.productCode})` : ""}
-                </Text>
-                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2 }}>
-                  Заказано: {item.orderedQty} × {item.unitPrice.toLocaleString("ru")} = {(item.orderedQty * item.unitPrice).toLocaleString("ru")} {branding.currencySymbol}
-                </Text>
-
-                <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 8 }}>
-                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, minWidth: 80 }}>
-                    Передал:
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {RESULT_OPTIONS.map(opt => {
+              const isSelected = result === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => setResult(opt.value)}
+                  style={{
+                    flex: 1, minWidth: "45%", paddingVertical: 14, paddingHorizontal: 12,
+                    borderRadius: Radii.lg,
+                    backgroundColor: isSelected ? `${opt.color}15` : colors.bg.input,
+                    borderWidth: 2,
+                    borderColor: isSelected ? opt.color : colors.border.default,
+                    alignItems: "center",
+                  }}
+                >
+                  <Feather name={opt.icon as keyof typeof Feather.glyphMap} size={22} color={isSelected ? opt.color : colors.text.secondary} />
+                  <Text style={{
+                    fontFamily: isSelected ? Typography.fontBold : Typography.fontMedium,
+                    fontSize: Typography.size.sm,
+                    color: isSelected ? opt.color : colors.text.secondary,
+                    marginTop: 6, textAlign: "center",
+                  }}>
+                    {opt.label}
                   </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <TouchableOpacity
-                      onPress={() => updateItem(idx, "deliveredQty", Math.max(0, item.deliveredQty - 1))}
-                      style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}
-                    >
-                      <Feather name="minus" size={18} color={colors.text.primary} />
-                    </TouchableOpacity>
-                    <TextInput
-                      value={String(item.deliveredQty)}
-                      onChangeText={v => updateItem(idx, "deliveredQty", Math.max(0, Math.min(item.orderedQty, Number(v) || 0)))}
-                      keyboardType="numeric"
-                      style={{
-                        width: 60, height: 36, textAlign: "center",
-                        fontFamily: Typography.fontBold, fontSize: Typography.size.lg,
-                        color: colors.text.primary, backgroundColor: colors.bg.input,
-                        borderRadius: 8, borderWidth: 1, borderColor: colors.border.default,
-                      }}
-                    />
-                    <TouchableOpacity
-                      onPress={() => updateItem(idx, "deliveredQty", Math.min(item.orderedQty, item.deliveredQty + 1))}
-                      style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}
-                    >
-                      <Feather name="plus" size={18} color={colors.text.primary} />
-                    </TouchableOpacity>
-                    <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }}>
-                      / {item.orderedQty}
-                    </Text>
-                  </View>
-                </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
 
-                {hasReturn && (
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger, marginBottom: 4 }}>
-                      Возврат: {item.orderedQty - item.deliveredQty} шт
+        {/* Payment fields */}
+        {showPaymentFields && (
+          <View style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 12 }}>
+              ОПЛАТА
+            </Text>
+
+            {result === "partial_paid" && (
+              <>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
+                  Сумма оплаты:
+                </Text>
+                <TextInput
+                  value={paidAmount}
+                  onChangeText={setPaidAmount}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={colors.text.muted}
+                  style={{
+                    height: 48, paddingHorizontal: 12,
+                    fontFamily: Typography.fontBold, fontSize: Typography.size.xl,
+                    color: colors.text.primary, backgroundColor: colors.bg.input,
+                    borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default,
+                    marginBottom: 8,
+                  }}
+                />
+                {debt > 0 && (
+                  <View style={{ padding: 10, borderRadius: Radii.md, backgroundColor: colors.status.dangerDim, marginBottom: 8 }}>
+                    <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.status.danger }}>
+                      Долг: {debt.toLocaleString("ru")} {branding.currencySymbol}
                     </Text>
-                    <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.secondary, marginBottom: 4 }}>
-                      ПОЧЕМУ НЕ ВСЁ? *
-                    </Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                      {RETURN_REASONS.map(r => (
-                        <TouchableOpacity
-                          key={r.value}
-                          onPress={() => updateItem(idx, "returnReason", r.value)}
-                          style={{
-                            paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16,
-                            backgroundColor: item.returnReason === r.value ? colors.brand.primaryDim : colors.bg.input,
-                            borderWidth: 1,
-                            borderColor: item.returnReason === r.value ? colors.brand.primary : colors.border.default,
-                          }}
-                        >
-                          <Text style={{
-                            fontFamily: Typography.fontMedium, fontSize: Typography.size.xs,
-                            color: item.returnReason === r.value ? colors.brand.primary : colors.text.secondary,
-                          }}>
-                            {r.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
                   </View>
                 )}
-              </View>
-            );
-          })}
-        </View>
+              </>
+            )}
 
-        {/* Payment Section */}
-        <View style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
-          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 12 }}>
-            ОПЛАТА
-          </Text>
-
-          <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary, marginBottom: 4 }}>
-            Сумма по факту: {computedTotal.toLocaleString("ru")} {branding.currencySymbol}
-          </Text>
-
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
-            Получено:
-          </Text>
-          <TextInput
-            value={paidAmount}
-            onChangeText={setPaidAmount}
-            keyboardType="numeric"
-            placeholder="0"
-            placeholderTextColor={colors.text.muted}
-            style={{
-              height: 48, paddingHorizontal: 12,
-              fontFamily: Typography.fontBold, fontSize: Typography.size.xl,
-              color: colors.text.primary, backgroundColor: colors.bg.input,
-              borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default,
-              marginBottom: 8,
-            }}
-          />
-
-          {debt > 0 && (
-            <View style={{ padding: 12, borderRadius: Radii.md, backgroundColor: colors.status.dangerDim, marginBottom: 8 }}>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.status.danger }}>
-                Долг: {debt.toLocaleString("ru")} {branding.currencySymbol}
-              </Text>
-            </View>
-          )}
-
-          {/* Payment method */}
-          <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
-            {(["cash", "card", "transfer"] as const).map(m => (
-              <TouchableOpacity
-                key={m}
-                onPress={() => setPaymentMethod(m)}
-                style={{
-                  flex: 1, paddingVertical: 10, borderRadius: Radii.md,
-                  backgroundColor: paymentMethod === m ? colors.brand.primaryDim : colors.bg.input,
-                  borderWidth: 1,
-                  borderColor: paymentMethod === m ? colors.brand.primary : colors.border.default,
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{
-                  fontFamily: Typography.fontMedium, fontSize: Typography.size.sm,
-                  color: paymentMethod === m ? colors.brand.primary : colors.text.secondary,
-                }}>
-                  {m === "cash" ? "Наличные" : m === "card" ? "Карта" : "Перевод"}
+            {result === "paid" && (
+              <View style={{ padding: 10, borderRadius: Radii.md, backgroundColor: colors.status.successDim, marginBottom: 8 }}>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.status.success }}>
+                  Сумма: {orderTotal.toLocaleString("ru")} {branding.currencySymbol}
                 </Text>
-              </TouchableOpacity>
-            ))}
+              </View>
+            )}
+
+            {/* Payment method */}
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+              {(["cash", "card", "transfer"] as const).map(m => (
+                <TouchableOpacity
+                  key={m}
+                  onPress={() => setPaymentMethod(m)}
+                  style={{
+                    flex: 1, paddingVertical: 10, borderRadius: Radii.md,
+                    backgroundColor: paymentMethod === m ? colors.brand.primaryDim : colors.bg.input,
+                    borderWidth: 1,
+                    borderColor: paymentMethod === m ? colors.brand.primary : colors.border.default,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{
+                    fontFamily: Typography.fontMedium, fontSize: Typography.size.sm,
+                    color: paymentMethod === m ? colors.brand.primary : colors.text.secondary,
+                  }}>
+                    {m === "cash" ? "Наличные" : m === "card" ? "Карта" : "Перевод"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Debt due date */}
+            {result === "partial_paid" && (
+              <>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
+                  Когда обещал доплатить:
+                </Text>
+                <TextInput
+                  value={debtDueDate}
+                  onChangeText={setDebtDueDate}
+                  placeholder="ГГГГ-ММ-ДД"
+                  placeholderTextColor={colors.text.muted}
+                  style={{
+                    height: 44, paddingHorizontal: 12,
+                    fontFamily: Typography.fontRegular, fontSize: Typography.size.base,
+                    color: colors.text.primary, backgroundColor: colors.bg.input,
+                    borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default,
+                    marginBottom: 8,
+                  }}
+                />
+              </>
+            )}
           </View>
+        )}
 
-          {/* Debt due date */}
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
-            Когда обещал доплатить:
-          </Text>
-          <TextInput
-            value={debtDueDate}
-            onChangeText={setDebtDueDate}
-            placeholder="ГГГГ-ММ-ДД"
-            placeholderTextColor={colors.text.muted}
-            style={{
-              height: 44, paddingHorizontal: 12,
-              fontFamily: Typography.fontRegular, fontSize: Typography.size.base,
-              color: colors.text.primary, backgroundColor: colors.bg.input,
-              borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default,
-              marginBottom: 8,
-            }}
-          />
+        {/* Return fields */}
+        {showReturnFields && (
+          <View style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 12 }}>
+              ВОЗВРАТ
+            </Text>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
+              Причина возврата:
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {RETURN_REASONS.map(r => (
+                <TouchableOpacity
+                  key={r.value}
+                  onPress={() => setReturnReason(r.value)}
+                  style={{
+                    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16,
+                    backgroundColor: returnReason === r.value ? colors.brand.primaryDim : colors.bg.input,
+                    borderWidth: 1,
+                    borderColor: returnReason === r.value ? colors.brand.primary : colors.border.default,
+                  }}
+                >
+                  <Text style={{
+                    fontFamily: Typography.fontMedium, fontSize: Typography.size.xs,
+                    color: returnReason === r.value ? colors.brand.primary : colors.text.secondary,
+                  }}>
+                    {r.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
 
-          {/* Notes */}
+        {/* Notes */}
+        <View style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
           <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
             Комментарий:
           </Text>
           <TextInput
             value={notes}
             onChangeText={setNotes}
-            placeholder="Комментарий агента..."
+            placeholder="Комментарий курьера..."
             placeholderTextColor={colors.text.muted}
             multiline
             style={{
@@ -356,31 +335,6 @@ export default function DeliveryScreen() {
               textAlignVertical: "top",
             }}
           />
-        </View>
-
-        {/* Summary */}
-        <View style={[s.card, { marginHorizontal: 16, marginBottom: 16, backgroundColor: colors.bg.elevated }]}>
-          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 8 }}>
-            СВОДКА
-          </Text>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-            <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }}>Заказ исходно:</Text>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary }}>{Number(order.total).toLocaleString("ru")} {branding.currencySymbol}</Text>
-          </View>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-            <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }}>По факту:</Text>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary }}>{computedTotal.toLocaleString("ru")} {branding.currencySymbol}</Text>
-          </View>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-            <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }}>Оплачено:</Text>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.success }}>{Number(paidAmount || 0).toLocaleString("ru")} {branding.currencySymbol}</Text>
-          </View>
-          {debt > 0 && (
-            <View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: colors.border.default, paddingTop: 6, marginTop: 4 }}>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.status.danger }}>ДОЛГ:</Text>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.status.danger }}>{debt.toLocaleString("ru")} {branding.currencySymbol}</Text>
-            </View>
-          )}
         </View>
       </ScrollView>
 
@@ -396,7 +350,7 @@ export default function DeliveryScreen() {
           disabled={submitting}
           style={{
             height: 52, borderRadius: Radii.lg,
-            backgroundColor: colors.brand.primary,
+            backgroundColor: result === "returned" ? "#d45050" : result === "partial_returned" ? "#f09050" : colors.brand.primary,
             alignItems: "center", justifyContent: "center",
             opacity: submitting ? 0.6 : 1,
           }}
@@ -408,4 +362,17 @@ export default function DeliveryScreen() {
       </View>
     </KeyboardAvoidingView>
   );
+}
+
+function makeStyles(colors: ReturnType<typeof useThemeColors>) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.bg.primary },
+    card: {
+      padding: 16,
+      backgroundColor: colors.bg.card,
+      borderRadius: Radii.lg,
+      borderWidth: 1,
+      borderColor: colors.border.default,
+    },
+  };
 }
