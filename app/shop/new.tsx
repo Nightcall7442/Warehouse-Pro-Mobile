@@ -112,7 +112,11 @@ export default function NewShopScreen() {
 
   const mutation = useMutation({
     mutationFn: () => createShop({ name, ownerName: owner || undefined, phone: phone || undefined, city: city || undefined, district: district || undefined, address: address || undefined, notes: notes || undefined, photoUrl: photo || undefined, gpsLat: gpsLat || undefined, gpsLng: gpsLng || undefined, territoryId }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shops"] }); router.back(); notify.success("Магазин создан"); },
+    // "shops" and "availableShops" are two different endpoints (the latter
+    // backs the shop picker in order creation and the catalog screen) — only
+    // invalidating "shops" left a just-created shop missing from both until a
+    // manual refresh or app restart.
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shops"] }); qc.invalidateQueries({ queryKey: ["availableShops"] }); router.back(); notify.success("Магазин создан"); },
     onError: (e: Error) => notify.error(e.message),
   });
 

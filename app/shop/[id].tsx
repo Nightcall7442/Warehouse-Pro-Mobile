@@ -65,13 +65,16 @@ export default function ShopDetailScreen() {
   const updateMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: (data: Partial<Record<string, string>>) => updateShop(Number(id), { ...data, territoryId } as any),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); setEditing(false); notify.success("Сохранено"); },
+    // "availableShops" backs the order-creation picker and catalog screen —
+    // a separate endpoint from "shops", so it needs its own invalidation or
+    // an edited shop's debt/name/status stays stale there.
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); qc.invalidateQueries({ queryKey: ["availableShops"] }); setEditing(false); notify.success("Сохранено"); },
     onError: (e: Error) => notify.error(e.message),
   });
 
   const photoMutation = useMutation({
     mutationFn: (url: string) => uploadShopPhoto(Number(id), url),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); notify.success("Фото обновлено"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); qc.invalidateQueries({ queryKey: ["availableShops"] }); notify.success("Фото обновлено"); },
     onError: (e: Error) => notify.error(e.message),
   });
 

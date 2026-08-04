@@ -35,7 +35,19 @@ export default function DeliveriesScreen() {
     queryFn: () => listMyDeliveries(),
   });
 
-  const { addDeliveryAction } = useOfflineStore();
+  const { addDeliveryAction, deliveryActions } = useOfflineStore();
+
+  // An order queued offline stays in `myDeliveries` untouched — there's no
+  // server response to update it with yet — so without this, the card kept
+  // showing active buttons and a courier could queue a second markDelivered
+  // (or markFailed) for the same order before the first ever syncs. The
+  // backend now rejects a duplicate on sync, but it still shows up in the
+  // queue as a confusing "failed" entry instead of never being created.
+  const queuedOrderIds = new Set(
+    deliveryActions
+      .filter(a => !a.synced)
+      .map(a => (a.action.type === "completeDelivery" ? a.action.input.orderId : a.action.orderId)),
+  );
 
   const markOut = useMutation({
     mutationFn: async (orderId: number) => {
@@ -121,8 +133,8 @@ export default function DeliveriesScreen() {
     onError: (e: Error) => notify.error(e.message),
   });
 
-  const assigned = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "assigned");
-  const inTransit = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "out_for_delivery");
+  const assigned = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "assigned" && !queuedOrderIds.has(d.id));
+  const inTransit = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "out_for_delivery" && !queuedOrderIds.has(d.id));
   const delivered = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "delivered");
   const totalDeliveries = (deliveries ?? []).length;
 
@@ -229,6 +241,7 @@ export default function DeliveriesScreen() {
                   ]);
                 }}
                 isPending={markDel.isPending}
+                failPending={markFail.isPending}
               />
             ))}
           </>
@@ -343,7 +356,7 @@ export default function DeliveriesScreen() {
 }
 
 function DeliveryCard({
-  order, colors, cashInput, onCashChange, onOpenMap, onDeliver, onFail, isPending,
+  order, colors, cashInput, onCashChange, onOpenMap, onDeliver, onFail, isPending, failPending,
 }: {
   order: Delivery;
   colors: ThemeColors;
@@ -353,6 +366,7 @@ function DeliveryCard({
   onDeliver: () => void;
   onFail: () => void;
   isPending: boolean;
+  failPending: boolean;
 }) {
   const config = STATUS_CONFIG[order.deliveryStatus] ?? STATUS_CONFIG.assigned;
 
@@ -414,7 +428,7 @@ function DeliveryCard({
             Доставлено
           </Button>
           <View style={{ marginTop: 8 }}>
-            <Button variant="danger" icon="x-circle" onPress={onFail}>
+            <Button variant="danger" icon="x-circle" onPress={onFail} loading={failPending}>
               Не доставлено
             </Button>
           </View>

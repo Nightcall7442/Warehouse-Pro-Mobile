@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed } from "../api";
+import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed, completeDelivery, CompleteDeliveryInput } from "../api";
 
 const S4 = () => ((1 + Math.random()) * 0x10000 | 0).toString(16).substring(1);
 export function uuidv4() {
@@ -24,7 +24,8 @@ export interface OfflineOrder {
 export type DeliveryAction =
   | { type: "markOutForDelivery"; orderId: number }
   | { type: "markDelivered"; orderId: number; cashAmount?: string }
-  | { type: "markFailed"; orderId: number; reason?: string };
+  | { type: "markFailed"; orderId: number; reason?: string }
+  | { type: "completeDelivery"; input: CompleteDeliveryInput };
 
 export interface OfflineDeliveryAction {
   id: string;
@@ -157,6 +158,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
             return markOutForDelivery(action.orderId);
           } else if (action.type === "markDelivered") {
             return markDelivered(action.orderId, action.cashAmount);
+          } else if (action.type === "completeDelivery") {
+            return completeDelivery(action.input);
           } else {
             return markFailed(action.orderId, action.reason);
           }
@@ -312,10 +315,11 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     await writeDeliveryActionsQueue(updated);
 
     try {
-      const { markOutForDelivery, markDelivered, markFailed } = await import("../../src/api");
+      const { markOutForDelivery, markDelivered, markFailed, completeDelivery } = await import("../../src/api");
       const act = action.action;
       if (act.type === "markOutForDelivery") await markOutForDelivery(act.orderId);
       else if (act.type === "markDelivered") await markDelivered(act.orderId, act.cashAmount);
+      else if (act.type === "completeDelivery") await completeDelivery(act.input);
       else if (act.type === "markFailed") await markFailed(act.orderId, act.reason);
 
       const final = get().deliveryActions.map((a) =>

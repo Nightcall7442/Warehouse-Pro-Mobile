@@ -72,9 +72,9 @@ function QuotaCard({ colors, isDark }: { colors: ReturnType<typeof useThemeColor
 }
 
 // ── Visit Card ───────────────────────────────────────────────────────────────
-function VisitCard({ plan, colors, isDark, onDone, onSkip, index }: {
+function VisitCard({ plan, colors, isDark, onDone, onSkip, index, isPending }: {
   plan: Plan; colors: ReturnType<typeof useThemeColors>; isDark: boolean;
-  onDone: () => void; onSkip: () => void; index: number;
+  onDone: () => void; onSkip: () => void; index: number; isPending: boolean;
 }) {
   const STATUS_META: Record<string, { icon: IconName; color: string; bg: string; label: string }> = {
     visited: { icon: "check-circle", color: colors.status.success, bg: colors.status.successDim, label: "Посещён" },
@@ -114,12 +114,12 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index }: {
         </View>
         {plan.status === "planned" ? (
           <View style={{ flexDirection: "row", gap: 6 }}>
-            <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSkip(); }} haptic="none" scaleTo={0.9}>
+            <PressableScale disabled={isPending} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSkip(); }} haptic="none" scaleTo={0.9}>
               <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingVertical: 6, paddingHorizontal: 10 }}>
                 <Feather name="clock" size={14} color={colors.status.warning} />
               </View>
             </PressableScale>
-            <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDone(); }} haptic="none" scaleTo={0.9}>
+            <PressableScale disabled={isPending} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDone(); }} haptic="none" scaleTo={0.9}>
               <View style={{ backgroundColor: colors.status.success, borderRadius: Radii.sm, paddingVertical: 6, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Feather name="check" size={14} color="#fff" />
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: "#fff" }}>Готово</Text>
@@ -277,6 +277,7 @@ export default function PlanScreen() {
                 index={idx}
                 onDone={() => updateMutation.mutate({ planId: plan.id, status: "visited" })}
                 onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
+                isPending={updateMutation.isPending}
               />
             ))
           )}

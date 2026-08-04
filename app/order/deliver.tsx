@@ -7,11 +7,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { getOrderById, completeDelivery, type OrderDetail } from "../../src/api";
+import * as Network from "expo-network";
+import { getOrderById, completeDelivery, type OrderDetail, type CompleteDeliveryInput } from "../../src/api";
 import { Typography, Radii } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
 import { notify } from "../../src/store/toast";
 import { useBrandingStore } from "../../src/store/branding";
+import { useOfflineStore } from "../../src/store/offline";
 
 type DeliveryResult = "paid" | "partial_paid" | "returned" | "partial_returned";
 
@@ -38,6 +40,7 @@ export default function DeliveryScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { branding } = useBrandingStore();
+  const { addDeliveryAction } = useOfflineStore();
 
   const { data: order, isLoading } = useQuery({
     queryKey: ["order", id],
@@ -52,9 +55,22 @@ export default function DeliveryScreen() {
   const [returnReason, setReturnReason] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [returnedQty, setReturnedQty] = useState<Record<number, string>>({});
 
   const mutation = useMutation({
-    mutationFn: completeDelivery,
+    mutationFn: async (input: CompleteDeliveryInput) => {
+      const net = await Network.getNetworkStateAsync();
+      if (!net.isConnected) {
+        await addDeliveryAction({
+          id: `completeDelivery-${input.orderId}-${Date.now()}`,
+          action: { type: "completeDelivery", input },
+          createdAt: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true as const, result: input.result, finalStatus: "" };
+      }
+      return completeDelivery(input);
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["order", id] });
@@ -65,8 +81,13 @@ export default function DeliveryScreen() {
         returned: "Возврат",
         partial_returned: "Частичный возврат",
       };
-      notify.success(`Доставка: ${labels[data.result] ?? data.result}`);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if ("offline" in data && data.offline) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notify.info("Нет подключения. Доставка сохранена офлайн и отправится автоматически.");
+      } else {
+        notify.success(`Доставка: ${labels[data.result] ?? data.result}`);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       router.back();
     },
     onError: (e: Error) => {
@@ -79,6 +100,18 @@ export default function DeliveryScreen() {
   const orderTotal = useMemo(() => Number(order?.total ?? 0), [order]);
   const debt = useMemo(() => Math.max(0, orderTotal - Number(paidAmount || 0)), [orderTotal, paidAmount]);
 
+  const returnedItemsList = useMemo(() => {
+    if (!order) return [];
+    return order.items
+      .map(item => ({ itemId: item.id, returnedQty: Number(returnedQty[item.id] || 0) }))
+      .filter(ri => ri.returnedQty > 0);
+  }, [order, returnedQty]);
+
+  const setItemReturnedQty = (itemId: number, maxQty: number, value: string) => {
+    const clamped = Math.max(0, Math.min(maxQty, Number(value) || 0));
+    setReturnedQty(prev => ({ ...prev, [itemId]: String(clamped) }));
+  };
+
   const handleSubmit = () => {
     if (submitting) return;
 
@@ -90,12 +123,16 @@ export default function DeliveryScreen() {
       Alert.alert("Ошибка", "При частичной оплате сумма должна быть меньше итого");
       return;
     }
+    if (result === "partial_returned" && returnedItemsList.length === 0) {
+      Alert.alert("Ошибка", "Укажите возвращённое количество хотя бы одного товара");
+      return;
+    }
 
     const labels: Record<string, string> = {
       paid: `100% оплата: ${orderTotal.toLocaleString("ru")} ${branding.currencySymbol}`,
       partial_paid: `Оплата: ${Number(paidAmount).toLocaleString("ru")} ${branding.currencySymbol}, долг: ${debt.toLocaleString("ru")} ${branding.currencySymbol}`,
       returned: "Полный возврат — товар вернётся на склад",
-      partial_returned: "Частичный возврат",
+      partial_returned: `Частичный возврат: ${returnedItemsList.length} позици${returnedItemsList.length === 1 ? "я" : "и"}`,
     };
 
     Alert.alert(
@@ -114,6 +151,7 @@ export default function DeliveryScreen() {
               paymentMethod,
               debtDueDate: debtDueDate || undefined,
               returnReason: returnReason || undefined,
+              returnedItems: result === "partial_returned" ? returnedItemsList : undefined,
               notes: notes || undefined,
             });
           },
@@ -313,6 +351,59 @@ export default function DeliveryScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {result === "partial_returned" && (
+              <>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginTop: 8, marginBottom: 8 }}>
+                  Возвращённое количество:
+                </Text>
+                {order.items.map(item => {
+                  const qty = Number(returnedQty[item.id] || 0);
+                  return (
+                    <View
+                      key={item.id}
+                      style={{
+                        flexDirection: "row", alignItems: "center", gap: 10,
+                        paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.border.subtle,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary }} numberOfLines={2}>
+                          {item.productName}
+                        </Text>
+                        <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>
+                          Заказано: {item.quantity} {item.unit ?? "шт"}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setItemReturnedQty(item.id, item.quantity, String(qty - 1))}
+                        style={{ width: 32, height: 32, borderRadius: Radii.md, backgroundColor: colors.bg.input, alignItems: "center", justifyContent: "center" }}
+                      >
+                        <Feather name="minus" size={14} color={colors.text.primary} />
+                      </TouchableOpacity>
+                      <TextInput
+                        value={returnedQty[item.id] ?? "0"}
+                        onChangeText={(v) => setItemReturnedQty(item.id, item.quantity, v)}
+                        keyboardType="numeric"
+                        style={{
+                          width: 48, textAlign: "center", paddingVertical: 6,
+                          fontFamily: Typography.fontBold, fontSize: Typography.size.md,
+                          color: qty > 0 ? colors.status.warning : colors.text.primary,
+                          backgroundColor: colors.bg.input, borderRadius: Radii.md,
+                          borderWidth: 1, borderColor: qty > 0 ? colors.status.warning : colors.border.default,
+                        }}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setItemReturnedQty(item.id, item.quantity, String(qty + 1))}
+                        style={{ width: 32, height: 32, borderRadius: Radii.md, backgroundColor: colors.bg.input, alignItems: "center", justifyContent: "center" }}
+                      >
+                        <Feather name="plus" size={14} color={colors.text.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </>
+            )}
           </View>
         )}
 

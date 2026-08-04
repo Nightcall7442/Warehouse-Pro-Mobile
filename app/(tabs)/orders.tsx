@@ -213,7 +213,10 @@ export default function OrdersScreen() {
               >
                 <Feather name="alert-circle" size={14} color={colors.status.danger} />
                 <Text style={{ flex: 1, fontSize: Typography.size.xs, color: colors.text.secondary }} numberOfLines={1}>
-                  {a.action.type === "markOutForDelivery" ? "Выезд" : a.action.type === "markDelivered" ? "Доставлен" : "Проблема"} #{a.action.orderId}
+                  {a.action.type === "markOutForDelivery" ? "Выезд"
+                    : a.action.type === "markDelivered" ? "Доставлен"
+                    : a.action.type === "completeDelivery" ? "Доставка завершена"
+                    : "Проблема"} #{a.action.type === "completeDelivery" ? a.action.input.orderId : a.action.orderId}
                 </Text>
                 <Feather name="refresh-cw" size={14} color={colors.accent.primary} />
                 <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>Повтор</Text>

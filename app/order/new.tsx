@@ -210,8 +210,8 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
             {/* Price info */}
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
               <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>{line.unitPrice.toLocaleString("ru")} сум / {line.unit ?? "кг"}</Text>
-              <Text style={{ fontSize: Typography.size.xs, color: Number(line.quantity) > line.available && line.available > 0 ? colors.status.danger : colors.text.tertiary }}>
-                Остаток: {line.available}{Number(line.quantity) > line.available && line.available > 0 ? " (превышено!)" : ""}
+              <Text style={{ fontSize: Typography.size.xs, color: Number(line.quantity) > line.available ? colors.status.danger : colors.text.tertiary }}>
+                Остаток: {line.available}{Number(line.quantity) > line.available ? " (превышено!)" : ""}
               </Text>
             </View>
             {/* Inputs */}
@@ -563,7 +563,9 @@ export default function NewOrderScreen() {
     },
   });
 
-  const quantityError = lines.find(l => Number(l.quantity) > 0 && l.available > 0 && Number(l.quantity) > l.available);
+  // No `l.available > 0` guard: a line whose catalog stock is genuinely 0 must
+  // still be caught here, not silently let through because "0 > 0" is false.
+  const quantityError = lines.find(l => Number(l.quantity) > 0 && Number(l.quantity) > l.available);
   const canNext = step === 1 ? !!selectedShop : step === 2 ? lines.length > 0 && lines.every(l => Number(l.quantity) > 0) && !quantityError : true;
 
   const handleSubmit = async () => {

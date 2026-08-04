@@ -1,5 +1,5 @@
 // Warehouse Pro — Merchandiser Visit Report v2 (cold palette, Card, Badge, Button)
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, TextInput, ActivityIndicator, Alert, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
@@ -7,6 +7,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, safeBottomPadding } from "../../src/theme";
 import { getProducts, submitVisitReport, updatePlanStatus, uploadFile, type Product } from "../../src/api";
@@ -20,6 +21,45 @@ interface ChecklistItem {
   present: boolean;
   price?: string;
   promoNote?: string;
+}
+
+// ── Draft auto-save ──────────────────────────────────────────────────────────
+// A visit report has no offline queue — unlike order creation and delivery
+// actions, submitting requires connectivity, and until now a lost connection
+// (a shop's basement, a mall) meant the entire checklist and every photo
+// (already individually uploaded) were gone the moment the screen unmounted.
+// Keyed by planId so switching between plans can't restore the wrong one.
+const draftKey = (planId: string) => `visit_draft_${planId}`;
+
+interface VisitDraft {
+  photos: string[];
+  checklist: ChecklistItem[];
+  competitorNotes: string;
+  savedAt: number;
+}
+
+async function saveVisitDraft(planId: string, draft: Omit<VisitDraft, "savedAt">) {
+  try {
+    await AsyncStorage.setItem(draftKey(planId), JSON.stringify({ ...draft, savedAt: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+async function loadVisitDraft(planId: string): Promise<VisitDraft | null> {
+  try {
+    const raw = await AsyncStorage.getItem(draftKey(planId));
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as VisitDraft;
+    // Expire after 24 hours — a stale draft is more likely to confuse than help.
+    if (Date.now() - draft.savedAt > 24 * 60 * 60 * 1000) {
+      await AsyncStorage.removeItem(draftKey(planId));
+      return null;
+    }
+    return draft;
+  } catch { return null; }
+}
+
+async function clearVisitDraft(planId: string) {
+  try { await AsyncStorage.removeItem(draftKey(planId)); } catch { /* ignore */ }
 }
 
 // ── CardDots (matches web) ───────────────────────────────────────────────────
@@ -43,27 +83,58 @@ export default function MerchandiserVisitScreen() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [competitorNotes, setCompetitorNotes] = useState("");
+  const draftChecked = useRef(false);
 
   const { data: products, isLoading: productsLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
 
   useEffect(() => {
-    if (products && checklist.length === 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setChecklist(products.map((p: Product) => ({ productId: p.id, productName: p.name, present: false })));
-    }
+    if (!products || checklist.length > 0) return;
+    const fresh = products.map((p: Product) => ({ productId: p.id, productName: p.name, present: false }));
+    loadVisitDraft(planId).then(draft => {
+      if (draft && (draft.photos.length > 0 || draft.checklist.some(i => i.present) || draft.competitorNotes)) {
+        Alert.alert(
+          "Продолжить черновик?",
+          "Найден незавершённый отчёт по этому визиту — сеть, видимо, прервалась при отправке.",
+          [
+            { text: "Начать заново", style: "cancel", onPress: () => { setChecklist(fresh); clearVisitDraft(planId); } },
+            { text: "Продолжить", onPress: () => {
+              setPhotos(draft.photos);
+              setChecklist(draft.checklist.length === fresh.length ? draft.checklist : fresh);
+              setCompetitorNotes(draft.competitorNotes);
+            } },
+          ],
+        );
+      } else {
+        setChecklist(fresh);
+      }
+      draftChecked.current = true;
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
+
+  // Auto-save so a killed app or a lost connection doesn't erase the whole
+  // checklist and every already-uploaded photo — matches order/new.tsx's draft
+  // pattern. Skipped until the initial load/restore above has run, so it can't
+  // overwrite a still-unread draft with an empty in-progress state.
+  useEffect(() => {
+    if (!draftChecked.current || checklist.length === 0) return;
+    const timer = setTimeout(() => {
+      saveVisitDraft(planId, { photos, checklist, competitorNotes });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [planId, photos, checklist, competitorNotes]);
 
   const submitReport = useMutation({
     mutationFn: () => submitVisitReport({ planId: Number(planId), shopId: Number(shopId), photos, checklist, competitorNotes: competitorNotes || undefined }),
     onSuccess: async () => {
       try { await updatePlanStatus(Number(planId), "visited"); } catch { /* plan status update is best-effort */ }
+      await clearVisitDraft(planId);
       qc.invalidateQueries({ queryKey: ["plans"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       notify.success("Отчёт отправлен!");
       router.back();
     },
-    onError: (e: Error) => notify.error(e.message),
+    onError: (e: Error) => notify.error(e.message + " — черновик сохранён, можно повторить попытку."),
   });
 
   const pickPhoto = async (useCamera: boolean) => {
