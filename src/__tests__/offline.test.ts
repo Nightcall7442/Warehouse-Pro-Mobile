@@ -15,7 +15,7 @@ jest.mock("../api", () => ({
   createOrder: jest.fn(),
 }));
 
-import { useOfflineStore } from "../store/offline";
+import { useOfflineStore, isRetryableError } from "../store/offline";
 import { createOrder } from "../api";
 
 const mockCreateOrder = createOrder as jest.MockedFunction<typeof createOrder>;
@@ -204,5 +204,52 @@ describe("offline store", () => {
       const state = useOfflineStore.getState();
       expect(state.orders.every(o => !o.synced)).toBe(true);
     });
+  });
+});
+
+// ── Retry classification ─────────────────────────────────────────────────────
+//
+// What these guard: an entry marked non-retryable is presented to the agent as
+// permanently failed, and their natural response is to re-enter the order by
+// hand. That resubmission carries a fresh idempotency key, so the server has no
+// way to recognise it — the office ends up with a real duplicate. Misjudging a
+// transient server error is therefore how duplicate orders get created.
+describe("isRetryableError", () => {
+  function axiosLike(status: number) {
+    const e = new Error(`Request failed with status code ${status}`) as Error & {
+      response?: { status: number };
+    };
+    e.response = { status };
+    return e;
+  }
+
+  it("treats 5xx as retryable — a restart mid-deploy is not the agent's fault", () => {
+    expect(isRetryableError(axiosLike(500))).toBe(true);
+    expect(isRetryableError(axiosLike(502))).toBe(true);
+    expect(isRetryableError(axiosLike(503))).toBe(true);
+  });
+
+  it("treats a business rejection as final", () => {
+    expect(isRetryableError(axiosLike(400))).toBe(false);
+    expect(isRetryableError(axiosLike(403))).toBe(false);
+    expect(isRetryableError(axiosLike(404))).toBe(false);
+  });
+
+  it("treats 408 and 429 as retryable despite being 4xx", () => {
+    expect(isRetryableError(axiosLike(408))).toBe(true);
+    expect(isRetryableError(axiosLike(429))).toBe(true);
+  });
+
+  it("treats an unanswered request as retryable", () => {
+    expect(isRetryableError(new Error("Network Error"))).toBe(true);
+    expect(isRetryableError(new Error("timeout of 30000ms exceeded"))).toBe(true);
+  });
+
+  it("still recognises a 5xx that lost its response object", () => {
+    expect(isRetryableError(new Error("Request failed with status code 500"))).toBe(true);
+  });
+
+  it("does not retry a plain tRPC business message", () => {
+    expect(isRetryableError(new Error("Недостаточно товара на складе"))).toBe(false);
   });
 });

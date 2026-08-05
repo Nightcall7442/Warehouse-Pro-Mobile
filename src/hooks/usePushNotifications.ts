@@ -100,16 +100,24 @@ export function usePushNotifications() {
     };
   }, [isAuthenticated]);
 
-  // Cleanup on logout
+  // Cleanup on logout.
+  //
+  // This runs after the store has already flipped to signed-out, which means
+  // apiLogout() has usually invalidated the session and this call is rejected.
+  // It's a best-effort belt: the authoritative cleanup is server-side, where
+  // registerPushToken takes the token away from whoever held it last, so a
+  // handed-over phone can't keep notifying the previous agent even when this
+  // request never lands.
   useEffect(() => {
     if (isAuthenticated || !tokenRef.current) return;
 
     async function unregister() {
       try {
         await removePushToken();
-        tokenRef.current = null;
       } catch (e) {
         if (__DEV__) console.warn("[Push] Failed to unregister:", e);
+      } finally {
+        tokenRef.current = null;
       }
     }
 

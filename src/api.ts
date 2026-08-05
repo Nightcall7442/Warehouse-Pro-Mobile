@@ -129,8 +129,16 @@ async function trpcMutation<T>(procedure: string, input: unknown): Promise<T> {
     if (__DEV__) console.log(`[tRPC POST ${procedure}] status=${res.status}`, JSON.stringify(res.data)?.slice(0, 300));
     return unwrap<T>(res.data);
   } catch (err: unknown) {
-    const e = err as Error & { trpcMessage?: string };
-    if (e.trpcMessage) throw new Error(e.trpcMessage);
+    const e = err as Error & { trpcMessage?: string; response?: unknown };
+    if (e.trpcMessage) {
+      // Swap in the human-readable tRPC message, but carry the response across.
+      // Callers such as the offline queue decide whether to retry from the HTTP
+      // status, and a bare `new Error(msg)` drops it — making a transient 500
+      // look identical to "this shop no longer exists".
+      const wrapped = new Error(e.trpcMessage) as Error & { response?: unknown };
+      wrapped.response = e.response;
+      throw wrapped;
+    }
     throw err;
   }
 }

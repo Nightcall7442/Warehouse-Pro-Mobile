@@ -89,17 +89,34 @@ async function writeDeliveryActionsQueue(actions: OfflineDeliveryAction[]) {
 }
 
 /**
- * Check if an error is retryable (network) vs business error.
+ * Is this worth trying again, or did the server genuinely refuse the request?
+ *
+ * The distinction is what the agent sees: a retryable entry is "not sent yet",
+ * a non-retryable one is "this order will never go through, deal with it".
+ * Getting it backwards is expensive — an agent told their order failed for good
+ * simply re-enters it, and that fresh submission carries a new idempotency key,
+ * so it lands as a real duplicate the office has to unpick.
+ *
+ * Read the HTTP status off the error rather than pattern-matching its text.
+ * The string form axios produces is "Request failed with status code 502", so
+ * the old `msg.includes("status 5")` check never once matched — every server
+ * hiccup and every restart mid-deploy was reported to the agent as permanent.
  */
-function isRetryableError(e: unknown): boolean {
+export function isRetryableError(e: unknown): boolean {
+  const status = (e as { response?: { status?: number } })?.response?.status;
+  if (typeof status === "number") {
+    // 408 Request Timeout and 429 Too Many Requests are transient despite being 4xx.
+    if (status === 408 || status === 429) return true;
+    return status >= 500;
+  }
+
   if (!(e instanceof Error)) return false;
   const msg = e.message.toLowerCase();
-  // Network errors are retryable
+  // No response came back at all: the request never landed, so nothing was decided.
   if (msg.includes("network") || msg.includes("timeout") || msg.includes("fetch")) return true;
-  if (msg.includes("econnrefused") || msg.includes("econnreset")) return true;
-  // HTTP 5xx are retryable, 4xx are not
-  if (msg.includes("status 5")) return true;
-  if (msg.includes("status 4")) return false;
+  if (msg.includes("econnrefused") || msg.includes("econnreset") || msg.includes("aborted")) return true;
+  // Fallback for an error that lost its response object (e.g. rehydrated from storage).
+  if (/status(?: code)? 5\d\d/.test(msg)) return true;
   return false;
 }
 

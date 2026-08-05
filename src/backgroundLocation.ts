@@ -1,37 +1,110 @@
 import * as TaskManager from "expo-task-manager";
 import * as Location from "expo-location";
 import * as Battery from "expo-battery";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { saveLocation } from "./api";
 
 const BACKGROUND_LOCATION_TASK = "background-location-task";
 
-// Track consecutive errors for backoff
-let consecutiveErrors = 0;
+/**
+ * Points we captured but couldn't upload yet.
+ *
+ * An agent's route runs through places with no signal, and a dropped point is a
+ * hole in the route history that nothing can reconstruct later. The buffer is
+ * capped so a long dead zone can't grow it without bound — oldest points go
+ * first, since the recent ones are what the office actually looks at.
+ */
+const PENDING_KEY = "pending_locations";
+const PENDING_MAX = 200;
 
-TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async () => {
+interface PendingPoint {
+  lat: number;
+  lng: number;
+  accuracy: number;
+  batteryLevel?: number;
+}
+
+async function readPending(): Promise<PendingPoint[]> {
   try {
-    const [location, battery] = await Promise.all([
-      Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      }),
-      Battery.getBatteryLevelAsync().catch(() => null),
-    ]);
-    const batteryPct = battery !== null ? Math.round(battery * 100) : undefined;
-    await saveLocation(
-      location.coords.latitude,
-      location.coords.longitude,
-      location.coords.accuracy ?? 999,
-      batteryPct
-    );
-    consecutiveErrors = 0; // Reset on success
-  } catch (e) {
-    consecutiveErrors++;
-    if (__DEV__) console.error(`Background location error (attempt ${consecutiveErrors}):`, e);
+    const raw = await AsyncStorage.getItem(PENDING_KEY);
+    return raw ? (JSON.parse(raw) as PendingPoint[]) : [];
+  } catch {
+    return [];
+  }
+}
 
-    // If too many consecutive errors, stop tracking to save battery
-    if (consecutiveErrors >= 5) {
-      if (__DEV__) console.warn("Too many consecutive background location errors, stopping tracking");
-      await stopBackgroundTracking();
+async function writePending(points: PendingPoint[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(points.slice(-PENDING_MAX)));
+  } catch { /* buffer is best-effort */ }
+}
+
+/**
+ * Did the server answer, or did the request never land?
+ *
+ * Same distinction the auth store makes: no response means no signal, which is
+ * the normal condition out on a route and must not be treated as a failure of
+ * the tracking itself.
+ */
+function serverAnswered(e: unknown): boolean {
+  return (e as { response?: unknown })?.response !== undefined;
+}
+
+/** Drain whatever the last dead zone left behind, oldest first. */
+async function flushPending(): Promise<void> {
+  const pending = await readPending();
+  if (pending.length === 0) return;
+
+  const remaining = [...pending];
+  while (remaining.length > 0) {
+    const point = remaining[0];
+    try {
+      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel);
+      remaining.shift();
+    } catch (e) {
+      // Still offline — stop draining and keep the rest for the next fix.
+      // A point the server actively refused is not worth retrying forever.
+      if (serverAnswered(e)) remaining.shift();
+      else break;
+    }
+  }
+  await writePending(remaining);
+}
+
+TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
+  if (error) {
+    if (__DEV__) console.error("Background location task error:", error);
+    return;
+  }
+
+  // The OS hands us the fix it already took. Calling getCurrentPositionAsync()
+  // here instead — as this task used to — throws that away and forces a second,
+  // slower acquisition that routinely times out indoors or in a warehouse, which
+  // is precisely where agents spend their day.
+  const locations = (data as { locations?: Location.LocationObject[] } | null)?.locations;
+  const location = locations?.[locations.length - 1];
+  if (!location) return;
+
+  const battery = await Battery.getBatteryLevelAsync().catch(() => null);
+  const point: PendingPoint = {
+    lat: location.coords.latitude,
+    lng: location.coords.longitude,
+    accuracy: location.coords.accuracy ?? 999,
+    batteryLevel: battery !== null ? Math.round(battery * 100) : undefined,
+  };
+
+  try {
+    await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel);
+    await flushPending();
+  } catch (e) {
+    if (__DEV__) console.warn("Background location upload failed, buffering:", e);
+    // Tracking deliberately stays on. The previous version stopped itself after
+    // five consecutive failures — and since a lost connection produced exactly
+    // that, driving through one dead zone silently killed GPS for the rest of
+    // the day, with no way back until the agent reopened the GPS tab by hand.
+    if (!serverAnswered(e)) {
+      const pending = await readPending();
+      await writePending([...pending, point]);
     }
   }
 });
@@ -67,7 +140,8 @@ export async function startBackgroundTracking(): Promise<{ success: boolean; rea
         },
       });
     }
-    consecutiveErrors = 0;
+    // Coming back into coverage is the natural moment to clear the backlog.
+    void flushPending();
     return { success: true };
   } catch (e) {
     if (__DEV__) console.error("Failed to start background tracking:", e);
