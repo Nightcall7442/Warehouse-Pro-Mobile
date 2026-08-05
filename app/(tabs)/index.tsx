@@ -1,5 +1,5 @@
 // Warehouse Pro — Agent Dashboard v2 (cold palette + rings/sparklines)
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
-import { getAgentDashboard, getSupervisorDashboard, getPlans, updatePlanStatus, getRevenueTrend, getDashboardKpis, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, Plan } from "../../src/api";
+import { getSupervisorDashboard, getPlans, updatePlanStatus, getMyOrders, getRevenueTrend, getDashboardKpis, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, Plan } from "../../src/api";
 import { Card, SectionHeader } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
 import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors, Gradients } from "../../src/theme";
@@ -93,6 +93,26 @@ function PlanRow({ plan, onDone, onSkip, onPress, colors, isDark, index }: {
   );
 }
 
+// Visit and order statuses, worded as they are on the plan and orders tabs so
+// the same record doesn't get two different names in two places.
+const PLAN_STATUS: Record<string, { icon: "check-circle" | "clock" | "circle"; color: string; bg: string; label: string }> = {
+  visited: { icon: "check-circle", color: "#34c473", bg: "rgba(52,196,115,0.12)", label: "Посещён" },
+  skipped: { icon: "clock",        color: "#d4973a", bg: "rgba(212,151,58,0.12)", label: "Пропущен" },
+  planned: { icon: "circle",       color: "#5b6d8a", bg: "rgba(91,109,138,0.12)", label: "Запланирован" },
+};
+
+const ORDER_STATUS: Record<string, { color: string; label: string }> = {
+  new:                 { color: "#5b6d8a", label: "Новый" },
+  processing:          { color: "#d4973a", label: "В работе" },
+  shipped:             { color: "#4a9de8", label: "Отгружен" },
+  pending:             { color: "#d4973a", label: "Ожидает" },
+  delivered:           { color: "#34c473", label: "Доставлен" },
+  partial_return_kept: { color: "#34c473", label: "Частичный возврат" },
+  partially_returned:  { color: "#d4973a", label: "Частичный возврат" },
+  returned:            { color: "#d45050", label: "Возврат" },
+  cancelled:           { color: "#d45050", label: "Отменён" },
+};
+
 // ── Agent Home (Premium — matching web Dashboard.tsx style) ────────────────────
 function AgentHome() {
   const router = useRouter();
@@ -103,15 +123,34 @@ function AgentHome() {
 
   const isAgentRole = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator" || user?.role === "merchandiser";
 
-  const { data: kpis, isLoading: kpisLoading, isError: kpisError, refetch: refetchKpis } = useQuery({
-    queryKey: ["agentDashboard"], queryFn: getAgentDashboard, retry: false, enabled: isAgentRole,
-  });
-
-  const { data: revenueTrend } = useQuery({
+  const { data: revenueTrend, refetch: refetchTrend } = useQuery({
     queryKey: ["revenueTrend"],
     queryFn: () => getRevenueTrend(7),
     retry: false, enabled: isAgentRole,
   });
+
+  // Today's route. getPlans() with no arguments already scopes to today and to
+  // the calling agent server-side, so nothing needs passing here.
+  const { data: todayPlans, isLoading: plansLoading, refetch: refetchPlans } = useQuery({
+    queryKey: ["plans", "today"],
+    queryFn: async () => { const r = await getPlans(); return Array.isArray(r) ? r : []; },
+    retry: false, enabled: isAgentRole,
+  });
+
+  const { data: myOrders, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
+    queryKey: ["myOrders"], queryFn: getMyOrders, retry: false, enabled: isAgentRole,
+  });
+
+  const visitedCount = (todayPlans ?? []).filter(p => p.status === "visited").length;
+
+  // "Мои заказы сегодня" says today, so it has to mean today — the whole list
+  // would quietly turn the section into a different thing by tomorrow.
+  const todayOrders = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    return (myOrders ?? [])
+      .filter(o => (o.createdAt ?? "").slice(0, 10) === today)
+      .slice(0, 5);
+  }, [myOrders]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
@@ -121,8 +160,10 @@ function AgentHome() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { await refetchKpis(); } finally { setRefreshing(false); }
-  }, [refetchKpis]);
+    try {
+      await Promise.all([refetchPlans(), refetchOrders(), refetchTrend()]);
+    } finally { setRefreshing(false); }
+  }, [refetchPlans, refetchOrders, refetchTrend]);
 
   const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#5b6d8a" />;
 
@@ -147,61 +188,76 @@ function AgentHome() {
         </View>
       </FadeInItem>
 
-      {/* ── KPI Cards (matching web kpi-hero style) ──────────────────────── */}
+      {/* ── Today's visits ───────────────────────────────────────────────── */}
+      {/* The route is the agent's day. It used to live only behind the plan tab,
+          so the screen called "Мой день" opened without any of it. Rows go to
+          the shop, which is where the agent acts on a visit; marking one done
+          stays on the plan tab rather than being duplicated here. */}
       <FadeInItem delay={60}>
-        {kpisLoading ? (
-          <View style={{ gap: 12, marginBottom: 16 }}>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
-              <ShimmerSkeleton height={140} style={{ flex: 1 }} radius={Radii.xl} />
-            </View>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Feather name="map-pin" size={16} color="#5b6d8a" />
+            <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 16, color: isDark ? "#ede9e3" : "#2d3748" }}>Визиты сегодня</Text>
+            {(todayPlans?.length ?? 0) > 0 && (
+              <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, backgroundColor: isDark ? "rgba(0,153,204,0.12)" : "rgba(91,109,138,0.1)" }}>
+                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 11, color: "#5b6d8a" }}>
+                  {visitedCount} / {todayPlans?.length ?? 0}
+                </Text>
+              </View>
+            )}
           </View>
-        ) : kpisError ? (
-          <PressableScale onPress={() => refetchKpis()} haptic="light" style={{ marginBottom: 16 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 64, borderRadius: 16, backgroundColor: isDark ? "rgba(255,77,106,0.12)" : "rgba(212,80,80,0.08)", borderWidth: 1, borderColor: isDark ? "rgba(255,77,106,0.3)" : "rgba(212,80,80,0.2)" }}>
-              <Feather name="wifi-off" size={14} color="#d45050" />
-              <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 13, color: "#d45050" }}>Ошибка — тап</Text>
-            </View>
+          <PressableScale onPress={() => router.push("/(tabs)/plan")} haptic="light">
+            <Feather name="arrow-right" size={16} color={isDark ? "#8a8478" : "#8b9bb4"} />
           </PressableScale>
-        ) : (
-          <View style={{ gap: 12, marginBottom: 16 }}>
-            {/* Row 1: Orders + Revenue */}
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              {/* Orders card (matching web kpi-hero) */}
-              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
-                <CardDots />
-                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 9, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>ЗАКАЗЫ</Text>
-                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 28, color: isDark ? "#ede9e3" : "#2d3748", marginTop: 8 }}>{kpis?.todayOrders ?? 0}</Text>
-                {revenueTrend && revenueTrend.length > 0 && (
-                  <View style={{ marginTop: 12 }}>
-                    <MiniBarChart data={revenueTrend.slice(-7)} color="#5b6d8a" width={100} height={32} />
+        </View>
+        <View style={{ backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 20, overflow: "hidden", marginBottom: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
+          {plansLoading ? (
+            <View style={{ padding: 16, gap: 10 }}>
+              <ShimmerSkeleton height={44} radius={Radii.md} />
+              <ShimmerSkeleton height={44} radius={Radii.md} />
+            </View>
+          ) : (todayPlans?.length ?? 0) === 0 ? (
+            <View style={{ padding: 24, alignItems: "center", gap: 8 }}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="map-pin" size={20} color={isDark ? "#8a8478" : "#8b9bb4"} />
+              </View>
+              <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 13, color: isDark ? "#8a8478" : "#5a6a7f" }}>На сегодня визитов нет</Text>
+            </View>
+          ) : (
+            (todayPlans ?? []).slice(0, 5).map((plan, i) => {
+              const meta = PLAN_STATUS[plan.status] ?? PLAN_STATUS.planned;
+              return (
+                <PressableScale
+                  key={plan.id}
+                  haptic="light"
+                  onPress={() => { if (plan.shopId) router.push(`/shop/${plan.shopId}`); else router.push("/(tabs)/plan"); }}
+                >
+                  <View style={{
+                    flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14,
+                    borderTopWidth: i === 0 ? 0 : 1,
+                    borderTopColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
+                    opacity: plan.status === "visited" ? 0.6 : 1,
+                  }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: meta.bg, alignItems: "center", justifyContent: "center" }}>
+                      <Feather name={meta.icon} size={14} color={meta.color} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 14, color: isDark ? "#ede9e3" : "#2d3748" }}>
+                        {plan.shopName ?? "Магазин"}
+                      </Text>
+                      {plan.shopAddress ? (
+                        <Text numberOfLines={1} style={{ fontFamily: "DM Sans", fontSize: 12, color: isDark ? "#8a8478" : "#8b9bb4", marginTop: 2 }}>
+                          {plan.shopAddress}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 11, color: meta.color }}>{meta.label}</Text>
                   </View>
-                )}
-              </View>
-              {/* Revenue card */}
-              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
-                <CardDots />
-                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 9, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>ВЫРУЧКА</Text>
-                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 22, color: isDark ? "#ede9e3" : "#2d3748", marginTop: 8 }} numberOfLines={1}>{(kpis?.todayRevenue ?? 0).toLocaleString("ru")}</Text>
-                <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 11, color: isDark ? "#8a8478" : "#5a6a7f", marginTop: 4 }}>сум</Text>
-              </View>
-            </View>
-            {/* Row 2: Shops + Margin */}
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              {/* Shops card */}
-              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
-                <CardDots />
-                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 9, color: isDark ? "#8a8478" : "#8b9bb4", letterSpacing: 1, textTransform: "uppercase" }}>МАГАЗИНОВ</Text>
-                <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 28, color: isDark ? "#ede9e3" : "#2d3748", marginTop: 8 }}>{kpis?.assignedShops ?? 0}</Text>
-              </View>
-              {/* Margin ring */}
-              <View style={{ flex: 1, backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 24, padding: 16, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
-                <ProgressRing value={kpis?.todayRevenue ? Math.min((kpis.todayRevenue / 1000000) * 100, 100) : 0} size={64} strokeWidth={6} color="#34c473" />
-                <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 10, color: isDark ? "#8a8478" : "#5a6a7f", marginTop: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Цель дня</Text>
-              </View>
-            </View>
-          </View>
-        )}
+                </PressableScale>
+              );
+            })
+          )}
+        </View>
       </FadeInItem>
 
       {/* ── Revenue sparkline card (matching web) ────────────────────────── */}
@@ -282,13 +338,51 @@ function AgentHome() {
             <Feather name="arrow-right" size={16} color={isDark ? "#8a8478" : "#8b9bb4"} />
           </PressableScale>
         </View>
+        {/* This section was a hardcoded "Создайте первый заказ" panel — it never
+            queried anything, so it read as empty however many orders the agent
+            had actually placed that day. */}
         <View style={{ backgroundColor: isDark ? "#221f1c" : "#efedea", borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)" }}>
-          <View style={{ padding: 24, alignItems: "center", gap: 8 }}>
-            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", alignItems: "center", justifyContent: "center" }}>
-              <Feather name="clipboard" size={20} color={isDark ? "#8a8478" : "#8b9bb4"} />
+          {ordersLoading ? (
+            <View style={{ padding: 16, gap: 10 }}>
+              <ShimmerSkeleton height={44} radius={Radii.md} />
+              <ShimmerSkeleton height={44} radius={Radii.md} />
             </View>
-            <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 13, color: isDark ? "#8a8478" : "#5a6a7f" }}>Создайте первый заказ</Text>
-          </View>
+          ) : todayOrders.length === 0 ? (
+            <View style={{ padding: 24, alignItems: "center", gap: 8 }}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="clipboard" size={20} color={isDark ? "#8a8478" : "#8b9bb4"} />
+              </View>
+              <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 13, color: isDark ? "#8a8478" : "#5a6a7f" }}>
+                {(myOrders?.length ?? 0) > 0 ? "Сегодня заказов ещё нет" : "Создайте первый заказ"}
+              </Text>
+            </View>
+          ) : (
+            todayOrders.map((order, i) => {
+              const meta = ORDER_STATUS[order.status] ?? ORDER_STATUS.new;
+              return (
+                <PressableScale key={order.id} haptic="light" onPress={() => router.push(`/order/${order.id}`)}>
+                  <View style={{
+                    flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14,
+                    borderTopWidth: i === 0 ? 0 : 1,
+                    borderTopColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
+                  }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 14, color: isDark ? "#ede9e3" : "#2d3748" }}>
+                        {order.shopName ?? order.orderNumber}
+                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: meta.color }} />
+                        <Text style={{ fontFamily: "DM Sans", fontSize: 12, color: isDark ? "#8a8478" : "#8b9bb4" }}>{meta.label}</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 14, color: isDark ? "#ede9e3" : "#2d3748" }} numberOfLines={1}>
+                      {Number(order.total ?? 0).toLocaleString("ru")}
+                    </Text>
+                  </View>
+                </PressableScale>
+              );
+            })
+          )}
         </View>
       </FadeInItem>
     </ScrollView>
