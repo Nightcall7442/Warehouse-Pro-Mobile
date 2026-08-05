@@ -154,7 +154,7 @@ export default function MerchandiserVisitScreen() {
       try {
         const url = await uploadFile(`data:image/jpeg;base64,${result.assets[0].base64}`, "visits");
         setPhotos(prev => [...prev, url]);
-      } catch { notify.error("Ошибка загрузки фото"); }
+      } catch (e) { notify.error(e instanceof Error ? e.message : "Ошибка загрузки фото"); }
     }
   };
 

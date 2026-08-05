@@ -58,7 +58,7 @@ export default function NewShopScreen() {
     try {
       const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops");
       setPhoto(url);
-    } catch { notify.error("Ошибка загрузки"); }
+    } catch (e) { notify.error(e instanceof Error ? e.message : "Ошибка загрузки"); }
   };
 
   const takePhoto = async () => {

@@ -121,11 +121,15 @@ async function trpcQuery<T>(procedure: string, input?: unknown): Promise<T> {
   return unwrap<T>(res.data);
 }
 
-async function trpcMutation<T>(procedure: string, input: unknown): Promise<T> {
+async function trpcMutation<T>(
+  procedure: string,
+  input: unknown,
+  opts?: { timeout?: number }
+): Promise<T> {
   // tRPC v11 non-batch format: body is {"json": input}
   if (__DEV__) console.log(`[tRPC POST] ${procedure}`, input);
   try {
-    const res = await api.post(`/${procedure}`, { json: input });
+    const res = await api.post(`/${procedure}`, { json: input }, opts);
     if (__DEV__) console.log(`[tRPC POST ${procedure}] status=${res.status}`, JSON.stringify(res.data)?.slice(0, 300));
     return unwrap<T>(res.data);
   } catch (err: unknown) {
@@ -598,10 +602,51 @@ export async function uploadShopPhoto(shopId: number, dataUrl: string): Promise<
   await trpcMutation("agent.uploadMyShopPhoto", { shopId, dataUrl });
 }
 
+/**
+ * How long an image upload may take before we give up.
+ *
+ * The shared 15s default is sized for JSON round-trips of a few kilobytes. A
+ * photo goes up as base64 inside that same JSON body — commonly 1.5–3 MB — and
+ * on the rural 3G an agent actually has, that is a minute or more. Under the
+ * old timeout those uploads could not succeed at all outside a city: the
+ * request was cut off mid-flight and the agent was told "Ошибка загрузки".
+ */
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+/** Roughly what the server's 5,000,000-character limit allows, in bytes. */
+export const MAX_UPLOAD_BYTES = 3_500_000;
+
 /** Upload a base64 image to S3 via server. Returns the public URL. */
 export async function uploadFile(dataUrl: string, folder: "products" | "shops" | "avatars" | "visits" = "products"): Promise<string> {
-  const result = await trpcMutation<{ url: string }>("upload.file", { dataUrl, folder });
-  return result.url;
+  // Check before spending a minute of the agent's connection on a body the
+  // server is going to refuse anyway, and say so in terms they can act on.
+  const base64Length = dataUrl.length - (dataUrl.indexOf(",") + 1);
+  if (base64Length * 0.75 > MAX_UPLOAD_BYTES) {
+    throw new Error("Фото слишком большое. Снимите заново или выберите другое.");
+  }
+  // A dropped upload used to lose the photo outright: the caller caught the
+  // error, showed "Ошибка загрузки" and the image was gone — for a merchandiser
+  // that is the proof of the visit they just made, and re-taking it means
+  // walking back into the shop. Signal on the road comes and goes over seconds,
+  // so a couple of spaced retries recover most of these.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, attempt * 3000));
+    try {
+      const result = await trpcMutation<{ url: string }>(
+        "upload.file",
+        { dataUrl, folder },
+        { timeout: UPLOAD_TIMEOUT_MS }
+      );
+      return result.url;
+    } catch (e) {
+      lastError = e;
+      // The server looked at it and said no — too large, wrong format, not
+      // signed in. Sending the identical bytes again cannot change that.
+      if ((e as { serverRejected?: boolean })?.serverRejected) throw e;
+    }
+  }
+  throw lastError;
 }
 
 export interface UpdateProfileInput {

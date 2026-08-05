@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "../../src/store/auth";
-import { updateProfile, changePassword, getAgentDashboard, getMyShops } from "../../src/api";
+import { updateProfile, changePassword, getAgentDashboard, getMyShops, uploadFile } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { notify } from "../../src/store/toast";
 import { Typography, Spacing, Radii } from "../../src/theme";
@@ -62,17 +62,29 @@ export default function ProfileScreen() {
     onError: (e: Error) => notify.error(e.message),
   });
 
+  // The picked image has to go to S3 first. Sending assets[0].uri straight to
+  // the server — as this did — stored a local path like file:///.../ImagePicker/
+  // x.jpeg in the users table: it rendered on the agent's own phone until the
+  // cache was swept, and was a broken image for everyone else, including the
+  // office dashboard. Every other photo in the app already goes via uploadFile.
   const avatarMutation = useMutation({
-    mutationFn: (d: { avatar: string }) => updateProfile(d),
-    onSuccess: (_, v) => { updateUser({ avatar: v.avatar }); notify.success("Аватар обновлён"); },
+    mutationFn: async (d: { base64: string }) => {
+      const url = await uploadFile(`data:image/jpeg;base64,${d.base64}`, "avatars");
+      await updateProfile({ avatar: url });
+      return url;
+    },
+    onSuccess: (url) => { updateUser({ avatar: url }); notify.success("Аватар обновлён"); },
     onError: (e: Error) => notify.error(e.message),
   });
 
   const handleAvatarPress = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") { Alert.alert("Нужно разрешение", "Доступ к галерее"); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-    if (!result.canceled && result.assets[0]) avatarMutation.mutate({ avatar: result.assets[0].uri });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.6, base64: true,
+    });
+    const base64 = result.assets?.[0]?.base64;
+    if (!result.canceled && base64) avatarMutation.mutate({ base64 });
   }, [avatarMutation]);
 
   const pwdMutation = useMutation({
