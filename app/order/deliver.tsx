@@ -17,12 +17,18 @@ import { useOfflineStore } from "../../src/store/offline";
 
 type DeliveryResult = "paid" | "partial_paid" | "returned" | "partial_returned";
 
-const RESULT_OPTIONS: Array<{ value: DeliveryResult; icon: string; label: string; color: string }> = [
-  { value: "paid", icon: "check-circle", label: "100% оплачен", color: "#34c473" },
-  { value: "partial_paid", icon: "clock", label: "Частично оплачен", color: "#d4973a" },
-  { value: "returned", icon: "rotate-ccw", label: "Возврат", color: "#d45050" },
-  { value: "partial_returned", icon: "package", label: "Частичный возврат", color: "#f09050" },
-];
+// Partial-return uses a distinct 4th hue (no theme token covers it) to stay visually
+// separate from the 3 standard status colors — matches the same orange used in OrderStyles.
+const PARTIAL_RETURN_COLOR = "#f09050";
+
+function getResultOptions(colors: ReturnType<typeof useThemeColors>): Array<{ value: DeliveryResult; icon: string; label: string; color: string }> {
+  return [
+    { value: "paid", icon: "check-circle", label: "100% оплачен", color: colors.status.success },
+    { value: "partial_paid", icon: "clock", label: "Частично оплачен", color: colors.status.warning },
+    { value: "returned", icon: "rotate-ccw", label: "Возврат", color: colors.status.danger },
+    { value: "partial_returned", icon: "package", label: "Частичный возврат", color: PARTIAL_RETURN_COLOR },
+  ];
+}
 
 const RETURN_REASONS = [
   { value: "changed_mind", label: "Передумал" },
@@ -37,6 +43,7 @@ export default function DeliveryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useThemeColors();
+  const RESULT_OPTIONS = useMemo(() => getResultOptions(colors), [colors]);
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { branding } = useBrandingStore();
@@ -441,7 +448,7 @@ export default function DeliveryScreen() {
           disabled={submitting}
           style={{
             height: 52, borderRadius: Radii.lg,
-            backgroundColor: result === "returned" ? "#d45050" : result === "partial_returned" ? "#f09050" : colors.brand.primary,
+            backgroundColor: result === "returned" ? colors.status.danger : result === "partial_returned" ? PARTIAL_RETURN_COLOR : colors.brand.primary,
             alignItems: "center", justifyContent: "center",
             opacity: submitting ? 0.6 : 1,
           }}

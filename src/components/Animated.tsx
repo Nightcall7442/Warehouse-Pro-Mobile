@@ -42,6 +42,12 @@ export function ScaleIn({ children, style }: { children: React.ReactNode; style?
 }
 
 // ── PressableScale → TouchableOpacity (no scale animation) ───────────────────
+// Default hitSlop of 6pt/side pads out small icon buttons (many are sized
+// 32-36pt visually) toward the ~44pt accessible touch-target floor without
+// changing any rendered layout. Callers with tight adjacent spacing can pass
+// hitSlop={undefined} or a smaller value to opt out.
+const DEFAULT_HIT_SLOP = { top: 6, bottom: 6, left: 6, right: 6 };
+
 export function PressableScale({
   children,
   onPress,
@@ -50,6 +56,7 @@ export function PressableScale({
   haptic = "light",
   disabled = false,
   accessibilityLabel,
+  hitSlop = DEFAULT_HIT_SLOP,
 }: {
   children: React.ReactNode;
   onPress?: () => void;
@@ -58,6 +65,7 @@ export function PressableScale({
   haptic?: "light" | "medium" | "heavy" | "selection" | "success" | "error" | "none";
   disabled?: boolean;
   accessibilityLabel?: string;
+  hitSlop?: { top: number; bottom: number; left: number; right: number };
 }) {
   const handlePress = () => {
     if (haptic !== "none") {
@@ -93,6 +101,7 @@ export function PressableScale({
       style={[{ opacity: disabled ? 0.5 : 1 }, style]}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      hitSlop={hitSlop}
     >
       {children}
     </TouchableOpacity>

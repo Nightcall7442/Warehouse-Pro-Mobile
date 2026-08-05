@@ -331,6 +331,22 @@ export const Shadows = {
 // a light-toned shadow reads muddy on a charcoal canvas.
 export const DarkShadowColor = "#000000";
 
+// ── Order Status Gradients ──────────────────────────────────────────────────
+// Categorical palette for order-pipeline statuses (needs more distinct hues than
+// the accent/status scale provides — e.g. purple for "shipped"). Theme-agnostic
+// (same in light/dark) to match the web app's order status badges.
+export const OrderStatusGradients: Record<string, readonly [string, string]> = {
+  new: ["#4a9de8", "#4b6cf6"],
+  processing: ["#e8a830", "#f09050"],
+  shipped: ["#9b59b6", "#8e44ad"],
+  pending: ["#f09050", "#e8a830"],
+  delivered: ["#34c473", "#2ec4b0"],
+  cancelled: ["#e85050", "#f06895"],
+  returned: ["#e85050", "#c0392b"],
+  partially_returned: ["#f09050", "#e8a830"],
+  partial_return_kept: ["#d4973a", "#f09858"],
+};
+
 // ── KPI Colors ────────────────────────────────────────────────────────────────
 export const KpiColors = {
   indigo: "#5b6d8a",

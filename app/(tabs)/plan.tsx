@@ -147,7 +147,7 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
   if (isLoading) return <ShimmerSkeleton height={120} radius={Radii.xxl} />;
   if (!kpi) return null;
 
-  const GRADE_COLORS: Record<string, string> = { A: colors.status.success, B: "#5a8fad", C: colors.status.warning, D: colors.status.danger, F: colors.status.danger };
+  const GRADE_COLORS: Record<string, string> = { A: colors.status.success, B: colors.status.info, C: colors.status.warning, D: colors.status.danger, F: colors.status.danger };
   const gradeColor = GRADE_COLORS[kpi.grade] ?? colors.text.muted;
 
   return (

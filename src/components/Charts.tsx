@@ -5,7 +5,7 @@ import React from "react";
 import { View, Text } from "react-native";
 import Svg, { Circle, Path, Defs, LinearGradient as SvgGrad, Stop } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
-import { Typography, Radii } from "../theme";
+import { Typography, Radii, Shadows, DarkShadowColor } from "../theme";
 import { useThemeColors, useThemeStore } from "../store/theme";
 
 // ── ProgressRing ──────────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ export function NeumorphicProgressBar({ value, height = 8, color, style }: {
       backgroundColor: colors.bg.elevated,
       overflow: "hidden",
       // Neumorphic inset shadow
-      shadowColor: isDark ? "#000" : "#a0988c",
+      shadowColor: isDark ? DarkShadowColor : Shadows.xs.shadowColor,
       shadowOffset: { width: -3, height: -3 },
       shadowOpacity: isDark ? 0.35 : 0.22,
       shadowRadius: 5,

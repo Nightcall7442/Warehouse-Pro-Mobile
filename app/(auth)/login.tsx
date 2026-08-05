@@ -146,7 +146,7 @@ export default function LoginScreen() {
                     value={password} onChangeText={setPassword} secureTextEntry={!showPassword}
                     autoComplete="password" editable={!loading} onSubmitEditing={handleLogin}
                   />
-                  <TouchableOpacity style={{ position: "absolute", right: 12 }} onPress={() => setShowPassword(v => !v)} activeOpacity={0.7}>
+                  <TouchableOpacity style={{ position: "absolute", right: 12 }} onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
                     <Feather name={showPassword ? "eye-off" : "eye"} size={16} color={C.textMuted} />
                   </TouchableOpacity>
                 </View>

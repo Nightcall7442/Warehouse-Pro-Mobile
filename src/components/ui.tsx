@@ -210,14 +210,14 @@ interface SearchInputProps {
 export function SearchInput({ value, onChangeText, placeholder = "Поиск…", autoFocus }: SearchInputProps) {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const shadowColor = isDark ? DarkShadowColor : "#a0988c";
+  const shadowColor = isDark ? DarkShadowColor : Shadows.inner.shadowColor;
   return (
     <View style={{
       flexDirection: "row", alignItems: "center", gap: 10,
       backgroundColor: colors.bg.input, borderRadius: Radii.lg,
       paddingHorizontal: Spacing.md, paddingVertical: 12,
       // Neumorphic inset: inner shadow (bottom-right dark)
-      shadowColor: isDark ? "#000" : "#a0988c",
+      shadowColor,
       shadowOffset: { width: -3, height: -3 },
       shadowOpacity: isDark ? 0.3 : 0.2,
       shadowRadius: 6,
@@ -257,7 +257,7 @@ export function ScreenHeader({ title, subtitle, right, style }: {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const shadowColor = isDark ? DarkShadowColor : "#a0988c";
+  const shadowColor = isDark ? DarkShadowColor : Shadows.xs.shadowColor;
   return (
     <View style={[{
       paddingTop: insets.top + 8, paddingBottom: 12, paddingHorizontal: 16,

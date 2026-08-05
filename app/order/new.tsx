@@ -203,7 +203,7 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
                 <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{idx + 1}</Text>
               </View>
               <Text style={{ flex: 1, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, lineHeight: 20 }} numberOfLines={2}>{line.name}</Text>
-              <TouchableOpacity onPress={() => onChange(lines.filter((_, i) => i !== idx))} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
+              <TouchableOpacity onPress={() => onChange(lines.filter((_, i) => i !== idx))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="x" size={14} color={colors.text.muted} />
               </TouchableOpacity>
             </View>
@@ -292,7 +292,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
             {search.length > 0 && <TouchableOpacity onPress={() => setSearch("")}><Feather name="x-circle" size={16} color={colors.text.muted} /></TouchableOpacity>}
           </View>
           {/* Stock filter */}
-          <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
+          <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
             <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: onlyInStock ? colors.accent.primary : colors.border.default, backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
               {onlyInStock && <Feather name="check" size={12} color="#fff" />}
             </View>

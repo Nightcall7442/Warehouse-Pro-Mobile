@@ -6,7 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getSalesTargetSummary, getPlans, getAgentsList, Plan } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii } from "../../src/theme";
+import { Typography, Spacing, Radii, Gradients } from "../../src/theme";
 import { Card, EmptyState } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
@@ -67,7 +67,7 @@ export default function TargetsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       {/* Header */}
-      <LinearGradient colors={isDark ? ["#221f1c", "#1c1a17"] : [colors.brand.primary, colors.brand.primaryLight]}
+      <LinearGradient colors={isDark ? Gradients.dark : [colors.brand.primary, colors.brand.primaryLight]}
         style={{ paddingTop: insets.top + 16, paddingBottom: 16, paddingHorizontal: Spacing.base }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <View>
@@ -110,12 +110,12 @@ export default function TargetsScreen() {
                 </Card>
                 <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Факт</Text>
-                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: "#34c473", marginTop: 4 }}>{totalActual.toLocaleString("ru")}</Text>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.status.success, marginTop: 4 }}>{totalActual.toLocaleString("ru")}</Text>
                   <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.muted }}>сум</Text>
                 </Card>
                 <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Среднее</Text>
-                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: avgCompletion >= 80 ? "#34c473" : avgCompletion >= 50 ? "#d4973a" : "#d45050", marginTop: 4 }}>{avgCompletion}%</Text>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: avgCompletion >= 80 ? colors.status.success : avgCompletion >= 50 ? colors.status.warning : colors.status.danger, marginTop: 4 }}>{avgCompletion}%</Text>
                   <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.muted }}>выполнение</Text>
                 </Card>
               </View>
@@ -133,7 +133,7 @@ export default function TargetsScreen() {
           )}
           renderItem={({ item, index }) => {
             const revPct = Math.min(100, item.completion);
-            const color = revPct >= 100 ? "#34c473" : revPct >= 60 ? "#d4973a" : "#d45050";
+            const color = revPct >= 100 ? colors.status.success : revPct >= 60 ? colors.status.warning : colors.status.danger;
             return (
               <FadeInItem delay={index * 40}>
                 <Card style={{ padding: 16 }}>

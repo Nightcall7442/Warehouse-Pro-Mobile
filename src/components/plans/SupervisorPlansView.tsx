@@ -5,7 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getPlans, getAgentsList, getSalesTargetSummary, createSalesTarget, Plan } from "../../api";
 import { useThemeColors, useThemeStore } from "../../store/theme";
-import { Typography, Spacing, Radii } from "../../theme";
+import { Typography, Spacing, Radii, Gradients } from "../../theme";
 import { ScreenHeader, EmptyState, Card } from "../ui";
 import { ProgressRing, NeumorphicProgressBar } from "../Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../Animated";
@@ -63,7 +63,7 @@ export function SupervisorPlansView() {
         right={
           <View style={{ flexDirection: "row", gap: 8 }}>
             <PressableScale onPress={() => { setCreateMode("target"); setShowCreateTarget(true); }} haptic="light">
-              <View style={{ backgroundColor: "#d4973a", borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
+              <View style={{ backgroundColor: colors.accent.warning, borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="target" size={18} color="#fff" />
               </View>
             </PressableScale>
@@ -204,7 +204,7 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
               <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.tertiary }}>{new Date(periodStart).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} — {new Date(periodEnd).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}</Text>
             </View>
             <PressableScale onPress={() => { if (!agentId) { notify.error("Выберите агента"); return; } if (!targetAmount) { notify.error("Введите норму"); return; } mutation.mutate(); }} disabled={mutation.isPending} haptic="medium">
-              <LinearGradient colors={["#5b6d8a", "#7a8fa8"]} style={{ borderRadius: 12, paddingVertical: 16, alignItems: "center", opacity: mutation.isPending ? 0.7 : 1 }}>
+              <LinearGradient colors={Gradients.primary} style={{ borderRadius: 12, paddingVertical: 16, alignItems: "center", opacity: mutation.isPending ? 0.7 : 1 }}>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: "#fff" }}>{mutation.isPending ? "Создание..." : "Создать норму"}</Text>
               </LinearGradient>
             </PressableScale>

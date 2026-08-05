@@ -3,6 +3,7 @@ import {
   Spacing,
   Radii,
   ThemeColors,
+  OrderStatusGradients,
 } from "../../theme";
 import { Feather } from "@expo/vector-icons";
 import { format, parseISO } from "date-fns";
@@ -20,15 +21,15 @@ export const STATUS_CONFIG: Record<
     step: number;
   }
 > = {
-  new:                  { label: "Новый",              gradient: ["#4a9de8","#4b6cf6"], icon: "file-text",    badgeVariant: "info",    step: 0 },
-  processing:           { label: "В обработке",        gradient: ["#e8a830","#f09050"], icon: "loader",       badgeVariant: "warning", step: 1 },
-  shipped:              { label: "Отгружён",           gradient: ["#9b59b6","#8e44ad"], icon: "truck",        badgeVariant: "info",    step: 2 },
-  pending:              { label: "В ожидании",         gradient: ["#f09050","#e8a830"], icon: "clock",        badgeVariant: "warning", step: 2 },
-  delivered:            { label: "Доставлен",          gradient: ["#34c473","#2ec4b0"], icon: "check-circle", badgeVariant: "success", step: 3 },
-  cancelled:            { label: "Отменён",            gradient: ["#e85050","#f06895"], icon: "x-circle",     badgeVariant: "danger",  step: -1 },
-  returned:             { label: "Возврат",            gradient: ["#e85050","#c0392b"], icon: "rotate-ccw",   badgeVariant: "danger",  step: -1 },
-  partially_returned:   { label: "Возврат частично",  gradient: ["#f09050","#e8a830"], icon: "rotate-ccw",   badgeVariant: "warning", step: 2 },
-  partial_return_kept:  { label: "Возврат (магазин)",  gradient: ["#d4973a","#f09858"], icon: "package",      badgeVariant: "warning", step: 2 },
+  new:                  { label: "Новый",              gradient: OrderStatusGradients.new,                 icon: "file-text",    badgeVariant: "info",    step: 0 },
+  processing:           { label: "В обработке",        gradient: OrderStatusGradients.processing,          icon: "loader",       badgeVariant: "warning", step: 1 },
+  shipped:              { label: "Отгружён",           gradient: OrderStatusGradients.shipped,             icon: "truck",        badgeVariant: "info",    step: 2 },
+  pending:              { label: "В ожидании",         gradient: OrderStatusGradients.pending,             icon: "clock",        badgeVariant: "warning", step: 2 },
+  delivered:            { label: "Доставлен",          gradient: OrderStatusGradients.delivered,           icon: "check-circle", badgeVariant: "success", step: 3 },
+  cancelled:            { label: "Отменён",            gradient: OrderStatusGradients.cancelled,           icon: "x-circle",     badgeVariant: "danger",  step: -1 },
+  returned:             { label: "Возврат",            gradient: OrderStatusGradients.returned,            icon: "rotate-ccw",   badgeVariant: "danger",  step: -1 },
+  partially_returned:   { label: "Возврат частично",  gradient: OrderStatusGradients.partially_returned,  icon: "rotate-ccw",   badgeVariant: "warning", step: 2 },
+  partial_return_kept:  { label: "Возврат (магазин)",  gradient: OrderStatusGradients.partial_return_kept, icon: "package",      badgeVariant: "warning", step: 2 },
 };
 
 export const PIPELINE_STEPS = ["Новый", "В обработке", "Отгружён", "Доставлен"];
