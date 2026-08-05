@@ -99,7 +99,13 @@ export default function MerchandiserVisitScreen() {
             { text: "Начать заново", style: "cancel", onPress: () => { setChecklist(fresh); clearVisitDraft(planId); } },
             { text: "Продолжить", onPress: () => {
               setPhotos(draft.photos);
-              setChecklist(draft.checklist.length === fresh.length ? draft.checklist : fresh);
+              // Merge on productId rather than trusting the two lists to line
+              // up. Comparing lengths meant that the office adding a single
+              // product silently threw away every tick the merchandiser had
+              // made — and since photos and notes still came back, nothing on
+              // screen suggested the checklist had been reset.
+              const ticked = new Map(draft.checklist.map(i => [i.productId, i.present]));
+              setChecklist(fresh.map(i => ({ ...i, present: ticked.get(i.productId) ?? i.present })));
               setCompetitorNotes(draft.competitorNotes);
             } },
           ],

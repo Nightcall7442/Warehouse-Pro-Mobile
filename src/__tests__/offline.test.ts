@@ -214,8 +214,12 @@ describe("offline store", () => {
 // hand. That resubmission carries a fresh idempotency key, so the server has no
 // way to recognise it — the office ends up with a real duplicate. Misjudging a
 // transient server error is therefore how duplicate orders get created.
+//
+// The inverse costs too: an entry wrongly kept as retryable is re-sent on every
+// sync pass forever, because the queue selects on `!synced` alone.
 describe("isRetryableError", () => {
-  function axiosLike(status: number) {
+  /** A bare 5xx from the proxy — no handler ever saw the request. */
+  function gateway(status: number) {
     const e = new Error(`Request failed with status code ${status}`) as Error & {
       response?: { status: number };
     };
@@ -223,24 +227,42 @@ describe("isRetryableError", () => {
     return e;
   }
 
-  it("treats 5xx as retryable — a restart mid-deploy is not the agent's fault", () => {
-    expect(isRetryableError(axiosLike(500))).toBe(true);
-    expect(isRetryableError(axiosLike(502))).toBe(true);
-    expect(isRetryableError(axiosLike(503))).toBe(true);
+  /** What trpcMutation throws once a handler has deliberately refused. */
+  function rejected(message: string, status = 500) {
+    const e = new Error(message) as Error & {
+      response?: { status: number };
+      serverRejected?: boolean;
+    };
+    e.response = { status };
+    e.serverRejected = true;
+    return e;
+  }
+
+  it("retries a bare 5xx — a restart mid-deploy is not the agent's fault", () => {
+    expect(isRetryableError(gateway(500))).toBe(true);
+    expect(isRetryableError(gateway(502))).toBe(true);
+    expect(isRetryableError(gateway(503))).toBe(true);
   });
 
-  it("treats a business rejection as final", () => {
-    expect(isRetryableError(axiosLike(400))).toBe(false);
-    expect(isRetryableError(axiosLike(403))).toBe(false);
-    expect(isRetryableError(axiosLike(404))).toBe(false);
+  it("does not retry a business rejection, even though tRPC maps it to 500", () => {
+    // Most of the API throws a plain Error, so this is the common case by far.
+    expect(isRetryableError(rejected("Недостаточно товара на складе"))).toBe(false);
+    expect(isRetryableError(rejected("Заказ уже завершён"))).toBe(false);
+    expect(isRetryableError(rejected("Магазин не найден", 404))).toBe(false);
   });
 
-  it("treats 408 and 429 as retryable despite being 4xx", () => {
-    expect(isRetryableError(axiosLike(408))).toBe(true);
-    expect(isRetryableError(axiosLike(429))).toBe(true);
+  it("does not retry a 4xx", () => {
+    expect(isRetryableError(gateway(400))).toBe(false);
+    expect(isRetryableError(gateway(403))).toBe(false);
+    expect(isRetryableError(gateway(404))).toBe(false);
   });
 
-  it("treats an unanswered request as retryable", () => {
+  it("retries 408 and 429 despite them being 4xx", () => {
+    expect(isRetryableError(gateway(408))).toBe(true);
+    expect(isRetryableError(gateway(429))).toBe(true);
+  });
+
+  it("retries a request that never landed", () => {
     expect(isRetryableError(new Error("Network Error"))).toBe(true);
     expect(isRetryableError(new Error("timeout of 30000ms exceeded"))).toBe(true);
   });
@@ -249,7 +271,70 @@ describe("isRetryableError", () => {
     expect(isRetryableError(new Error("Request failed with status code 500"))).toBe(true);
   });
 
-  it("does not retry a plain tRPC business message", () => {
-    expect(isRetryableError(new Error("Недостаточно товара на складе"))).toBe(false);
+  it("honours trpcMessage on an error that skipped the mutation wrapper", () => {
+    // trpcQuery has no try/catch, so the raw axios error reaches callers with
+    // trpcMessage attached by the interceptor but no serverRejected flag.
+    const e = new Error("Request failed with status code 500") as Error & {
+      trpcMessage?: string;
+    };
+    e.trpcMessage = "Магазин удалён";
+    expect(isRetryableError(e)).toBe(false);
+  });
+});
+
+// ── Auto-sync selection ──────────────────────────────────────────────────────
+//
+// `retryable` used to be written on every failure and read by nobody: both
+// queues selected on `!synced` alone. An order the server had refused for good
+// was therefore re-sent on every launch and every reconnect, and stayed in the
+// agent's list as a red row they could not clear without reinstalling.
+describe("auto-sync selection", () => {
+  function rejected(message: string) {
+    const e = new Error(message) as Error & { serverRejected?: boolean };
+    e.serverRejected = true;
+    return e;
+  }
+
+  beforeEach(() => {
+    useOfflineStore.setState({ orders: [], deliveryActions: [], syncingOrders: false });
+    mockCreateOrder.mockReset();
+  });
+
+  it("stops re-sending an order the server refused outright", async () => {
+    mockCreateOrder.mockRejectedValue(rejected("Товар удалён"));
+    await useOfflineStore.getState().addOrder(makeOrder({ id: "dead" }) as never);
+
+    await useOfflineStore.getState().syncAll();
+    expect(mockCreateOrder).toHaveBeenCalledTimes(1);
+    expect(useOfflineStore.getState().orders[0].retryable).toBe(false);
+
+    // Every later pass must leave it alone.
+    await useOfflineStore.getState().syncAll();
+    await useOfflineStore.getState().syncAll();
+    expect(mockCreateOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps re-sending an order that only failed for lack of signal", async () => {
+    mockCreateOrder.mockRejectedValue(new Error("Network Error"));
+    await useOfflineStore.getState().addOrder(makeOrder({ id: "offline" }) as never);
+
+    await useOfflineStore.getState().syncAll();
+    await useOfflineStore.getState().syncAll();
+    expect(mockCreateOrder).toHaveBeenCalledTimes(2);
+    expect(useOfflineStore.getState().orders[0].retryable).toBe(true);
+  });
+
+  it("never marks a skipped entry as synced", async () => {
+    mockCreateOrder.mockRejectedValue(rejected("Магазин удалён"));
+    await useOfflineStore.getState().addOrder(makeOrder({ id: "a" }) as never);
+    await useOfflineStore.getState().syncAll();
+
+    mockCreateOrder.mockResolvedValue({ id: 1 } as never);
+    await useOfflineStore.getState().addOrder(makeOrder({ id: "b" }) as never);
+    await useOfflineStore.getState().syncAll();
+
+    const state = useOfflineStore.getState();
+    expect(state.orders.find(o => o.id === "a")!.synced).toBe(false);
+    expect(state.orders.find(o => o.id === "b")!.synced).toBe(true);
   });
 });

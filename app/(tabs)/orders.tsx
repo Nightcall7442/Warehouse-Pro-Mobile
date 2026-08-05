@@ -1,6 +1,6 @@
 // Warehouse Pro — Orders v2 (cold palette, ProgressRing donuts)
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -34,6 +34,21 @@ function dayLabel(dateStr: string): string {
 
 function dayKey(dateStr: string): string {
   try { return format(parseISO(dateStr), "yyyy-MM-dd"); } catch { return "unknown"; }
+}
+
+/**
+ * Discarding drops work the agent actually did — a visit they made, an order
+ * they took — so it asks first, and says plainly that nothing will be sent.
+ */
+function confirmDiscard(what: string, onConfirm: () => void) {
+  Alert.alert(
+    "Удалить из очереди?",
+    `${what} не будет отправлено на сервер. Отменить это действие нельзя.`,
+    [
+      { text: "Отмена", style: "cancel" },
+      { text: "Удалить", style: "destructive", onPress: onConfirm },
+    ]
+  );
 }
 
 export default function OrdersScreen() {
@@ -173,6 +188,19 @@ export default function OrdersScreen() {
                   <>
                     <Feather name="refresh-cw" size={14} color={colors.accent.primary} />
                     <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>Повтор</Text>
+                    {/* Only offered once the server has actually refused the order.
+                        Retrying that will never help, and without a way out the
+                        row stays red forever — which is what pushes agents into
+                        re-entering the order by hand and creating a duplicate. */}
+                    {o.retryable === false ? (
+                      <TouchableOpacity
+                        onPress={() => confirmDiscard(o.shopName, () => offline.remove(o.id))}
+                        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                        accessibilityLabel="Удалить заказ из очереди"
+                      >
+                        <Feather name="x" size={16} color={colors.text.muted} />
+                      </TouchableOpacity>
+                    ) : null}
                   </>
                 )}
               </TouchableOpacity>
@@ -220,6 +248,15 @@ export default function OrdersScreen() {
                 </Text>
                 <Feather name="refresh-cw" size={14} color={colors.accent.primary} />
                 <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>Повтор</Text>
+                {a.retryable === false ? (
+                  <TouchableOpacity
+                    onPress={() => confirmDiscard("это действие", () => offline.discardDeliveryAction(a.id))}
+                    hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+                    accessibilityLabel="Удалить действие из очереди"
+                  >
+                    <Feather name="x" size={16} color={colors.text.muted} />
+                  </TouchableOpacity>
+                ) : null}
               </TouchableOpacity>
             ))}
           </Card>

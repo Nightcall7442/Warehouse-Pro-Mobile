@@ -131,12 +131,18 @@ async function trpcMutation<T>(procedure: string, input: unknown): Promise<T> {
   } catch (err: unknown) {
     const e = err as Error & { trpcMessage?: string; response?: unknown };
     if (e.trpcMessage) {
-      // Swap in the human-readable tRPC message, but carry the response across.
-      // Callers such as the offline queue decide whether to retry from the HTTP
-      // status, and a bare `new Error(msg)` drops it — making a transient 500
-      // look identical to "this shop no longer exists".
-      const wrapped = new Error(e.trpcMessage) as Error & { response?: unknown };
+      // Swap in the human-readable tRPC message, but mark that this came back
+      // as a tRPC error envelope — meaning the server received the request and
+      // deliberately refused it. The offline queue needs that distinction and
+      // can't get it from the HTTP status: most of the API rejects with a plain
+      // `throw new Error(...)`, which tRPC maps to 500, so status alone makes
+      // "этот магазин удалён" indistinguishable from a server restart.
+      const wrapped = new Error(e.trpcMessage) as Error & {
+        response?: unknown;
+        serverRejected?: boolean;
+      };
       wrapped.response = e.response;
+      wrapped.serverRejected = true;
       throw wrapped;
     }
     throw err;

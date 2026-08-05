@@ -49,6 +49,7 @@ interface OfflineStore {
   syncAll: () => Promise<{ synced: number; failed: number }>;
   syncDeliveryActions: () => Promise<{ synced: number; failed: number }>;
   remove: (id: string) => Promise<void>;
+  discardDeliveryAction: (id: string) => Promise<void>;
   clear: () => Promise<void>;
   retry: (id: string) => Promise<boolean>;
   retryDeliveryAction: (id: string) => Promise<boolean>;
@@ -97,16 +98,34 @@ async function writeDeliveryActionsQueue(actions: OfflineDeliveryAction[]) {
  * simply re-enters it, and that fresh submission carries a new idempotency key,
  * so it lands as a real duplicate the office has to unpick.
  *
- * Read the HTTP status off the error rather than pattern-matching its text.
- * The string form axios produces is "Request failed with status code 502", so
- * the old `msg.includes("status 5")` check never once matched — every server
- * hiccup and every restart mid-deploy was reported to the agent as permanent.
+ * The question is really "did the server decide anything?", and the HTTP status
+ * cannot answer it here: most of the API rejects with a plain `throw new Error`,
+ * which tRPC maps to 500, so "этот магазин удалён" and a crashed server arrive
+ * with the identical status. What separates them is the tRPC error envelope —
+ * present only when the request reached a handler that deliberately refused it.
+ *
+ * A bare 5xx with no envelope is the proxy or the platform talking: a restart
+ * mid-deploy, a gateway timeout. Those must be retried, and the old code never
+ * did — its `msg.includes("status 5")` check could not match what axios
+ * actually writes, "Request failed with status code 502". An agent shown that
+ * as a permanent failure simply re-enters the order by hand, and the fresh
+ * submission carries a new idempotency key, so it lands as a real duplicate.
  */
 export function isRetryableError(e: unknown): boolean {
-  const status = (e as { response?: { status?: number } })?.response?.status;
+  const err = e as {
+    serverRejected?: boolean;
+    trpcMessage?: string;
+    response?: { status?: number };
+  };
+
+  // The server received it and said no. Retrying changes nothing.
+  if (err?.serverRejected || err?.trpcMessage) return false;
+
+  const status = err?.response?.status;
   if (typeof status === "number") {
     // 408 Request Timeout and 429 Too Many Requests are transient despite being 4xx.
     if (status === 408 || status === 429) return true;
+    // 5xx without an envelope never reached a handler — infrastructure, not a verdict.
     return status >= 500;
   }
 
@@ -118,6 +137,24 @@ export function isRetryableError(e: unknown): boolean {
   // Fallback for an error that lost its response object (e.g. rehydrated from storage).
   if (/status(?: code)? 5\d\d/.test(msg)) return true;
   return false;
+}
+
+/**
+ * Should an automatic sync pass pick this entry up?
+ *
+ * `retryable` was being written on every failure and then read by nobody — both
+ * queues selected on `!synced` alone. So an entry the server had refused for
+ * good (a deleted product, a shop that no longer exists) was re-sent on every
+ * launch and every reconnect, forever, and sat in the agent's list as a red
+ * item they had no way to clear short of reinstalling the app.
+ *
+ * `undefined` means never attempted, which is exactly what should be sent.
+ * Only an explicit `false` — the server answered and refused — is skipped, and
+ * only for automatic passes: the manual retry button still forces an attempt,
+ * since the underlying cause may since have been fixed in the office.
+ */
+function shouldAutoSync(entry: { synced: boolean; retryable?: boolean }): boolean {
+  return !entry.synced && entry.retryable !== false;
 }
 
 export const useOfflineStore = create<OfflineStore>((set, get) => ({
@@ -158,12 +195,13 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
 
     try {
       const currentActions = get().deliveryActions;
-      const pendingActions = currentActions.filter(a => !a.synced);
+      const pendingActions = currentActions.filter(shouldAutoSync);
 
       if (pendingActions.length === 0) return { synced: 0, failed: 0 };
 
+      const inFlight = new Set(pendingActions.map(a => a.id));
       const syncingActions = currentActions.map(a =>
-        a.synced ? a : { ...a, status: "syncing" as const }
+        inFlight.has(a.id) ? { ...a, status: "syncing" as const } : a
       );
       set({ deliveryActions: syncingActions });
       await writeDeliveryActionsQueue(syncingActions);
@@ -189,7 +227,11 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       const finalActions = syncingActions.map(a => {
         if (a.synced) return a;
         const idx = pendingActions.findIndex((p) => p.id === a.id);
-        if (idx !== -1 && results[idx].status === "rejected") {
+        // Left out of this pass (already refused for good, or queued while it
+        // ran) — leave it exactly as it is. Falling through here would mark an
+        // entry synced that was never actually sent.
+        if (idx === -1) return a;
+        if (results[idx].status === "rejected") {
           failed++;
           return {
             ...a,
@@ -219,13 +261,14 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     try {
       // Capture snapshot at start — work only with this snapshot to avoid race conditions
       const snapshot = get().orders;
-      const pendingOrders = snapshot.filter(o => !o.synced);
+      const pendingOrders = snapshot.filter(shouldAutoSync);
 
       if (pendingOrders.length === 0) return { synced: 0, failed: 0 };
 
       // Mark snapshot orders as syncing (don't re-read from store)
+      const inFlight = new Set(pendingOrders.map(o => o.id));
       const syncingSnapshot = snapshot.map(o =>
-        o.synced ? o : { ...o, status: "syncing" as const }
+        inFlight.has(o.id) ? { ...o, status: "syncing" as const } : o
       );
       // Merge with any new orders added after snapshot
       const currentOrders = get().orders;
@@ -283,6 +326,14 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     const orders = get().orders.filter((o) => o.id !== id);
     set({ orders });
     await writeQueue(orders);
+  },
+
+  // Throw away an entry the server will never accept. Without this the agent
+  // is stuck looking at a permanent red row with no way to act on it.
+  discardDeliveryAction: async (id) => {
+    const deliveryActions = get().deliveryActions.filter((a) => a.id !== id);
+    set({ deliveryActions });
+    await writeDeliveryActionsQueue(deliveryActions);
   },
 
   clear: async () => {
