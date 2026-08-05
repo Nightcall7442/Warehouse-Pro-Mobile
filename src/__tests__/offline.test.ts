@@ -15,7 +15,7 @@ jest.mock("../api", () => ({
   createOrder: jest.fn(),
 }));
 
-import { useOfflineStore, isRetryableError } from "../store/offline";
+import { useOfflineStore, isRetryableError, uuidv4 } from "../store/offline";
 import { createOrder } from "../api";
 
 const mockCreateOrder = createOrder as jest.MockedFunction<typeof createOrder>;
@@ -336,5 +336,39 @@ describe("auto-sync selection", () => {
     const state = useOfflineStore.getState();
     expect(state.orders.find(o => o.id === "a")!.synced).toBe(false);
     expect(state.orders.find(o => o.id === "b")!.synced).toBe(true);
+  });
+});
+
+// ── Idempotency key format ───────────────────────────────────────────────────
+//
+// The server validates this with z.string().uuid(), which enforces both the
+// version nibble and the variant nibble. This generator set the version but
+// left the variant to chance, so three keys in four were malformed and the
+// order came back 400 "Invalid UUID" — the agent simply could not place it.
+// Nothing caught it earlier because the key only used to be attached to
+// re-sends from the offline queue, not to the first online attempt.
+describe("uuidv4", () => {
+  // Same pattern zod applies: version 1-5, variant 8/9/a/b.
+  const RFC4122 = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  it("always produces a key the server will accept", () => {
+    const bad = Array.from({ length: 5000 }, uuidv4).filter(k => !RFC4122.test(k));
+    expect(bad.slice(0, 3)).toEqual([]);
+  });
+
+  it("marks itself as version 4", () => {
+    expect(new Set(Array.from({ length: 500 }, () => uuidv4()[14]))).toEqual(new Set(["4"]));
+  });
+
+  // If the variant were pinned to a single value the keys would still validate,
+  // so check the generator actually varies across the allowed set.
+  it("uses the whole allowed variant range", () => {
+    const seen = new Set(Array.from({ length: 500 }, () => uuidv4()[19]));
+    expect([...seen].sort()).toEqual(["8", "9", "a", "b"]);
+  });
+
+  it("does not repeat itself", () => {
+    const keys = Array.from({ length: 5000 }, uuidv4);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });

@@ -3,8 +3,22 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed, completeDelivery, CompleteDeliveryInput } from "../api";
 
 const S4 = () => ((1 + Math.random()) * 0x10000 | 0).toString(16).substring(1);
+
+/**
+ * A UUID the server will actually accept.
+ *
+ * RFC 4122 pins two things: the version nibble (the "4") and the variant
+ * nibble, which must be 8, 9, a or b. This generator set the version but left
+ * the variant to chance, so three keys out of four were malformed — and the
+ * server validates with z.string().uuid(), which checks both. Every affected
+ * order came back "Invalid UUID" / 400 and simply could not be placed.
+ *
+ * The bug was invisible until idempotency keys started being sent on the first
+ * online attempt; before that only re-sends from the offline queue carried one.
+ */
 export function uuidv4() {
-  return `${S4()}${S4()}-${S4()}-4${S4().slice(0, 3)}-${S4()}-${S4()}${S4()}${S4()}`;
+  const variant = "89ab"[(Math.random() * 4) | 0];
+  return `${S4()}${S4()}-${S4()}-4${S4().slice(0, 3)}-${variant}${S4().slice(0, 3)}-${S4()}${S4()}${S4()}`;
 }
 
 const STORAGE_KEY = "pending_orders";
