@@ -1,6 +1,6 @@
 // Warehouse Pro — Shop Detail v2 (cold palette, Card, Badge, FadeInItem)
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Linking, RefreshControl } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Linking, RefreshControl, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
@@ -78,16 +78,39 @@ export default function ShopDetailScreen() {
     onError: (e: Error) => notify.error(e.message),
   });
 
-  const pickPhoto = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { notify.error("Нет доступа к галерее"); return; }
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true });
-    if (!res.canceled && res.assets[0].base64) {
-      try {
-        const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops");
-        photoMutation.mutate(url);
-      } catch { notify.error("Ошибка загрузки"); }
-    }
+  const PICKER_OPTS: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true };
+
+  const uploadPicked = async (res: ImagePicker.ImagePickerResult) => {
+    if (res.canceled || !res.assets[0]?.base64) return;
+    try {
+      const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops");
+      photoMutation.mutate(url);
+    } catch { notify.error("Ошибка загрузки"); }
+  };
+
+  // Same reason as the new-shop screen: updating a shop's photo is something
+  // an agent does while standing at it, and gallery-only left them no way to
+  // actually take the picture.
+  const pickPhoto = () => {
+    Alert.alert("Фото магазина", undefined, [
+      {
+        text: "Сделать фото",
+        onPress: () => { void (async () => {
+          const cam = await ImagePicker.requestCameraPermissionsAsync();
+          if (!cam.granted) { notify.error("Нет доступа к камере"); return; }
+          await uploadPicked(await ImagePicker.launchCameraAsync(PICKER_OPTS));
+        })(); },
+      },
+      {
+        text: "Выбрать из галереи",
+        onPress: () => { void (async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!perm.granted) { notify.error("Нет доступа к галерее"); return; }
+          await uploadPicked(await ImagePicker.launchImageLibraryAsync(PICKER_OPTS));
+        })(); },
+      },
+      { text: "Отмена", style: "cancel" },
+    ]);
   };
 
   const captureGPS = async () => {

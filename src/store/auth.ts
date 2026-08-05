@@ -42,6 +42,43 @@ async function tryRefreshToken(token: string): Promise<string | null> {
 
 const TOKEN_REFRESH_BUFFER_MS = 24 * 60 * 60 * 1000; // Refresh 24h before expiry
 
+/** Last known profile, so a session survives opening the app without signal. */
+const CACHED_USER_KEY = "cached_user";
+
+/**
+ * Did the server actually reject this session, or did we just fail to reach it?
+ *
+ * Only the first justifies throwing the token away. Agents work in places with
+ * no signal, and treating "request failed" as "you are logged out" is what made
+ * them re-enter their password most mornings: getMe() throws the same way for a
+ * dead connection as for an expired token, and hydrate() deleted the token on
+ * any throw at all.
+ *
+ * axios sets `response` only when a reply came back. No response means the
+ * request never landed — DNS, timeout, airplane mode — and the token is very
+ * probably still perfectly valid.
+ */
+function isAuthRejection(e: unknown): boolean {
+  const status = (e as { response?: { status?: number } })?.response?.status;
+  return status === 401 || status === 403;
+}
+
+async function readCachedUser(): Promise<User | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(CACHED_USER_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedUser(user: User | null): Promise<void> {
+  try {
+    if (user) await SecureStore.setItemAsync(CACHED_USER_KEY, JSON.stringify(user));
+    else await SecureStore.deleteItemAsync(CACHED_USER_KEY);
+  } catch { /* cache is best-effort */ }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
@@ -70,10 +107,29 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       const user = await getMe();
+      await writeCachedUser(user);
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (e) {
       if (__DEV__) console.error('Session hydration failed:', e);
+
+      // Couldn't reach the server. Keep the token and let the agent in on the
+      // last known profile — the offline queue is built for exactly this, and
+      // signing them out here would strand a day's orders behind a login screen
+      // they can't get past without a connection.
+      if (!isAuthRejection(e)) {
+        const cached = await readCachedUser();
+        if (cached) {
+          set({ user: cached, isAuthenticated: true, isLoading: false });
+          return;
+        }
+        // No cached profile to fall back on, but the token is still probably
+        // good — leave it in place so a later retry can use it.
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        return;
+      }
+
       await SecureStore.deleteItemAsync("session_token").catch((err: unknown) => { if (__DEV__) console.warn("Failed to clear invalid token:", err); });
+      await writeCachedUser(null);
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },
@@ -82,6 +138,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     const result = await apiLogin(email, password);
 
     if (result?.user) {
+      await writeCachedUser(result.user);
       set({ user: result.user, isAuthenticated: true });
     } else {
       throw new Error('No user data in response');
@@ -107,11 +164,24 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       const user = await getMe();
+      await writeCachedUser(user);
       set({ user, isAuthenticated: true });
       return true;
     } catch (e) {
       if (__DEV__) console.warn("Biometric auth failed:", e);
+
+      // Same rule as hydrate: a failed request is not a rejected session.
+      if (!isAuthRejection(e)) {
+        const cached = await readCachedUser();
+        if (cached) {
+          set({ user: cached, isAuthenticated: true });
+          return true;
+        }
+        return false;
+      }
+
       await SecureStore.deleteItemAsync("session_token").catch((err: unknown) => { if (__DEV__) console.warn("Failed to clear invalid token:", err); });
+      await writeCachedUser(null);
       return false;
     }
   },
@@ -119,6 +189,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     try { await apiLogout(); }
     catch (e) { if (__DEV__) console.warn("Logout API call failed (non-blocking):", e); }
+    // Deliberate sign-out, so the cached profile goes too — otherwise the next
+    // launch would restore the previous user from cache.
+    await writeCachedUser(null);
     set({ user: null, isAuthenticated: false });
   },
 

@@ -101,7 +101,12 @@ export default function ShopsScreen() {
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
   const isAgent = user?.role === "agent";
   const [search, setSearch] = useState("");
-  const [sortByDistance, setSortByDistance] = useState(false);
+  // Nearest-first is what an agent standing in the field wants by default —
+  // they walk a route, they don't look up shops alphabetically. It stays a
+  // toggle so the territory grouping is still one tap away, but it starts on
+  // as soon as a position is available (and falls back to the grouped list on
+  // its own when it isn't, since every distance is Infinity then).
+  const [sortByDistance, setSortByDistance] = useState(true);
   const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
   const [showWorkZones, setShowWorkZones] = useState(false);
   const { location } = useLocation();

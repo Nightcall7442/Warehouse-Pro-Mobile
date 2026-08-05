@@ -64,19 +64,36 @@ export default function DeliveryScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [returnedQty, setReturnedQty] = useState<Record<number, string>>({});
 
+  const queueOffline = async (input: CompleteDeliveryInput) => {
+    await addDeliveryAction({
+      id: `completeDelivery-${input.orderId}-${Date.now()}`,
+      action: { type: "completeDelivery", input },
+      createdAt: new Date().toISOString(),
+      synced: false,
+    });
+    return { offline: true as const, result: input.result, finalStatus: "" };
+  };
+
   const mutation = useMutation({
     mutationFn: async (input: CompleteDeliveryInput) => {
       const net = await Network.getNetworkStateAsync();
-      if (!net.isConnected) {
-        await addDeliveryAction({
-          id: `completeDelivery-${input.orderId}-${Date.now()}`,
-          action: { type: "completeDelivery", input },
-          createdAt: new Date().toISOString(),
-          synced: false,
-        });
-        return { offline: true as const, result: input.result, finalStatus: "" };
+      if (!net.isConnected) return queueOffline(input);
+
+      try {
+        return await completeDelivery(input);
+      } catch (e) {
+        // The pre-flight check said we were online, but the request still
+        // didn't land — which is the normal case in a weak-signal doorway,
+        // not an edge case. Falling through to onError here would show a
+        // toast and drop the delivery on the floor: the goods are handed
+        // over, the money is taken, and nothing records it. Queue it like
+        // the offline branch above and let AutoSync carry it.
+        const msg = e instanceof Error ? e.message.toLowerCase() : "";
+        const unreachable = !msg || msg.includes("network") || msg.includes("timeout")
+          || msg.includes("fetch") || msg.includes("econn") || msg.includes("status 5");
+        if (unreachable) return queueOffline(input);
+        throw e; // a real rejection from the server — the courier must see it
       }
-      return completeDelivery(input);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });

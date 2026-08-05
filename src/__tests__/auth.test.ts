@@ -56,3 +56,47 @@ describe("Auth Store", () => {
     expect(useAuthStore.getState().user).toEqual({ id: 1, name: "Updated" });
   });
 });
+describe("session survives a lost connection", () => {
+  const { SecureStore } = require("../storage");
+
+  beforeEach(() => {
+    // The store awaits these, so bare jest.fn() (returning undefined) breaks
+    // on `.catch(...)` before the assertion is ever reached.
+    SecureStore.setItemAsync.mockResolvedValue(undefined);
+    SecureStore.deleteItemAsync.mockResolvedValue(undefined);
+  });
+
+  /**
+   * Agents work where there is no signal. getMe() throws the same way for a
+   * dead connection as for an expired token, and hydrate() used to delete the
+   * token on any throw — so opening the app out of coverage logged them out
+   * and made them type their password again. That is the "аккаунт каждый раз
+   * спрашивает войти" complaint.
+   */
+  it("keeps the token and the user when the server is unreachable", async () => {
+    SecureStore.getItemAsync.mockImplementation(async (key: string) =>
+      key === "session_token" ? "tok" :
+      key === "cached_user" ? JSON.stringify({ id: 7, name: "Агент", role: "agent" }) : null);
+    // No `response` field — axios reports it this way when nothing came back.
+    getMe.mockRejectedValue(Object.assign(new Error("Network Error"), { code: "ECONNABORTED" }));
+
+    await useAuthStore.getState().hydrate();
+
+    expect(SecureStore.deleteItemAsync).not.toHaveBeenCalledWith("session_token");
+    const s = useAuthStore.getState();
+    expect(s.isAuthenticated).toBe(true);
+    expect(s.user?.name).toBe("Агент");
+  });
+
+  it("still signs out when the server actually rejects the session", async () => {
+    SecureStore.getItemAsync.mockImplementation(async (key: string) =>
+      key === "session_token" ? "tok" :
+      key === "cached_user" ? JSON.stringify({ id: 7, name: "Агент", role: "agent" }) : null);
+    getMe.mockRejectedValue(Object.assign(new Error("Unauthorized"), { response: { status: 401 } }));
+
+    await useAuthStore.getState().hydrate();
+
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("session_token");
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+});

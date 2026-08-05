@@ -1,6 +1,6 @@
 // Warehouse Pro — New Shop v2 (cold palette, Card, Button, PressableScale)
 import React, { useState } from "react";
-import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
@@ -51,21 +51,43 @@ export default function NewShopScreen() {
     color: colors.text.primary,
   };
 
-  const pickPhoto = async () => {
+  const PICKER_OPTS: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true };
+
+  const uploadPicked = async (res: ImagePicker.ImagePickerResult) => {
+    if (res.canceled || !res.assets[0]?.base64) return;
+    try {
+      const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops");
+      setPhoto(url);
+    } catch { notify.error("Ошибка загрузки"); }
+  };
+
+  const takePhoto = async () => {
+    const cam = await ImagePicker.requestCameraPermissionsAsync();
+    if (!cam.granted) { notify.error("Нет доступа к камере"); return; }
+    await uploadPicked(await ImagePicker.launchCameraAsync(PICKER_OPTS));
+  };
+
+  const pickFromLibrary = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { const cam = await ImagePicker.requestCameraPermissionsAsync(); if (!cam.granted) { notify.error("Нет доступа"); return; }
-      const res = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true });
-      if (!res.canceled && res.assets[0].base64) {
-        try { const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops"); setPhoto(url); }
-        catch { notify.error("Ошибка загрузки"); }
-      }
-      return;
-    }
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true });
-    if (!res.canceled && res.assets[0].base64) {
-      try { const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops"); setPhoto(url); }
-      catch { notify.error("Ошибка загрузки"); }
-    }
+    if (!perm.granted) { notify.error("Нет доступа к галерее"); return; }
+    await uploadPicked(await ImagePicker.launchImageLibraryAsync(PICKER_OPTS));
+  };
+
+  /**
+   * Ask which source to use, camera first.
+   *
+   * This used to open the gallery and only fall back to the camera when
+   * gallery permission was *denied* — so the one case it couldn't serve was
+   * the main one: an agent standing in front of a new shop, wanting to
+   * photograph it. The picture doesn't exist yet; there is nothing in the
+   * gallery to choose.
+   */
+  const pickPhoto = () => {
+    Alert.alert("Фото магазина", undefined, [
+      { text: "Сделать фото", onPress: () => { void takePhoto(); } },
+      { text: "Выбрать из галереи", onPress: () => { void pickFromLibrary(); } },
+      { text: "Отмена", style: "cancel" },
+    ]);
   };
 
   const captureGPS = async () => {

@@ -57,11 +57,20 @@ function AutoSync() {
     Promise.all(tasks).finally(() => { syncing.current = false; });
   }, [syncAll, syncDeliveryActions, qc]);
 
-  // Sync on mount (app foreground) — catches pending items from previous session
+  // Sync once the queue has actually been read off disk — catches pending
+  // items from a previous session.
+  //
+  // This used to run on mount, which was always too early: React runs a
+  // child's effects before its parent's, and load() is kicked off in
+  // RootLayout's effect, so this fired while `orders` was still the empty
+  // initial state and synced nothing. Anything queued offline then sat there
+  // until the agent happened to open the Orders tab or the connection
+  // flapped — long enough for them to assume the order hadn't gone through
+  // and enter it a second time.
+  const loaded = useOfflineStore((s) => s.loaded);
   useEffect(() => {
-    runSync();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (loaded) runSync();
+  }, [loaded, runSync]);
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
