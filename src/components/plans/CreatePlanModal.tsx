@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { View, Text, ScrollView, TextInput } from "react-native";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
-  createPlan,
+  createPlans,
   getAgentsList,
   getAllShops,
   ShopSummary,
@@ -63,20 +63,23 @@ export function CreatePlanModal({
   const mutation = useMutation({
     mutationFn: async () => {
       if (!agentId || !selectedShops.length) return;
-      const results = [];
-      for (const shop of selectedShops) {
-        const result = await createPlan({
-          agentId,
-          shopId: shop.id,
-          planDate: date,
-          notes: notes || undefined,
-        });
-        results.push(result);
-      }
-      return results;
+      // Один запрос на территорию вместо цикла по магазинам: см. createPlans.
+      return createPlans({
+        agentId,
+        shopIds: selectedShops.map(shop => shop.id),
+        planDate: date,
+        notes: notes || undefined,
+      });
     },
-    onSuccess: () => {
-      notify.success(`Создано ${selectedShops.length} планов`);
+    onSuccess: (result) => {
+      // Показываем, что записалось на самом деле. Раньше здесь стояло число
+      // выбранных магазинов — оно оставалось верным, только пока ни один из них
+      // не был назначен ранее.
+      notify.success(
+        result && result.skipped > 0
+          ? `Создано ${result.created}, уже были: ${result.skipped}`
+          : `Создано ${result?.created ?? 0} планов`,
+      );
       const createdAgent = agentId ?? undefined;
       reset();
       onCreated(createdAgent);

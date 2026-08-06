@@ -457,6 +457,27 @@ export async function createPlan(input: {
   return trpcMutation<{ id: number }>("agent.createPlan", input);
 }
 
+/**
+ * Assign a whole territory in one call.
+ *
+ * The plan screen used to loop createPlan, one request per shop. A district of
+ * forty shops meant forty mutations back to back: the first already-planned
+ * shop threw and aborted the loop halfway, and the burst ate the mutation
+ * budget so the next territory of the shift would not go through at all.
+ *
+ * Already-planned shops come back as `skipped` rather than as an error —
+ * assigning a territory where some points are already scheduled is a normal
+ * thing to do, not a mistake to report.
+ */
+export async function createPlans(input: {
+  agentId: number;
+  shopIds: number[];
+  planDate: string;
+  notes?: string;
+}): Promise<{ created: number; skipped: number; notFound: number }> {
+  return trpcMutation<{ created: number; skipped: number; notFound: number }>("agent.createPlans", input);
+}
+
 // ── Supervisor: list agents (for the "assign plan" picker) ──────────────────
 export interface AgentSummary {
   id: number;
