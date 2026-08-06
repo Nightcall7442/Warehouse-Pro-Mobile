@@ -1,8 +1,22 @@
 import React, { useEffect, useRef, useCallback, useImperativeHandle } from "react";
+import { View, Text } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import Constants from "expo-constants";
 
-const YANDEX_API_KEY = Constants.expoConfig?.extra?.yandexMapsApiKey ?? process.env.EXPO_PUBLIC_YANDEX_MAPS_API_KEY ?? "";
+/**
+ * The map key, from whichever source actually has one.
+ *
+ * `??` only falls through on null and undefined, so the placeholder that used to
+ * sit in app.json — the literal string "YOUR_YANDEX_MAPS_API_KEY_HERE" — always
+ * won, and every build asked Yandex to load the map with a key it would refuse.
+ * The tracking screen showed an empty box and nothing said why. Anything that
+ * looks like a placeholder is treated here as no key at all, so the same shape
+ * of mistake cannot come back silently through a config file.
+ */
+const configuredKey = String(
+  Constants.expoConfig?.extra?.yandexMapsApiKey ?? process.env.EXPO_PUBLIC_YANDEX_MAPS_API_KEY ?? "",
+).trim();
+const YANDEX_API_KEY = /^(YOUR_|CHANGE|<|xxx)/i.test(configuredKey) ? "" : configuredKey;
 
 export interface MapMarker {
   id: number;
@@ -158,6 +172,18 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
         : { lat: 41.2995, lng: 69.2401 });
     return buildHtml(markers, c, zoom);
   }, [markers, center, zoom]);
+
+  // A map with no key renders as a blank rectangle, which reads as a broken
+  // screen rather than as a missing setting. Say which it is.
+  if (!YANDEX_API_KEY) {
+    return (
+      <View style={[{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, style]}>
+        <Text style={{ textAlign: "center", fontSize: 13, opacity: 0.7 }}>
+          Карта недоступна: не задан ключ Яндекс.Карт. Его нужно передать сборке как EXPO_PUBLIC_YANDEX_MAPS_API_KEY.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <WebView

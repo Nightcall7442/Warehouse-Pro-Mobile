@@ -56,7 +56,6 @@
       "eas": {
         "projectId": "e5d30f54-2b04-473c-988f-4715f4946a01"
       },
-      "yandexMapsApiKey": "YOUR_YANDEX_MAPS_API_KEY_HERE",
       "router": {}
     }
   }
