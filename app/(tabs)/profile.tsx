@@ -9,6 +9,7 @@ import { useAuthStore } from "../../src/store/auth";
 import { updateProfile, changePassword, getAgentDashboard, getMyShops, uploadFile } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { notify } from "../../src/store/toast";
+import { MonthlyPlanCard } from "../../src/components/MonthlyPlanCard";
 import { Typography, Spacing, Radii } from "../../src/theme";
 import { Card, Badge } from "../../src/components/ui";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
@@ -50,6 +51,9 @@ export default function ProfileScreen() {
 
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
   const isAgent = user?.role === "agent";
+  // Monthly quotas are set against field staff. A CEO has no personal plan, so
+  // showing them a permanent "норма не назначена" card would be noise.
+  const isFieldRole = user?.role === "agent" || user?.role === "merchandiser";
   const roleMeta = ROLE_META[user?.role ?? ""] ?? { label: user?.role ?? "—", icon: "user" as IconName };
 
   const { refetch: refetchKpis } = useQuery({ queryKey: ["agentDashboard"], queryFn: getAgentDashboard, enabled: isAgent });
@@ -103,6 +107,18 @@ export default function ProfileScreen() {
       >
         {/* Title */}
         <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 24, color: colors.text.primary, marginBottom: Spacing.xl }}>Настройки</Text>
+
+        {/* ── Monthly plan ──
+            Sits directly under the title: it's the thing an agent opens this
+            tab to check, and everything below it is settings. Roles without a
+            quota simply see nothing — the card renders its own empty state. */}
+        {isFieldRole && (
+          <FadeInItem delay={0}>
+            <View style={{ marginBottom: Spacing.lg }}>
+              <MonthlyPlanCard />
+            </View>
+          </FadeInItem>
+        )}
 
         {/* ── Profile Card ── */}
         <FadeInItem delay={0}>

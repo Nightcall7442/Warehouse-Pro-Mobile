@@ -838,6 +838,9 @@ export interface MyQuota {
   orders: { target: number; actual: number; pct: number };
   visits: { target: number; actual: number; pct: number };
   month: string;
+  /** Days in the plan's month, and how many of them have passed. */
+  daysTotal: number;
+  daysElapsed: number;
 }
 
 export async function getMyQuota(month?: string): Promise<MyQuota | null> {
