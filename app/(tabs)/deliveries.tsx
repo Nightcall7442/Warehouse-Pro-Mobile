@@ -30,7 +30,7 @@ export default function DeliveriesScreen() {
   const qc = useQueryClient();
   const [cashInputs, setCashInputs] = useState<Record<number, string>>({});
 
-  const { data: deliveries, isLoading, refetch, isFetching } = useQuery({
+  const { data: deliveries, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["myDeliveries"],
     queryFn: () => listMyDeliveries(),
   });
@@ -213,6 +213,29 @@ export default function DeliveriesScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg.primary, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color={colors.accent.primary} />
+      </View>
+    );
+  }
+
+  // Не удалось загрузить — это НЕ то же самое, что «доставок нет».
+  //
+  // Раньше ветки ошибки не было вовсе: при неудачном запросе список выходил
+  // пустым, и экран честно рисовал «Ожидают 0 / В пути 0». Курьер, открывший
+  // приложение на складе в подвале, делал единственный разумный вывод — что
+  // маршрут на сегодня не назначили — и уезжал. Баннер «нет сети» тут не
+  // помогает: он показывается только при полном обрыве, а при слабом сигнале
+  // запрос просто не доходит.
+  if (isError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg.primary, paddingTop: insets.top, justifyContent: "center", padding: Spacing.base }}>
+        <EmptyState
+          icon="alert-circle"
+          title="Не удалось загрузить доставки"
+          description="Это сбой связи, а не пустой маршрут. Проверьте подключение и попробуйте снова."
+        />
+        <Button onPress={() => { void refetch(); }} loading={isFetching} style={{ marginTop: Spacing.base }}>
+          Повторить
+        </Button>
       </View>
     );
   }

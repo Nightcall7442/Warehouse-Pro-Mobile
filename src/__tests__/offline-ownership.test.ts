@@ -130,3 +130,72 @@ describe("записи очереди помечены автором", () => {
     expect(auth).not.toContain("pending_delivery_actions");
   });
 });
+
+describe("сбой загрузки не выглядит как пустой день", () => {
+  it("экран доставок отличает ошибку от отсутствия заказов", () => {
+    const src = read("app/(tabs)/deliveries.tsx");
+    // Без ветки ошибки список выходил пустым, и экран честно рисовал
+    // «Ожидают 0 / В пути 0». Курьер делал единственный разумный вывод —
+    // что маршрут не назначили — и уезжал.
+    expect(src).toContain("isError");
+    expect(src).toContain("Не удалось загрузить доставки");
+  });
+
+  it("экран плана отличает ошибку от отсутствия визитов", () => {
+    const src = read("app/(tabs)/plan.tsx");
+    expect(src).toContain("plansError");
+    expect(src).toContain("Не удалось загрузить план");
+  });
+
+  it("несохранённая отметка визита показывается агенту", () => {
+    const src = read("app/(tabs)/plan.tsx");
+    const mutation = src.slice(src.indexOf("const updateMutation"));
+    // Молчание здесь стоило агенту KPI: посещаемость весит 30%, а отметки
+    // просто не доходили.
+    expect(mutation.slice(0, 900)).toContain("onError");
+  });
+});
+
+describe("напоминания о визитах", () => {
+  const src = read("src/hooks/useVisitReminders.ts");
+
+  it("не сносят все уведомления приложения", () => {
+    // cancelAllScheduledNotificationsAsync убирал в том числе чужие
+    // уведомления — например, пуши о назначенных доставках.
+    // Ищется ВЫЗОВ, а не упоминание: имя осталось в комментарии как
+    // объяснение прежнего поведения.
+    expect(src).not.toMatch(/cancelAllScheduledNotificationsAsync\(/);
+  });
+
+  it("не раскладываются с шагом в пять минут от «сейчас»", () => {
+    // У плана визита есть только дата, времени нет — «напомнить заранее»
+    // данные не поддерживают. Прежний код рассылал по уведомлению на визит
+    // подряд, и агент за рулём получал их каждые пять минут.
+    expect(src).not.toMatch(/idx \+ 1\) \* 5 \* 60 \* 1000/);
+  });
+
+  it("одно уведомление с постоянным идентификатором", () => {
+    // Постоянный идентификатор заменяет прежнее уведомление, поэтому
+    // повторный запуск эффекта не плодит копии.
+    expect(src).toContain("REMINDER_ID");
+    expect(src).toContain("identifier: REMINDER_ID");
+  });
+
+  it("эффект зависит от числа, а не от массива планов", () => {
+    // На массиве эффект перезапускался при каждом обновлении запроса — в том
+    // числе после каждой отметки «Посещён», которая его инвалидирует.
+    expect(src).toContain("[isAuthenticated, plannedCount]");
+  });
+});
+
+describe("длинные списки виртуализированы", () => {
+  it("магазины рисуются FlatList, а не ScrollView с map", () => {
+    const src = read("app/(tabs)/shops.tsx");
+    // Шестьсот карточек разом — это ещё и шестьсот параллельных запросов за
+    // фотографиями по сотовой сети, ради шести видимых.
+    expect(src).not.toMatch(/\{filtered\.map\(/);
+    expect(src).not.toMatch(/\{selectedShops\.map\(/);
+    expect(src).toContain("data={filtered}");
+    expect(src).toContain("data={selectedShops}");
+  });
+});

@@ -192,17 +192,26 @@ export default function ShopsScreen() {
             {[1, 2, 3, 4].map(i => <ShimmerSkeleton key={i} height={100} radius={Radii.xl} />)}
           </View>
         ) : (
-          <ScrollView contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.accent.primary} />}>
-            {selectedShops.map((s, idx) => (
+          // FlatList, а не ScrollView с map: прежний вариант монтировал все
+          // карточки разом. У супервайзера с шестью сотнями точек это шестьсот
+          // компонентов и столько же параллельных запросов за фотографиями —
+          // по сотовой сети, ради шести карточек, которые видно. На недорогом
+          // Android экран замирал на десятки секунд.
+          <FlatList
+            data={selectedShops}
+            keyExtractor={s => String(s.id)}
+            contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingBottom: insets.bottom + 100 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.accent.primary} />}
+            renderItem={({ item: s, index: idx }) => (
               <ShopCard key={s.id} shop={s} isDark={isDark} colors={colors} index={idx}
                 distance={sortByDistance && location ? s._distance : undefined}
                 estimatedTime={sortByDistance && location ? s._estimatedTime : undefined}
                 onView={() => router.push({ pathname: "/shop/[id]", params: { id: String(s.id) } })}
                 onOrder={() => router.push({ pathname: "/order/new", params: { shopId: String(s.id), shopName: s.name ?? "" } })}
               />
-            ))}
-          </ScrollView>
+            )}
+          />
         )}
       </View>
     );
@@ -256,16 +265,21 @@ export default function ShopsScreen() {
         </View>
       ) : sortByDistance && location ? (
         // Distance mode: flat list
-        <ScrollView contentContainerStyle={{ paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.accent.primary} />}>
-          {filtered.map((s, idx) => (
-            <ShopCard key={s.id} shop={s} isDark={isDark} colors={colors} index={idx}
-              distance={s._distance} estimatedTime={s._estimatedTime}
-              onView={() => router.push({ pathname: "/shop/[id]", params: { id: String(s.id) } })}
-              onOrder={() => router.push({ pathname: "/order/new", params: { shopId: String(s.id), shopName: s.name ?? "" } })}
-            />
-          ))}
-        </ScrollView>
+        <FlatList
+          data={filtered}
+          keyExtractor={s => String(s.id)}
+          contentContainerStyle={{ paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.accent.primary} />}
+          renderItem={({ item: s, index: idx }) => (
+              <ShopCard key={s.id} shop={s} isDark={isDark} colors={colors} index={idx}
+                distance={s._distance}
+                estimatedTime={s._estimatedTime}
+                onView={() => router.push({ pathname: "/shop/[id]", params: { id: String(s.id) } })}
+                onOrder={() => router.push({ pathname: "/order/new", params: { shopId: String(s.id), shopName: s.name ?? "" } })}
+              />
+            )}
+        />
       ) : (
         // Territory drill-down view
         <ScrollView contentContainerStyle={{ paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false}

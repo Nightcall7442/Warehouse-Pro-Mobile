@@ -204,7 +204,7 @@ export default function PlanScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: plans, isLoading: plansLoading, refetch: refetchPlans } = useQuery({
+  const { data: plans, isLoading: plansLoading, isError: plansError, refetch: refetchPlans } = useQuery({
     queryKey: ["plans"],
     queryFn: async () => { const r = await getPlans(); return Array.isArray(r) ? r : []; },
     retry: false,
@@ -213,6 +213,14 @@ export default function PlanScreen() {
   const updateMutation = useMutation({
     mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) => updatePlanStatus(planId, status),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["plans"] }); qc.invalidateQueries({ queryKey: ["myQuota"] }); },
+    // Без этой ветки отметка визита пропадала молча: агент жал «Посещён»,
+    // ничего не происходило — ни галочки, ни сообщения, — он жал ещё раз и
+    // бросал. Вечером в отчёте оказывалось три визита из четырнадцати, а
+    // посещаемость весит 30% в его KPI. Восстановить это потом нечем.
+    onError: (e: Error) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      notify.error(`Отметка не сохранена: ${e.message}. Повторите, когда появится связь.`);
+    },
   });
 
   const handleRefresh = useCallback(async () => {
@@ -265,6 +273,16 @@ export default function PlanScreen() {
             <View style={{ gap: 8 }}>
               {[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={64} radius={Radii.lg} />)}
             </View>
+          ) : plansError ? (
+            // «Не удалось загрузить» и «визитов нет» — разные вещи. Раньше
+            // ветки ошибки не было, и агент, открывший приложение вне зоны
+            // покрытия, видел «0/0 · 0%» и считал, что на сегодня ничего не
+            // назначено.
+            <EmptyState
+              icon="alert-circle"
+              title="Не удалось загрузить план"
+              description="Это сбой связи, а не пустой день. Потяните вниз, чтобы повторить."
+            />
           ) : !plans?.length ? (
             <EmptyState icon="calendar" title="На сегодня визитов нет" description="Планы визитов появятся здесь" />
           ) : (
