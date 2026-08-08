@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuthStore } from "./auth";
 import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed, completeDelivery, CompleteDeliveryInput } from "../api";
 
 const S4 = () => ((1 + Math.random()) * 0x10000 | 0).toString(16).substring(1);
@@ -33,6 +34,19 @@ export interface OfflineOrder {
   status?: "pending" | "syncing" | "failed";
   error?: string;
   retryable?: boolean; // true = network error (retry), false = business error (don't retry)
+  /**
+   * Кто создал запись. Проставляется при постановке в очередь.
+   *
+   * Телефон в поле часто общий: агент сдаёт смену и передаёт его сменщику.
+   * Без этой пометки очередь агента А уходила на сервер под токеном агента Б —
+   * сервер берёт автора из сессии, а не из запроса. Заказы, выручка и комиссия
+   * записывались не тому человеку, а отложенные действия курьера отваливались
+   * с «заказ не назначен на вас».
+   *
+   * Поле необязательное: записи, созданные до этой правки, синхронизируются
+   * по-прежнему. Отбросить их значило бы потерять работу, уже сделанную в поле.
+   */
+  ownerId?: number;
 }
 
 export type DeliveryAction =
@@ -49,6 +63,19 @@ export interface OfflineDeliveryAction {
   status?: "pending" | "syncing" | "failed";
   error?: string;
   retryable?: boolean;
+  /**
+   * Кто создал запись. Проставляется при постановке в очередь.
+   *
+   * Телефон в поле часто общий: агент сдаёт смену и передаёт его сменщику.
+   * Без этой пометки очередь агента А уходила на сервер под токеном агента Б —
+   * сервер берёт автора из сессии, а не из запроса. Заказы, выручка и комиссия
+   * записывались не тому человеку, а отложенные действия курьера отваливались
+   * с «заказ не назначен на вас».
+   *
+   * Поле необязательное: записи, созданные до этой правки, синхронизируются
+   * по-прежнему. Отбросить их значило бы потерять работу, уже сделанную в поле.
+   */
+  ownerId?: number;
 }
 
 interface OfflineStore {
@@ -167,8 +194,32 @@ export function isRetryableError(e: unknown): boolean {
  * only for automatic passes: the manual retry button still forces an attempt,
  * since the underlying cause may since have been fixed in the office.
  */
-function shouldAutoSync(entry: { synced: boolean; retryable?: boolean }): boolean {
-  return !entry.synced && entry.retryable !== false;
+/**
+ * Годится ли запись к отправке прямо сейчас.
+ *
+ * Кроме собственного состояния записи учитывается, кто сейчас в приложении:
+ * чужую запись отправлять нельзя — сервер запишет её на текущего пользователя.
+ * Она остаётся в очереди и уйдёт, когда её автор снова войдёт.
+ */
+function shouldAutoSync(
+  entry: { synced: boolean; retryable?: boolean; ownerId?: number },
+  currentUserId?: number,
+): boolean {
+  if (entry.synced || entry.retryable === false) return false;
+  if (entry.ownerId != null && currentUserId != null && entry.ownerId !== currentUserId) return false;
+  return true;
+}
+
+/**
+ * Кто сейчас вошёл.
+ *
+ * Обычный импорт, а не отложенный: отложенный не работает в тестовой среде без
+ * особого флага, и владелец записи там молча оставался бы пустым — то есть
+ * проверка, ради которой всё делается, в тестах бы не работала. Цикла здесь
+ * нет: auth про очередь не знает.
+ */
+function currentUserId(): number | undefined {
+  return useAuthStore.getState().user?.id;
 }
 
 export const useOfflineStore = create<OfflineStore>((set, get) => ({
@@ -189,6 +240,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     // client saw a network error) submit as a genuinely new, duplicate order.
     const withKey = {
       ...order,
+      ownerId: order.ownerId ?? currentUserId(),
       input: { ...order.input, idempotencyKey: order.input.idempotencyKey ?? uuidv4() },
       status: "pending" as const,
     };
@@ -198,7 +250,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   },
 
   addDeliveryAction: async (action) => {
-    const deliveryActions = [...get().deliveryActions, { ...action, status: "pending" as const }];
+    const deliveryActions = [...get().deliveryActions, { ...action, ownerId: action.ownerId ?? currentUserId(), status: "pending" as const }];
     set({ deliveryActions });
     await writeDeliveryActionsQueue(deliveryActions);
   },
@@ -209,7 +261,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
 
     try {
       const currentActions = get().deliveryActions;
-      const pendingActions = currentActions.filter(shouldAutoSync);
+      const userId = currentUserId();
+      const pendingActions = currentActions.filter(a => shouldAutoSync(a, userId));
 
       if (pendingActions.length === 0) return { synced: 0, failed: 0 };
 
@@ -275,7 +328,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     try {
       // Capture snapshot at start — work only with this snapshot to avoid race conditions
       const snapshot = get().orders;
-      const pendingOrders = snapshot.filter(shouldAutoSync);
+      const userId = currentUserId();
+      const pendingOrders = snapshot.filter(o => shouldAutoSync(o, userId));
 
       if (pendingOrders.length === 0) return { synced: 0, failed: 0 };
 

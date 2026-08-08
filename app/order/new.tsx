@@ -7,7 +7,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getAvailableShops, getProducts, createOrder, Shop } from "../../src/api";
-import { useOfflineStore, uuidv4 } from "../../src/store/offline";
+import { useOfflineStore, uuidv4, isRetryableError } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding } from "../../src/theme";
@@ -549,8 +549,21 @@ export default function NewOrderScreen() {
     mutationFn: createOrder,
     onSuccess: () => { clearDraft(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); notify.success("Заказ создан!"); router.back(); },
     onError: async (e: Error) => {
-      const isNetworkError = !e.message || e.message.includes("Network") || e.message.includes("timeout") || e.message.includes("fetch") || e.message.includes("status 5");
-      if (isNetworkError && selectedShop) {
+      // Разбор ошибки отдан общей функции, которая уже умеет отличать отказ
+      // сервера от неудачи доставки запроса.
+      //
+      // Здесь стояла своя проверка, и она искала в тексте подстроку
+      // "status 5". Axios пишет "Request failed with status code 502" — между
+      // "status" и "5" стоит слово "code", и подстрока не совпадала никогда.
+      // То есть при ответе 502 (перезапуск сервера, шлюз) заказ НЕ попадал в
+      // офлайн-очередь: агент видел непонятную ошибку, черновик оставался, а
+      // ключ идемпотентности жил только в памяти экрана. Повторный ввод
+      // получал новый ключ — и если первый запрос на сервере всё-таки прошёл,
+      // в офисе появлялись два одинаковых заказа с двойным списанием склада.
+      //
+      // Ровно эта ошибка описана и исправлена в самой очереди
+      // (src/store/offline.ts), но точка входа сохраняла старую копию.
+      if (isRetryableError(e) && selectedShop) {
         const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false };
         await addOrder(offlineOrder);
         clearDraft();

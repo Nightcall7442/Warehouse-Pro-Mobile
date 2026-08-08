@@ -12,7 +12,7 @@ import { Typography, Spacing, Radii, ThemeColors, KpiColors } from "../../src/th
 import { Card, Button, Badge, SectionHeader, EmptyState } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { listMyDeliveries, type Delivery } from "../../src/api";
-import { useOfflineStore } from "../../src/store/offline";
+import { useOfflineStore, isRetryableError } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
 import * as Haptics from "expo-haptics";
 import * as Network from "expo-network";
@@ -62,7 +62,26 @@ export default function DeliveriesScreen() {
         return { offline: true };
       }
       const { markOutForDelivery } = await import("../../src/api");
-      return markOutForDelivery(orderId);
+      try {
+        return markOutForDelivery(orderId);
+      } catch (e) {
+        // Предполётная проверка сказала «сеть есть», но запрос всё равно
+        // не дошёл. В дверях магазина это обычное дело, а не исключение:
+        // Android считает подключением и EDGE, и Wi-Fi с окном входа.
+        //
+        // Раньше здесь перехвата не было вовсе. Курьер жал «Доставлено»,
+        // вводил принятую сумму, получал тост с текстом ошибки — и
+        // действие не сохранялось нигде: ни на сервере, ни в очереди.
+        // Товар отдан, деньги в кармане, в системе ничего.
+        if (!isRetryableError(e)) throw e;
+        await addDeliveryAction({
+          id: `markOut-${orderId}-${Date.now()}`,
+          action: { type: "markOutForDelivery", orderId },
+          createdAt: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true };
+      }
     },
     onSuccess: (result: { offline?: boolean } | void) => {
       if (result?.offline) {
@@ -90,7 +109,26 @@ export default function DeliveriesScreen() {
         return { offline: true };
       }
       const { markDelivered } = await import("../../src/api");
-      return markDelivered(orderId, cashAmount);
+      try {
+        return markDelivered(orderId, cashAmount);
+      } catch (e) {
+        // Предполётная проверка сказала «сеть есть», но запрос всё равно
+        // не дошёл. В дверях магазина это обычное дело, а не исключение:
+        // Android считает подключением и EDGE, и Wi-Fi с окном входа.
+        //
+        // Раньше здесь перехвата не было вовсе. Курьер жал «Доставлено»,
+        // вводил принятую сумму, получал тост с текстом ошибки — и
+        // действие не сохранялось нигде: ни на сервере, ни в очереди.
+        // Товар отдан, деньги в кармане, в системе ничего.
+        if (!isRetryableError(e)) throw e;
+        await addDeliveryAction({
+          id: `markDel-${orderId}-${Date.now()}`,
+          action: { type: "markDelivered", orderId, cashAmount },
+          createdAt: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true };
+      }
     },
     onSuccess: (result: { offline?: boolean } | void) => {
       if (result?.offline) {
@@ -118,7 +156,26 @@ export default function DeliveriesScreen() {
         return { offline: true };
       }
       const { markFailed } = await import("../../src/api");
-      return markFailed(orderId, reason);
+      try {
+        return markFailed(orderId, reason);
+      } catch (e) {
+        // Предполётная проверка сказала «сеть есть», но запрос всё равно
+        // не дошёл. В дверях магазина это обычное дело, а не исключение:
+        // Android считает подключением и EDGE, и Wi-Fi с окном входа.
+        //
+        // Раньше здесь перехвата не было вовсе. Курьер жал «Доставлено»,
+        // вводил принятую сумму, получал тост с текстом ошибки — и
+        // действие не сохранялось нигде: ни на сервере, ни в очереди.
+        // Товар отдан, деньги в кармане, в системе ничего.
+        if (!isRetryableError(e)) throw e;
+        await addDeliveryAction({
+          id: `markFail-${orderId}-${Date.now()}`,
+          action: { type: "markFailed", orderId, reason },
+          createdAt: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true };
+      }
     },
     onSuccess: (result: { offline?: boolean } | void) => {
       if (result?.offline) {

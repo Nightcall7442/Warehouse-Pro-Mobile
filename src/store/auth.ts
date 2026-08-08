@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { SecureStore } from "../storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getMe, login as apiLogin, logout as apiLogout, API_BASE, User } from "../api";
 
 interface AuthState {
@@ -77,6 +78,27 @@ async function writeCachedUser(user: User | null): Promise<void> {
     if (user) await SecureStore.setItemAsync(CACHED_USER_KEY, JSON.stringify(user));
     else await SecureStore.deleteItemAsync(CACHED_USER_KEY);
   } catch { /* cache is best-effort */ }
+}
+
+
+/**
+ * Стереть данные, показанные предыдущему пользователю.
+ *
+ * Здесь только кэши и черновики — то, что можно получить заново. Очереди
+ * отправки не входят: они содержат работу, которой ещё нет на сервере.
+ */
+async function clearUserScopedCaches(): Promise<void> {
+  const exact = ["cached_products", "recent_shops", "order_draft"];
+  for (const key of exact) {
+    await AsyncStorage.removeItem(key).catch(() => {});
+  }
+  // Черновики отчётов о визите лежат под ключом с номером плана, поэтому
+  // перечислить их заранее нельзя — они ищутся по началу имени.
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const drafts = keys.filter(k => k.startsWith("visit_draft_"));
+    if (drafts.length > 0) await AsyncStorage.multiRemove(drafts);
+  } catch { /* хранилище недоступно — выход всё равно должен состояться */ }
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -192,6 +214,20 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Deliberate sign-out, so the cached profile goes too — otherwise the next
     // launch would restore the previous user from cache.
     await writeCachedUser(null);
+
+    // Всё, что показывалось предыдущему пользователю, уходит вместе с ним.
+    //
+    // Телефон в поле часто общий: агент сдаёт смену и передаёт его сменщику.
+    // Без этой очистки следующий вошедший первые секунды видел чужой каталог,
+    // чужие недавние магазины и мог открыть чужой недописанный заказ или отчёт
+    // о визите.
+    //
+    // Очереди отправки здесь НЕ трогаются намеренно. Это несделанная работа —
+    // заказы и действия курьера, ещё не дошедшие до сервера, — и стирать её при
+    // выходе значит терять смену человека. Они помечены автором (ownerId) и
+    // просто ждут, пока он войдёт снова.
+    await clearUserScopedCaches();
+
     set({ user: null, isAuthenticated: false });
   },
 

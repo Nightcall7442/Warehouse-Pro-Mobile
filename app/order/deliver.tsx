@@ -13,7 +13,7 @@ import { Typography, Radii } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
 import { notify } from "../../src/store/toast";
 import { useBrandingStore } from "../../src/store/branding";
-import { useOfflineStore } from "../../src/store/offline";
+import { useOfflineStore, isRetryableError } from "../../src/store/offline";
 
 type DeliveryResult = "paid" | "partial_paid" | "returned" | "partial_returned";
 
@@ -88,10 +88,13 @@ export default function DeliveryScreen() {
         // toast and drop the delivery on the floor: the goods are handed
         // over, the money is taken, and nothing records it. Queue it like
         // the offline branch above and let AutoSync carry it.
-        const msg = e instanceof Error ? e.message.toLowerCase() : "";
-        const unreachable = !msg || msg.includes("network") || msg.includes("timeout")
-          || msg.includes("fetch") || msg.includes("econn") || msg.includes("status 5");
-        if (unreachable) return queueOffline(input);
+        //
+        // Проверка отдана общей функции. Своя копия искала подстроку
+        // "status 5", а axios пишет "status code 502" — совпадения не было
+        // никогда, и при ответе шлюза курьер получал тост «Ошибка», отдав
+        // товар и взяв наличные. Комментарий выше описывает именно этот
+        // исход — он и наступал.
+        if (isRetryableError(e)) return queueOffline(input);
         throw e; // a real rejection from the server — the courier must see it
       }
     },
