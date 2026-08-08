@@ -11,6 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, safeBottomPadding } from "../../src/theme";
 import { getProducts, submitVisitReport, updatePlanStatus, uploadFile, type Product } from "../../src/api";
+import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { Card, Badge, Button, IconCircle } from "../../src/components/ui";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
@@ -148,11 +149,17 @@ export default function MerchandiserVisitScreen() {
     const perm = await permMethod();
     if (!perm.granted) { notify.error("Нет доступа"); return; }
     const launchMethod = useCamera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
-    const result = await launchMethod({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true });
-    if (!result.canceled && result.assets[0].base64) {
+    // base64 у камеры больше не запрашивается: он держал бы в памяти лишнюю
+    // копию полноразмерного кадра до того момента, как мы его уменьшим.
+    const result = await launchMethod({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6 });
+    if (!result.canceled && result.assets[0].uri) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       try {
-        const url = await uploadFile(`data:image/jpeg;base64,${result.assets[0].base64}`, "visits");
+        // Снимок уменьшается перед отправкой: камера отдаёт полное
+        // разрешение, и без этого кадр весит мегабайты, а часть кадров
+        // вовсе не проходит клиентский лимит.
+        const { dataUrl } = await preparePhoto(result.assets[0].uri);
+        const url = await uploadFile(dataUrl, "visits");
         setPhotos(prev => [...prev, url]);
       } catch (e) { notify.error(e instanceof Error ? e.message : "Ошибка загрузки фото"); }
     }

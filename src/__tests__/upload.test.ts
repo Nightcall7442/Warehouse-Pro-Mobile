@@ -124,9 +124,26 @@ describe("image screens", () => {
     const src = readFileSync(resolve(__dirname, "../..", screen), "utf8");
 
     expect(src).toContain("uploadFile(");
-    // The picker only fills `base64` when asked to, so its presence is also
-    // what proves the screen isn't relying on the local uri.
-    expect(src).toMatch(/base64:\s*true/);
+
+    // Раньше признаком служило `base64: true` у выбора изображения: картинку
+    // просили сразу в виде строки, и её наличие доказывало, что экран не
+    // отправляет локальный путь.
+    //
+    // Теперь base64 у камеры не запрашивается намеренно — он держал бы в
+    // памяти лишнюю копию полноразмерного кадра до уменьшения. Содержимое
+    // получается через preparePhoto, который уменьшает снимок и отдаёт
+    // готовый data-URL. Свойство, которое сторожит этот тест, то же:
+    // отправляется содержимое, а не путь на устройстве.
+    const usesPicker = /launch(Camera|ImageLibrary)Async|ImagePickerOptions/.test(src);
+    if (usesPicker) {
+      // Без preparePhoto снимок уходит либо путём, либо в полном разрешении.
+      expect(src).toContain("preparePhoto");
+    } else {
+      // Экраны без выбора изображения (например, показывающие уже
+      // загруженное) под это правило не подпадают.
+      expect(src).toMatch(/data:image|uploadFile\(/);
+    }
+
     expect(src).not.toMatch(/mutate\(\s*\{\s*avatar:\s*\w+\.assets\[0\]\.uri/);
   });
 });

@@ -20,6 +20,7 @@ import { Typography, Spacing, Radii } from "../../theme";
 import { ScreenHeader, EmptyState, Card } from "../ui";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../Animated";
 import { PlanRow } from "./PlanRow";
+import { preparePhoto } from "../../lib/prepare-photo";
 
 export function AgentPlansView() {
   const insets = useSafeAreaInsets();
@@ -90,11 +91,12 @@ export function AgentPlansView() {
       mediaTypes: ["images"],
       allowsEditing: true,
       quality: 0.7,
-      base64: true,
     });
-    if (!result.canceled && result.assets?.[0]?.base64) {
+    if (!result.canceled && result.assets?.[0]?.uri) {
       try {
-        const url = await uploadFile(`data:image/jpeg;base64,${result.assets[0].base64}`, "shops");
+        // Снимок уменьшается перед отправкой: камера отдаёт полное разрешение.
+        const { dataUrl } = await preparePhoto(result.assets[0].uri);
+        const url = await uploadFile(dataUrl, "shops");
         photoMutation.mutate({ planId, photoUrl: url });
       } catch {
         notify.error("Ошибка загрузки фото");

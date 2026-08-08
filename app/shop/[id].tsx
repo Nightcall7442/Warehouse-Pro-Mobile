@@ -15,6 +15,7 @@ import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/th
 import { getShop, getShopForSupervisor, updateShop, uploadShopPhoto, uploadFile, getTerritories, Territory } from "../../src/api";
 import { Card, Badge, Button } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
+import { preparePhoto } from "../../src/lib/prepare-photo";
 import { PressableScale, FadeInItem, ShimmerSkeleton } from "../../src/components/Animated";
 
 function InfoRow({ icon, label, value, onPress, colors }: { icon: string; label: string; value: string; onPress?: () => void; colors: ThemeColors }) {
@@ -78,12 +79,15 @@ export default function ShopDetailScreen() {
     onError: (e: Error) => notify.error(e.message),
   });
 
-  const PICKER_OPTS: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true };
+  const PICKER_OPTS: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6 };
 
   const uploadPicked = async (res: ImagePicker.ImagePickerResult) => {
-    if (res.canceled || !res.assets[0]?.base64) return;
+    if (res.canceled || !res.assets[0]?.uri) return;
     try {
-      const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops");
+      // Снимок уменьшается перед отправкой: камера отдаёт полное
+      // разрешение, и без этого кадр весит мегабайты.
+      const { dataUrl } = await preparePhoto(res.assets[0].uri);
+      const url = await uploadFile(dataUrl, "shops");
       photoMutation.mutate(url);
     } catch (e) { notify.error(e instanceof Error ? e.message : "Ошибка загрузки"); }
   };

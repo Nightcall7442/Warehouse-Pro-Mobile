@@ -405,13 +405,23 @@ export async function saveLocation(
   lat: number,
   lng: number,
   accuracy?: number,
-  batteryLevel?: number
+  batteryLevel?: number,
+  /**
+   * Когда точка снята. Передаётся у точек из буфера — тех, что ждали связи.
+   *
+   * Без него сервер ставил время получения, и на карте супервайзера агент весь
+   * день «стоял» на месте последней связи, а вечером мгновенно проезжал
+   * маршрут. Проверку геозоны это не ослабляет: сервер по-прежнему считает по
+   * времени получения, а это значение служит для показа.
+   */
+  recordedAt?: string,
 ): Promise<void> {
   await trpcMutation("agent.saveLocation", {
     lat: String(lat),
     lng: String(lng),
     accuracy: accuracy !== undefined ? String(accuracy) : undefined,
     batteryLevel,
+    recordedAt,
   });
 }
 
@@ -557,8 +567,10 @@ export async function getMyWorkZones(): Promise<Territory[]> {
   return trpcQuery<Territory[]>("agent.myWorkZones");
 }
 
-export async function createOrder(input: CreateOrderInput): Promise<{ id: number }> {
-  return trpcMutation<{ id: number }>("order.create", input);
+export async function createOrder(input: CreateOrderInput): Promise<{ id: number; orderNumber?: string; total?: number }> {
+  // total нужен, чтобы сверить сумму, которую агент назвал владельцу, с той,
+  // что сервер посчитал по своим ценам на момент отправки.
+  return trpcMutation<{ id: number; orderNumber?: string; total?: number }>("order.create", input);
 }
 
 export async function getMyOrders(): Promise<Order[]> {

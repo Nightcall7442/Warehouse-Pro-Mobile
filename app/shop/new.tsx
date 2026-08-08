@@ -6,6 +6,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
+import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
@@ -51,12 +52,16 @@ export default function NewShopScreen() {
     color: colors.text.primary,
   };
 
-  const PICKER_OPTS: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6, base64: true };
+  const PICKER_OPTS: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], allowsEditing: true, aspect: [4, 3], quality: 0.6 };
 
   const uploadPicked = async (res: ImagePicker.ImagePickerResult) => {
-    if (res.canceled || !res.assets[0]?.base64) return;
+    if (res.canceled || !res.assets[0]?.uri) return;
     try {
-      const url = await uploadFile(`data:image/jpeg;base64,${res.assets[0].base64}`, "shops");
+        // Снимок уменьшается перед отправкой: камера отдаёт полное
+        // разрешение, и без этого кадр весит мегабайты, а часть кадров
+        // вовсе не проходит клиентский лимит.
+      const { dataUrl } = await preparePhoto(res.assets[0].uri);
+      const url = await uploadFile(dataUrl, "shops");
       setPhoto(url);
     } catch (e) { notify.error(e instanceof Error ? e.message : "Ошибка загрузки"); }
   };

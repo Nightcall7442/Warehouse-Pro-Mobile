@@ -545,6 +545,18 @@ export default function NewOrderScreen() {
     return rawSubtotal > 0 ? ((rawSubtotal - discountedSubtotal) / rawSubtotal) * 100 : 0;
   }, [lines]);
 
+  /**
+   * Сумма, которую агент видит на экране и называет владельцу магазина.
+   *
+   * Считается так же, как в ReviewStep: цена × количество со скидкой по
+   * строке. Отдельно здесь потому, что ReviewStep — другой компонент, и его
+   * значение сюда не доходит.
+   */
+  const quotedTotal = useMemo(
+    () => lines.reduce((sum, l) => sum + l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100), 0),
+    [lines],
+  );
+
   const createMutation = useMutation({
     mutationFn: createOrder,
     onSuccess: () => { clearDraft(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); notify.success("Заказ создан!"); router.back(); },
@@ -564,11 +576,15 @@ export default function NewOrderScreen() {
       // Ровно эта ошибка описана и исправлена в самой очереди
       // (src/store/offline.ts), но точка входа сохраняла старую копию.
       if (isRetryableError(e) && selectedShop) {
-        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false };
+        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
         await addOrder(offlineOrder);
         clearDraft();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        notify.info("Ошибка сети. Заказ сохранён офлайн.");
+        // Про цену сказано прямо: сервер посчитает итог по своим ценам на
+        // момент отправки, а не по тем, что агент видел сейчас. Если за это
+        // время прайс поменяется, после синхронизации придёт отдельное
+        // сообщение с обеими суммами.
+        notify.info("Ошибка сети. Заказ сохранён офлайн. Итог будет пересчитан по ценам на момент отправки.");
         router.back();
       } else {
         notify.error(e.message ?? "Ошибка");

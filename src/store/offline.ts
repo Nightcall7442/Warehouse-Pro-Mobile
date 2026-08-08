@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "./auth";
+import { notify } from "./toast";
 import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed, completeDelivery, CompleteDeliveryInput } from "../api";
 
 const S4 = () => ((1 + Math.random()) * 0x10000 | 0).toString(16).substring(1);
@@ -34,6 +35,17 @@ export interface OfflineOrder {
   status?: "pending" | "syncing" | "failed";
   error?: string;
   retryable?: boolean; // true = network error (retry), false = business error (don't retry)
+  /**
+   * Сумма, которую агент назвал владельцу магазина при оформлении.
+   *
+   * Сервер считает итог по СВОИМ ценам на момент отправки, а не по присланным
+   * — и правильно делает: иначе приложение могло бы провести заказ по любой
+   * цене. Но заказ, оформленный офлайн, уходит спустя часы, и если за это
+   * время подняли прайс, накладная придёт на другую сумму, чем записано на
+   * бумаге у владельца. Сохранённая здесь цифра позволяет заметить это сразу
+   * после отправки и предупредить магазин заранее, а не у двери.
+   */
+  quotedTotal?: number;
   /**
    * Кто создал запись. Проставляется при постановке в очередь.
    *
@@ -348,6 +360,26 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       const results = await Promise.allSettled(
         pendingOrders.map((order) => createOrder(order.input))
       );
+
+      // Сверка названной суммы с посчитанной сервером.
+      //
+      // Делается сразу после отправки: ниже записи помечаются отправленными, и
+      // сообщить агенту нужно именно про те заказы, которые только что ушли.
+      for (let i = 0; i < pendingOrders.length; i++) {
+        const outcome = results[i];
+        if (outcome.status !== "fulfilled") continue;
+        const quoted = pendingOrders[i].quotedTotal;
+        const actual = outcome.value?.total;
+        if (quoted == null || actual == null) continue;
+        // Копейки не в счёт: расхождение в округлении не повод тревожить
+        // человека.
+        if (Math.abs(actual - quoted) < 1) continue;
+        notify.warning(
+          `${pendingOrders[i].shopName}: сумма изменилась — называли ` +
+          `${Math.round(quoted).toLocaleString("ru")}, к оплате ` +
+          `${Math.round(actual).toLocaleString("ru")} сум. Цены поменялись, пока заказ ждал отправки.`,
+        );
+      }
 
       let synced = 0;
       let failed = 0;

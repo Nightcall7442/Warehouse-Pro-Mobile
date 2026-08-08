@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "../../src/store/auth";
 import { updateProfile, changePassword, getAgentDashboard, getMyShops, uploadFile } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { MonthlyPlanCard } from "../../src/components/MonthlyPlanCard";
 import { Typography, Spacing, Radii } from "../../src/theme";
@@ -72,8 +73,11 @@ export default function ProfileScreen() {
   // cache was swept, and was a broken image for everyone else, including the
   // office dashboard. Every other photo in the app already goes via uploadFile.
   const avatarMutation = useMutation({
-    mutationFn: async (d: { base64: string }) => {
-      const url = await uploadFile(`data:image/jpeg;base64,${d.base64}`, "avatars");
+    mutationFn: async (d: { uri: string }) => {
+      // Аватар тем более незачем слать в полном разрешении: он показывается
+      // кружком в сорок точек.
+      const { dataUrl } = await preparePhoto(d.uri);
+      const url = await uploadFile(dataUrl, "avatars");
       await updateProfile({ avatar: url });
       return url;
     },
@@ -85,10 +89,10 @@ export default function ProfileScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") { Alert.alert("Нужно разрешение", "Доступ к галерее"); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.6, base64: true,
+      mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.6,
     });
-    const base64 = result.assets?.[0]?.base64;
-    if (!result.canceled && base64) avatarMutation.mutate({ base64 });
+    const uri = result.assets?.[0]?.uri;
+    if (!result.canceled && uri) avatarMutation.mutate({ uri });
   }, [avatarMutation]);
 
   const pwdMutation = useMutation({

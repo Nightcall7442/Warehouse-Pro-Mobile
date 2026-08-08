@@ -22,6 +22,18 @@ interface PendingPoint {
   lng: number;
   accuracy: number;
   batteryLevel?: number;
+  /**
+   * Когда точка снята, в формате ISO.
+   *
+   * Буфер копится, пока агент вне зоны покрытия, и заливается пачкой при
+   * первом сигнале. Без этого поля сервер ставил время получения: на карте
+   * агент весь день «стоял» на месте последней связи, а в 17:40 мгновенно
+   * проезжал весь маршрут, и ответить, где он был в два часа дня, было нечем.
+   *
+   * Необязательное: точки, уже лежащие в буфере со времён прежней версии,
+   * времени съёмки не имеют, и отбрасывать их из-за этого нельзя.
+   */
+  recordedAt?: string;
 }
 
 async function readPending(): Promise<PendingPoint[]> {
@@ -59,7 +71,7 @@ async function flushPending(): Promise<void> {
   while (remaining.length > 0) {
     const point = remaining[0];
     try {
-      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel);
+      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt);
       remaining.shift();
     } catch (e) {
       // Still offline — stop draining and keep the rest for the next fix.
@@ -91,10 +103,13 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     lng: location.coords.longitude,
     accuracy: location.coords.accuracy ?? 999,
     batteryLevel: battery !== null ? Math.round(battery * 100) : undefined,
+    // Время берётся у самой координаты, а не «сейчас»: система могла отдать
+    // накопленную точку с задержкой, и её собственная метка точнее.
+    recordedAt: new Date(location.timestamp).toISOString(),
   };
 
   try {
-    await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel);
+    await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt);
     await flushPending();
   } catch (e) {
     if (__DEV__) console.warn("Background location upload failed, buffering:", e);
