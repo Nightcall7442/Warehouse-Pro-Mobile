@@ -1,0 +1,105 @@
+import React from "react";
+import { View, Text, TouchableOpacity } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { Typography, Spacing, Radii } from "../theme";
+import { useThemeColors } from "../store/theme";
+
+interface Props {
+  children: React.ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error: Error | null;
+}
+
+function ErrorFallback({ onRetry }: { onRetry: () => void }) {
+  const colors = useThemeColors();
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.bg.primary,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: Spacing.xl,
+        gap: 16,
+      }}
+    >
+      <View
+        style={{
+          width: 72,
+          height: 72,
+          borderRadius: Radii.full,
+          backgroundColor: colors.status.dangerDim,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Feather name="alert-triangle" size={32} color={colors.status.danger} />
+      </View>
+      <Text
+        style={{
+          fontFamily: Typography.fontBold,
+          fontSize: Typography.size.lg,
+          color: colors.text.primary,
+          textAlign: "center",
+        }}
+      >
+        Произошла ошибка
+      </Text>
+      <Text
+        style={{
+          fontFamily: Typography.fontRegular,
+          fontSize: Typography.size.sm,
+          color: colors.text.muted,
+          textAlign: "center",
+          lineHeight: 20,
+          maxWidth: 280,
+        }}
+      >
+        {"Неожиданная ошибка. Попробуйте ещё раз."}
+      </Text>
+      <TouchableOpacity
+        onPress={onRetry}
+        style={{
+          backgroundColor: colors.accent.primary,
+          borderRadius: Radii.md,
+          paddingVertical: 12,
+          paddingHorizontal: 24,
+          marginTop: 8,
+        }}
+      >
+        <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>
+          Повторить
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+export class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    if (__DEV__) console.error("[ErrorBoundary]", error.message, errorInfo.componentStack);
+  }
+
+  resetError = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return <ErrorFallback onRetry={this.resetError} />;
+    }
+    return this.props.children;
+  }
+}
