@@ -52,14 +52,20 @@ async function writePending(points: PendingPoint[]): Promise<void> {
 }
 
 /**
- * Did the server answer, or did the request never land?
+ * Did the server permanently reject the point, or should it be retried?
  *
- * Same distinction the auth store makes: no response means no signal, which is
- * the normal condition out on a route and must not be treated as a failure of
- * the tracking itself.
+ * No response at all means no signal — the normal condition out on a route.
+ * A response means the server was reached, but only a definite client-side
+ * rejection (bad coordinates etc., 4xx other than 401/403) means the point
+ * itself is unsalvageable. 401/403 mean the session token needs refreshing,
+ * not that the point was bad — discarding on those was wiping a whole day's
+ * buffered route the moment the token expired mid-shift.
  */
-function serverAnswered(e: unknown): boolean {
-  return (e as { response?: unknown })?.response !== undefined;
+function isPermanentlyRejected(e: unknown): boolean {
+  const status = (e as { response?: { status?: number } })?.response?.status;
+  if (status == null) return false;
+  if (status === 401 || status === 403) return false;
+  return status >= 400 && status < 500;
 }
 
 /** Drain whatever the last dead zone left behind, oldest first. */
@@ -74,9 +80,10 @@ async function flushPending(): Promise<void> {
       await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt);
       remaining.shift();
     } catch (e) {
-      // Still offline — stop draining and keep the rest for the next fix.
-      // A point the server actively refused is not worth retrying forever.
-      if (serverAnswered(e)) remaining.shift();
+      // Still offline, or session needs refreshing — stop draining and keep
+      // the rest for the next fix. Only a point the server definitively
+      // rejected as bad data is not worth retrying forever.
+      if (isPermanentlyRejected(e)) remaining.shift();
       else break;
     }
   }
@@ -89,39 +96,48 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     return;
   }
 
-  // The OS hands us the fix it already took. Calling getCurrentPositionAsync()
+  // The OS hands us the fix(es) it already took. Calling getCurrentPositionAsync()
   // here instead — as this task used to — throws that away and forces a second,
   // slower acquisition that routinely times out indoors or in a warehouse, which
   // is precisely where agents spend their day.
+  //
+  // After a signal gap the OS delivers everything it accumulated as ONE batch
+  // (that's what deferredUpdatesInterval buys) — taking only the last entry
+  // silently dropped every other point in the gap, which is exactly the route
+  // history a dead zone makes irreplaceable.
   const locations = (data as { locations?: Location.LocationObject[] } | null)?.locations;
-  const location = locations?.[locations.length - 1];
-  if (!location) return;
+  if (!locations || locations.length === 0) return;
 
   const battery = await Battery.getBatteryLevelAsync().catch(() => null);
-  const point: PendingPoint = {
+  const batteryLevel = battery !== null ? Math.round(battery * 100) : undefined;
+  const points: PendingPoint[] = locations.map((location) => ({
     lat: location.coords.latitude,
     lng: location.coords.longitude,
     accuracy: location.coords.accuracy ?? 999,
-    batteryLevel: battery !== null ? Math.round(battery * 100) : undefined,
+    batteryLevel,
     // Время берётся у самой координаты, а не «сейчас»: система могла отдать
     // накопленную точку с задержкой, и её собственная метка точнее.
     recordedAt: new Date(location.timestamp).toISOString(),
-  };
+  }));
 
-  try {
-    await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt);
-    await flushPending();
-  } catch (e) {
-    if (__DEV__) console.warn("Background location upload failed, buffering:", e);
-    // Tracking deliberately stays on. The previous version stopped itself after
-    // five consecutive failures — and since a lost connection produced exactly
-    // that, driving through one dead zone silently killed GPS for the rest of
-    // the day, with no way back until the agent reopened the GPS tab by hand.
-    if (!serverAnswered(e)) {
-      const pending = await readPending();
-      await writePending([...pending, point]);
+  const toBuffer: PendingPoint[] = [];
+  for (const point of points) {
+    try {
+      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt);
+    } catch (e) {
+      if (__DEV__) console.warn("Background location upload failed, buffering:", e);
+      // Tracking deliberately stays on. The previous version stopped itself after
+      // five consecutive failures — and since a lost connection produced exactly
+      // that, driving through one dead zone silently killed GPS for the rest of
+      // the day, with no way back until the agent reopened the GPS tab by hand.
+      if (!isPermanentlyRejected(e)) toBuffer.push(point);
     }
   }
+  if (toBuffer.length > 0) {
+    const pending = await readPending();
+    await writePending([...pending, ...toBuffer]);
+  }
+  await flushPending();
 });
 
 export async function startBackgroundTracking(): Promise<{ success: boolean; reason?: string }> {

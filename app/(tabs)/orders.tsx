@@ -68,12 +68,14 @@ export default function OrdersScreen() {
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const pendingOffline = useMemo(() => {
-    return offlineOrders.filter(o => !o.synced);
-  }, [offlineOrders]);
+    // Чужая запись (оставшаяся в очереди с прошлой смены на этом устройстве)
+    // не показывается — иначе кнопка "Повтор" рядом с ней ничего бы не сделала.
+    return offlineOrders.filter(o => !o.synced && (o.ownerId == null || o.ownerId === user?.id));
+  }, [offlineOrders, user?.id]);
 
   const pendingActions = useMemo(() => {
-    return deliveryActions.filter(a => !a.synced);
-  }, [deliveryActions]);
+    return deliveryActions.filter(a => !a.synced && (a.ownerId == null || a.ownerId === user?.id));
+  }, [deliveryActions, user?.id]);
 
   const queryClient = useQueryClient();
   useEffect(() => {

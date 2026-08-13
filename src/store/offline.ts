@@ -445,6 +445,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   retry: async (id) => {
     const order = get().orders.find((o) => o.id === id);
     if (!order || order.synced) return false;
+    const uid = currentUserId();
+    if (order.ownerId != null && uid != null && order.ownerId !== uid) return false;
 
     const updated = get().orders.map((o) =>
       o.id === id ? { ...o, status: "syncing" as const, error: undefined } : o
@@ -475,6 +477,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   retryDeliveryAction: async (id) => {
     const action = get().deliveryActions.find((a) => a.id === id);
     if (!action || action.synced) return false;
+    const uid = currentUserId();
+    if (action.ownerId != null && uid != null && action.ownerId !== uid) return false;
 
     const updated = get().deliveryActions.map((a) =>
       a.id === id ? { ...a, status: "syncing" as const, error: undefined } : a

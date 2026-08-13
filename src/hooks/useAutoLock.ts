@@ -1,13 +1,22 @@
 import { useEffect, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useAuthStore } from "../store/auth";
 
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
+/**
+ * Persisted, not just an in-memory ref — a ref resets to null whenever the OS
+ * kills the app in the background (routine on Android, and expected on a
+ * phone shared across shifts). Without persistence, reopening a killed app
+ * always measured elapsed-time-in-background as 0 and skipped the lock
+ * entirely, no matter how many hours had actually passed.
+ */
+const BACKGROUNDED_AT_KEY = "auto_lock_backgrounded_at";
+
 export function useAutoLock() {
   const { isAuthenticated, logout } = useAuthStore();
-  const backgroundedAt = useRef<number | null>(null);
   const appState = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
@@ -19,28 +28,24 @@ export function useAutoLock() {
 
       // App going to background → record timestamp
       if (prev === "active" && nextState !== "active") {
-        backgroundedAt.current = Date.now();
+        await AsyncStorage.setItem(BACKGROUNDED_AT_KEY, String(Date.now()));
         return;
       }
 
       // App returning to foreground → check idle duration
       if (prev !== "active" && nextState === "active") {
-        const elapsed = backgroundedAt.current
-          ? Date.now() - backgroundedAt.current
-          : 0;
-        backgroundedAt.current = null;
+        const stored = await AsyncStorage.getItem(BACKGROUNDED_AT_KEY);
+        const elapsed = stored ? Date.now() - Number(stored) : 0;
+        await AsyncStorage.removeItem(BACKGROUNDED_AT_KEY);
 
         if (elapsed < IDLE_TIMEOUT_MS) return;
 
+        // Gate on hardware, not enrollment: authenticateAsync falls back to
+        // the device PIN/pattern on its own when no biometric is enrolled.
+        // Gating on isEnrolled skipped the lock entirely on any phone with a
+        // sensor the agent never registered a fingerprint on, PIN or not.
         const hasHardware = await LocalAuthentication.hasHardwareAsync();
-        const isEnrolled = hasHardware
-          ? await LocalAuthentication.isEnrolledAsync()
-          : false;
-
-        if (!isEnrolled) {
-          // No biometrics available — skip lock
-          return;
-        }
+        if (!hasHardware) return;
 
         const result = await LocalAuthentication.authenticateAsync({
           promptMessage: "Подтвердите вход",
