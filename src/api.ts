@@ -196,6 +196,14 @@ export interface CreateShopInput {
   gpsLng?: string;
   territoryId?: number;
   notes?: string;
+  /**
+   * Метка попытки. Одна и та же для всех повторов одного магазина.
+   *
+   * Сервер по ней узнаёт повтор и возвращает уже созданный магазин вместо
+   * второго. Генерировать её нужно один раз на экран, а не на запрос — иначе
+   * повтор придёт с новым ключом и создаст дубликат, ровно как раньше.
+   */
+  idempotencyKey?: string;
 }
 
 export interface Plan {
@@ -386,8 +394,21 @@ export async function getAllShopsForSupervisor(): Promise<Shop[]> {
   return trpcQuery<Shop[]>("agent.listAllShops");
 }
 
-export async function createShop(input: CreateShopInput): Promise<{ id: number }> {
-  return trpcMutation<{ id: number }>("agent.createShop", input);
+/**
+ * Своё время ожидания, а не общие 15 секунд.
+ *
+ * Когда S3 не настроен, фотография магазина едет прямо в теле этого запроса
+ * base64-строкой в сотни килобайт — столько же, сколько занимает загрузка
+ * снимка, для которой рядом стоит 120 секунд с пометкой «на сельском 3G это
+ * минута и больше». Под общим лимитом запрос обрывался раньше, чем сервер
+ * успевал ответить, хотя магазин уже был создан: агент видел ошибку и нажимал
+ * «Создать» второй раз. Ключ идемпотентности делает такой повтор безвредным,
+ * но лишний обрыв всё равно незачем.
+ */
+const SHOP_CREATE_TIMEOUT_MS = 120_000;
+
+export async function createShop(input: CreateShopInput): Promise<{ id: number; idempotent?: boolean }> {
+  return trpcMutation<{ id: number; idempotent?: boolean }>("agent.createShop", input, { timeout: SHOP_CREATE_TIMEOUT_MS });
 }
 
 export async function getPlans(agentId?: number, date?: string): Promise<Plan[]> {

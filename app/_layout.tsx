@@ -17,6 +17,7 @@ import { useBrandingStore } from "../src/store/branding";
 import { ToastHost } from "../src/components/Toast";
 import { ErrorBoundary } from "../src/components/ErrorBoundary";
 import { OfflineBanner } from "../src/components/OfflineBanner";
+import { LockScreen } from "../src/components/LockScreen";
 import { usePushNotifications } from "../src/hooks/usePushNotifications";
 import { useAutoLock } from "../src/hooks/useAutoLock";
 import { useVisitReminders } from "../src/hooks/useVisitReminders";
@@ -171,6 +172,9 @@ export default function RootLayout() {
               <Stack.Screen name="order/deliver" options={{ headerShown: false }} />
               <Stack.Screen name="merchandiser/visit" options={{ headerShown: false, presentation: "modal" }} />
             </Stack>
+            {/* Поверх всего: экран блокировки по простою. Ниже Stack, чтобы
+                закрывать любой открытый экран, включая модальные. */}
+            <LockScreen />
           </AuthGate>
         </QueryClientProvider>
       </GestureHandlerRootView>

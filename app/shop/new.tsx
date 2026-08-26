@@ -1,5 +1,5 @@
 // Warehouse Pro — New Shop v2 (cold palette, Card, Button, PressableScale)
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -13,6 +13,7 @@ import { useThemeColors } from "../../src/store/theme";
 import { Typography, Radii, Gradients, ThemeColors, safeBottomPadding } from "../../src/theme";
 import { Card, Button } from "../../src/components/ui";
 import { createShop, uploadFile, getTerritories, Territory } from "../../src/api";
+import { uuidv4 } from "../../src/store/offline";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
@@ -137,14 +138,47 @@ export default function NewShopScreen() {
     setGpsLoading(false);
   };
 
+  /**
+   * Метка попытки, одна на всё время заполнения формы.
+   *
+   * Генерируется при открытии экрана и НЕ меняется между нажатиями «Создать».
+   * В этом весь смысл: если первый запрос дошёл до сервера и магазин создался,
+   * а ответ потерялся, повтор придёт с тем же ключом — сервер узнает его и
+   * вернёт уже созданный магазин вместо второго. Ключ, сгенерированный на
+   * каждый запрос, не защищал бы ни от чего.
+   *
+   * useRef, а не useState: значение не влияет на отрисовку, а пересоздавать его
+   * при каждом рендере нельзя.
+   */
+  const idempotencyKeyRef = useRef(uuidv4());
+
   const mutation = useMutation({
-    mutationFn: () => createShop({ name, ownerName: owner || undefined, phone: phone || undefined, city: city || undefined, district: district || undefined, address: address || undefined, notes: notes || undefined, photoUrl: photo || undefined, gpsLat: gpsLat || undefined, gpsLng: gpsLng || undefined, territoryId }),
+    mutationFn: () => createShop({ name, ownerName: owner || undefined, phone: phone || undefined, city: city || undefined, district: district || undefined, address: address || undefined, notes: notes || undefined, photoUrl: photo || undefined, gpsLat: gpsLat || undefined, gpsLng: gpsLng || undefined, territoryId, idempotencyKey: idempotencyKeyRef.current }),
     // "shops" and "availableShops" are two different endpoints (the latter
     // backs the shop picker in order creation and the catalog screen) — only
     // invalidating "shops" left a just-created shop missing from both until a
     // manual refresh or app restart.
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shops"] }); qc.invalidateQueries({ queryKey: ["availableShops"] }); router.back(); notify.success("Магазин создан"); },
-    onError: (e: Error) => notify.error(e.message),
+    onSuccess: (res) => {
+      // Следующий магазин — новая попытка, и ключ ему нужен свой. Без этого
+      // экран, открытый повторно без размонтирования, отправил бы второй
+      // магазин под ключом первого и получил бы в ответ первый.
+      idempotencyKeyRef.current = uuidv4();
+      qc.invalidateQueries({ queryKey: ["shops"] });
+      qc.invalidateQueries({ queryKey: ["availableShops"] });
+      router.back();
+      // Повтор после оборванной связи — не ошибка и не второй магазин.
+      notify.success(res?.idempotent ? "Магазин уже был создан" : "Магазин создан");
+    },
+    onError: (e: Error) => {
+      // "timeout of 15000ms exceeded" агенту не говорит ничего, а нажать кнопку
+      // ещё раз предлагает прямо. Теперь повтор безопасен — тот же ключ вернёт
+      // тот же магазин, — но сказать об этом надо человеческими словами.
+      const msg = e.message ?? "";
+      const network = /timeout|network|econn|aborted/i.test(msg);
+      notify.error(network
+        ? "Связь пропала. Нажмите «Создать» ещё раз — повтор не создаст второй магазин."
+        : msg || "Не удалось создать магазин");
+    },
   });
 
   return (
