@@ -334,18 +334,46 @@ export interface OrderDetail extends Order {
 // API методы
 // ──────────────────────────────────────
 
+/**
+ * Один адрес заведён в нескольких организациях, и пароль подошёл сразу к
+ * нескольким. Сервер не выбирает за человека — данные в этих организациях
+ * разные — а называет их и ждёт повторного запроса с tenantId.
+ */
+export class TenantChoiceRequired extends Error {
+  readonly organizations: Array<{ tenantId: number; name: string }>;
+  constructor(message: string, organizations: Array<{ tenantId: number; name: string }>) {
+    super(message);
+    this.name = "TenantChoiceRequired";
+    this.organizations = organizations;
+  }
+}
+
 export async function login(
   email: string,
-  password: string
+  password: string,
+  tenantId?: number
 ): Promise<{ user: User; token: string }> {
-  const res = await axios.post(
-    `${API_BASE}/api/login`,
-    { email, password },
-    {
-      timeout: 15_000,
-      headers: { "Content-Type": "application/json" }
+  let res;
+  try {
+    res = await axios.post(
+      `${API_BASE}/api/login`,
+      tenantId === undefined ? { email, password } : { email, password, tenantId },
+      {
+        timeout: 15_000,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  } catch (e) {
+    const response = axios.isAxiosError(e) ? e.response : undefined;
+    const data = response?.data as { code?: string; error?: string; organizations?: Array<{ tenantId: number; name: string }> } | undefined;
+    if (response?.status === 409 && data?.code === "TENANT_REQUIRED") {
+      throw new TenantChoiceRequired(
+        data.error ?? "Выберите организацию",
+        data.organizations ?? [],
+      );
     }
-  );
+    throw e;
+  }
 
   const payload = res.data as { token: string; user: User; success: boolean };
 

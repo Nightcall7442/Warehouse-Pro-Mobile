@@ -1,6 +1,6 @@
 // Warehouse Pro — Login v3 (premium design matching web Login.tsx)
 import { useState, useEffect } from "react";
-import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Dimensions } from "react-native";
+import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
@@ -8,8 +8,7 @@ import { useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressableScale } from "../../src/components/Animated";
 import { useBiometricAuth } from "../../src/hooks/useBiometricAuth";
-
-const { height: SCREEN_H } = Dimensions.get("window");
+import { TenantChoiceRequired } from "../../src/api";
 
 export default function LoginScreen() {
   const { isDark } = useThemeStore();
@@ -20,6 +19,9 @@ export default function LoginScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
+  // Адрес заведён в нескольких организациях и пароль подошёл к нескольким —
+  // сервер называет их, выбирает человек.
+  const [orgChoice, setOrgChoice] = useState<{ message: string; organizations: Array<{ tenantId: number; name: string }> } | null>(null);
   const { login, loginWithBiometric } = useAuthStore();
   const { capabilities, biometricEnabled, loginWithBiometric: biometricAuth } = useBiometricAuth();
 
@@ -41,13 +43,23 @@ export default function LoginScreen() {
     dangerBorder: isDark ? "rgba(220,38,38,0.3)" : "#fecaca",
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (tenantId?: number) => {
     if (!email.trim() || !password) { setError("Введите email и пароль"); return; }
     setError(""); setLoading(true);
-    try { await login(email.trim().toLowerCase(), password); }
+    try {
+      await login(email.trim().toLowerCase(), password, tenantId);
+      setOrgChoice(null);
+    }
     catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } }; message?: string };
-      setError(err?.response?.data?.message ?? err?.message ?? "Неверный email или пароль");
+      if (e instanceof TenantChoiceRequired) {
+        setOrgChoice({ message: e.message, organizations: e.organizations });
+        return;
+      }
+      // Сервер отдаёт текст в поле error, а не message: раньше читалось только
+      // message, поэтому любой понятный отказ показывался как «Неверный email
+      // или пароль».
+      const err = e as { response?: { data?: { message?: string; error?: string } }; message?: string };
+      setError(err?.response?.data?.error ?? err?.response?.data?.message ?? err?.message ?? "Неверный email или пароль");
     } finally { setLoading(false); }
   };
 
@@ -64,9 +76,12 @@ export default function LoginScreen() {
   };
 
   useEffect(() => {
-    if (capabilities.hasHardware && capabilities.isEnrolled && biometricEnabled) {
-      handleBiometricLogin();
-    }
+    if (!(capabilities.hasHardware && capabilities.isEnrolled && biometricEnabled)) return;
+    // Отложено на такт: вызов прямо в теле эффекта ставит state внутри
+    // отрисовки. Заодно экран успевает нарисоваться до системного запроса
+    // отпечатка — иначе он всплывает поверх пустоты.
+    const id = setTimeout(() => { void handleBiometricLogin(); }, 0);
+    return () => clearTimeout(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -113,6 +128,23 @@ export default function LoginScreen() {
                 <Text style={{ fontFamily: "DM Sans", fontSize: 14, color: C.textSec, marginTop: 6 }}>Войдите, чтобы начать рабочий день</Text>
               </View>
 
+              {/* Выбор организации */}
+              {orgChoice ? (
+                <View style={{ padding: 12, borderRadius: 10, backgroundColor: C.inputBg, marginBottom: 20, borderWidth: 1, borderColor: C.inputBorder, gap: 8 }}>
+                  <Text style={{ color: C.text, fontSize: 13, fontFamily: "DM Sans", fontWeight: "500" }}>{orgChoice.message}</Text>
+                  {orgChoice.organizations.map(org => (
+                    <TouchableOpacity
+                      key={org.tenantId}
+                      disabled={loading}
+                      onPress={() => handleLogin(org.tenantId)}
+                      style={{ padding: 12, borderRadius: 8, backgroundColor: C.card, borderWidth: 1, borderColor: C.inputBorder }}
+                    >
+                      <Text style={{ color: C.text, fontSize: 14, fontFamily: "DM Sans", fontWeight: "600" }}>{org.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+
               {/* Error */}
               {error ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, backgroundColor: C.dangerBg, marginBottom: 20, borderWidth: 1, borderColor: C.dangerBorder }}>
@@ -129,7 +161,7 @@ export default function LoginScreen() {
                   <TextInput
                     style={{ flex: 1, padding: 14, fontSize: 14, fontFamily: "DM Sans", color: C.text }}
                     placeholder="you@company.com" placeholderTextColor={C.textMuted}
-                    value={email} onChangeText={setEmail} autoCapitalize="none"
+                    value={email} onChangeText={t => { setEmail(t); setOrgChoice(null); }} autoCapitalize="none"
                     keyboardType="email-address" autoComplete="email" editable={!loading}
                   />
                 </View>
@@ -144,7 +176,7 @@ export default function LoginScreen() {
                     style={{ flex: 1, padding: 14, paddingRight: 44, fontSize: 14, fontFamily: "DM Sans", color: C.text }}
                     placeholder="••••••••" placeholderTextColor={C.textMuted}
                     value={password} onChangeText={setPassword} secureTextEntry={!showPassword}
-                    autoComplete="password" editable={!loading} onSubmitEditing={handleLogin}
+                    autoComplete="password" editable={!loading} onSubmitEditing={() => handleLogin()}
                   />
                   <TouchableOpacity style={{ position: "absolute", right: 12 }} onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
                     <Feather name={showPassword ? "eye-off" : "eye"} size={16} color={C.textMuted} />
@@ -153,7 +185,7 @@ export default function LoginScreen() {
               </View>
 
               {/* Login button (matching web #4f46e5) */}
-              <PressableScale onPress={handleLogin} disabled={loading} haptic="medium">
+              <PressableScale onPress={() => handleLogin()} disabled={loading} haptic="medium">
                 <View style={{
                   backgroundColor: C.accent, borderRadius: 10, paddingVertical: 14,
                   flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,

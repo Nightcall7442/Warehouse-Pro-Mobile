@@ -7,7 +7,7 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, tenantId?: number) => Promise<void>;
   loginWithBiometric: () => Promise<boolean>;
   logout: () => Promise<void>;
   hydrate: () => Promise<void>;
@@ -156,8 +156,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  login: async (email, password) => {
-    const result = await apiLogin(email, password);
+  login: async (email, password, tenantId) => {
+    const result = await apiLogin(email, password, tenantId);
 
     if (result?.user) {
       await writeCachedUser(result.user);
