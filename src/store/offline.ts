@@ -117,11 +117,24 @@ async function readQueue(): Promise<OfflineOrder[]> {
   }
 }
 
+/**
+ * Запись очереди на диск.
+ *
+ * Сбой здесь означал тихую потерю работы: заказ оставался только в памяти, в
+ * списке отложенных выглядел сохранённым, и исчезал при первом же перезапуске
+ * приложения — а перезапускает его система сама, когда телефон лежит в кармане
+ * и памяти не хватает. Причина у сбоя приземлённая: на рабочих телефонах
+ * кончается место.
+ *
+ * Молчать об этом нельзя: агент должен знать, что заказ надо продиктовать в
+ * офис, а не обнаружить пропажу вечером.
+ */
 async function writeQueue(orders: OfflineOrder[]) {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
   } catch (e) {
     if (__DEV__) console.warn("[OfflineStore] Failed to write queue:", e);
+    notify.error("Не удалось сохранить заказ на телефон — освободите место и передайте заказ в офис");
   }
 }
 
@@ -139,6 +152,7 @@ async function writeDeliveryActionsQueue(actions: OfflineDeliveryAction[]) {
     await AsyncStorage.setItem(DELIVERY_ACTIONS_KEY, JSON.stringify(actions));
   } catch (e) {
     if (__DEV__) console.warn("[OfflineStore] Failed to write delivery actions queue:", e);
+    notify.error("Не удалось сохранить отметку о доставке — освободите место на телефоне");
   }
 }
 

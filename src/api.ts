@@ -616,10 +616,27 @@ export async function getMyWorkZones(): Promise<Territory[]> {
   return trpcQuery<Territory[]>("agent.myWorkZones");
 }
 
+/**
+ * Заказ отправляется дольше, чем обычный запрос.
+ *
+ * Общие 15 секунд рассчитаны на короткий JSON. Заказ на два десятка позиций
+ * сервер проводит в одной транзакции — резервирует остаток по каждой строке,
+ * считает цены и скидки, пишет движения склада, — и на сельском 3G ответа
+ * можно ждать заметно дольше. Обрыв по таймауту здесь особенно неприятен: сам
+ * заказ на сервере уже создан, а агент видит ошибку, и запись уходит в
+ * очередь. Повтор безвреден — ключ идемпотентности тот же, сервер вернёт
+ * существующий заказ, — но агент успевает решить, что заказ не прошёл, и
+ * начинает звонить в офис.
+ *
+ * Столько же, сколько у создания магазина и загрузки фотографии, и по той же
+ * причине.
+ */
+const ORDER_CREATE_TIMEOUT_MS = 120_000;
+
 export async function createOrder(input: CreateOrderInput): Promise<{ id: number; orderNumber?: string; total?: number }> {
   // total нужен, чтобы сверить сумму, которую агент назвал владельцу, с той,
   // что сервер посчитал по своим ценам на момент отправки.
-  return trpcMutation<{ id: number; orderNumber?: string; total?: number }>("order.create", input);
+  return trpcMutation<{ id: number; orderNumber?: string; total?: number }>("order.create", input, { timeout: ORDER_CREATE_TIMEOUT_MS });
 }
 
 export async function getMyOrders(): Promise<Order[]> {

@@ -8,13 +8,14 @@
     "android": "expo start --android --clear",
     "ios": "expo start --ios --clear",
     "web": "expo start --web",
-    "build:android": "eas build --platform android",
+    "build:android": "eas build --platform android --profile production",
     "build:ios": "eas build --platform ios",
     "prebuild": "expo prebuild --clean",
     "test": "jest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "build:apk": "eas build --platform android --profile preview"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
