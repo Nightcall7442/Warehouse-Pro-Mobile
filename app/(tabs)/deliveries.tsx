@@ -63,7 +63,7 @@ export default function DeliveriesScreen() {
       }
       const { markOutForDelivery } = await import("../../src/api");
       try {
-        return markOutForDelivery(orderId);
+        return await markOutForDelivery(orderId);
       } catch (e) {
         // Предполётная проверка сказала «сеть есть», но запрос всё равно
         // не дошёл. В дверях магазина это обычное дело, а не исключение:
@@ -110,7 +110,7 @@ export default function DeliveriesScreen() {
       }
       const { markDelivered } = await import("../../src/api");
       try {
-        return markDelivered(orderId, cashAmount);
+        return await markDelivered(orderId, cashAmount);
       } catch (e) {
         // Предполётная проверка сказала «сеть есть», но запрос всё равно
         // не дошёл. В дверях магазина это обычное дело, а не исключение:
@@ -157,7 +157,7 @@ export default function DeliveriesScreen() {
       }
       const { markFailed } = await import("../../src/api");
       try {
-        return markFailed(orderId, reason);
+        return await markFailed(orderId, reason);
       } catch (e) {
         // Предполётная проверка сказала «сеть есть», но запрос всё равно
         // не дошёл. В дверях магазина это обычное дело, а не исключение:
