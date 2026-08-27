@@ -16,7 +16,7 @@ import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
 import { Card, ScreenHeader, Badge } from "../../src/components/ui";
 import { ShimmerSkeleton, PressableScale, FadeInItem } from "../../src/components/Animated";
-import YandexMapView, { centerOnAgent, fitAllMarkers } from "../../src/components/YandexMapView";
+import YandexMapView, { centerOnAgent, fitAllMarkers, SHOP_PIN_ANIMATION_LIMIT } from "../../src/components/YandexMapView";
 import type { WebView } from "react-native-webview";
 
 const ONLINE_WINDOW = 600;
@@ -123,10 +123,14 @@ export default function TrackingScreen() {
 
     if (!showShops || !shopScores) return agents;
 
+    const visible = shopScores.filter(sc => sc.lat != null && sc.lng != null);
+    // Покачивание — только пока меток немного: каждая метка отдельная
+    // картинка, и её анимацию считает движок телефона.
+    const animated = visible.length <= SHOP_PIN_ANIMATION_LIMIT;
+
     // Магазины идут ПЕРЕД агентами: карта рисует метки по порядку, и человек
     // должен оказаться поверх точки, а не под ней.
-    const shops = shopScores
-      .filter(sc => sc.lat != null && sc.lng != null)
+    const shops = visible
       .map(sc => ({
         // Идентификаторы агентов и магазинов независимы и пересекаются,
         // поэтому у магазина он смещён — иначе метка агента №7 и магазина №7
@@ -138,6 +142,7 @@ export default function TrackingScreen() {
         color: TIER_COLOR[sc.tier],
         kind: "shop" as const,
         note: sc.reason,
+        animated,
       }));
 
     return [...shops, ...agents];

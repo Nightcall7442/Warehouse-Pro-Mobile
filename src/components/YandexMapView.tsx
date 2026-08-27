@@ -36,6 +36,8 @@ export interface MapMarker {
   kind?: "agent" | "shop";
   /** Строка под названием: чем магазин заслужил свой цвет. */
   note?: string;
+  /** Плавает ли булавка. Ставится вызывающим по числу меток на карте. */
+  animated?: boolean;
 }
 
 interface YandexMapViewProps {
@@ -52,17 +54,65 @@ function batteryDotColor(level: number): string {
   return "#34c473";
 }
 
+/** Размер картинки булавки и точка привязки — остриё, а не центр. */
+export const SHOP_PIN_SIZE: [number, number] = [30, 40];
+export const SHOP_PIN_ANCHOR: [number, number] = [-15, -38];
+
+/**
+ * Выше этого числа меток анимация выключается: каждая метка — отдельная
+ * картинка, и её SMIL считает сам движок. Два десятка плавающих булавок
+ * выглядят живо, три сотни съедают кадры и батарею ради эффекта, которого на
+ * такой плотности всё равно не видно.
+ */
+export const SHOP_PIN_ANIMATION_LIMIT = 60;
+
+/**
+ * Булавка магазина.
+ *
+ * Разметка совпадает с веб-версией (src/lib/shop-tier.ts в репозитории
+ * сервера) до пикселя — намеренно: супервайзер за компьютером и агент в поле
+ * должны видеть одну и ту же метку, иначе разговор о «красных» превращается в
+ * выяснение, кто что видит.
+ *
+ * Раньше здесь был плоский квадрат 20×20. На карте Яндекса он терялся среди её
+ * собственных значков — метро, аптек, банкоматов — и читался как артефакт
+ * отрисовки, а не как объект приложения.
+ *
+ * Что делает форму меткой, а не пятном: силуэт булавки с остриём (и привязка
+ * именно к острию — метка стоит на адресе, а не парит центром над ним), тень
+ * на земле, белая обводка (карта под меткой бывает любого цвета) и значок
+ * лавки внутри — цвет говорит «как платит», форма должна говорить «магазин».
+ */
+function shopPinSvg(color: string, animated: boolean): string {
+  const float = animated
+    ? `<animateTransform attributeName="transform" type="translate"
+         values="0 0; 0 -2.2; 0 0" keyTimes="0;0.5;1" dur="3s"
+         calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
+         repeatCount="indefinite"/>`
+    : "";
+  // Тень дышит вместе с булавкой: когда та поднимается, пятно чуть меньше и
+  // светлее. Без этого «полёт» читается как дрожание.
+  const shadowPulse = animated
+    ? `<animate attributeName="rx" values="5;3.8;5" keyTimes="0;0.5;1" dur="3s"
+         calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1" repeatCount="indefinite"/>
+       <animate attributeName="opacity" values="0.22;0.13;0.22" keyTimes="0;0.5;1" dur="3s"
+         calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1" repeatCount="indefinite"/>`
+    : "";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">
+  <ellipse cx="15" cy="37" rx="5" ry="1.7" fill="#000" opacity="0.22">${shadowPulse}</ellipse>
+  <g>${float}
+    <path d="M15 1.6c-5.3 0-9.6 4.2-9.6 9.4 0 6.8 8.4 14.9 8.7 15.3.5.5 1.3.5 1.8 0 .3-.4 8.7-8.5 8.7-15.3 0-5.2-4.3-9.4-9.6-9.4z"
+          fill="${color}" stroke="#ffffff" stroke-width="2"/>
+    <path d="M9.6 7.4h10.8l.9 2.5H8.7z" fill="#ffffff"/>
+    <path d="M10.3 10.6h9.4v5.1h-9.4z" fill="#ffffff"/>
+    <rect x="13.3" y="12.1" width="3.4" height="3.6" rx="0.4" fill="${color}"/>
+  </g>
+</svg>`;
+}
+
 function buildMarkerSvg(m: MapMarker): string {
-  // Магазин — небольшой квадрат со скруглением и без буквы: точек на карте
-  // сотни, буква на каждой ничего не сообщает, а размер отличает магазин от
-  // человека даже боковым зрением.
-  if (m.kind === "shop") {
-    return (
-      `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">` +
-      `<rect x="2" y="2" width="16" height="16" rx="5" fill="${m.color}" stroke="white" stroke-width="2"/>` +
-      `</svg>`
-    );
-  }
+  if (m.kind === "shop") return shopPinSvg(m.color, m.animated === true);
 
   const initial = m.label.charAt(0).toUpperCase();
   const pulse = m.online
@@ -118,13 +168,15 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number): string {
       markers.forEach(function(m) {
         var placemark = new ymaps.Placemark([m.lat, m.lng], {
           balloonContentHeader: '<b>' + m.label + '</b>',
-          balloonContentBody: m.batteryLevel != null ? ('🔋 ' + m.batteryLevel + '%') : '',
+          balloonContentBody: m.note ? m.note : (m.batteryLevel != null ? ('🔋 ' + m.batteryLevel + '%') : ''),
           hintContent: m.label,
         }, {
           iconLayout: "default#imageWithContent",
           iconImageHref: "data:image/svg+xml," + encodeURIComponent(m.svg),
-          iconImageSize: [40, 40],
-          iconImageOffset: [-20, -20],
+          // Размер и привязка приходят с самой меткой: у булавки магазина
+          // якорь на острие, у круга агента — по центру.
+          iconImageSize: m.iconSize || [40, 40],
+          iconImageOffset: m.iconAnchor || [-20, -20],
           balloonPanelMaxMapArea: 0,
         });
 
@@ -226,7 +278,12 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
   const loadedRef = useRef(false);
 
   useEffect(() => {
-    const json = JSON.stringify(markers.map(m => ({ ...m, svg: buildMarkerSvg(m) })));
+    const json = JSON.stringify(markers.map(m => ({
+      ...m,
+      svg: buildMarkerSvg(m),
+      iconSize: m.kind === "shop" ? SHOP_PIN_SIZE : [40, 40],
+      iconAnchor: m.kind === "shop" ? SHOP_PIN_ANCHOR : [-20, -20],
+    })));
     if (json === markersJsRef.current) return;
     markersJsRef.current = json;
     if (loadedRef.current) {
