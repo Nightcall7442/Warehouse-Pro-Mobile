@@ -68,10 +68,25 @@ function AutoSync() {
   // until the agent happened to open the Orders tab or the connection
   // flapped — long enough for them to assume the order hadn't gone through
   // and enter it a second time.
+  //
+  // Второе условие — кто именно вошёл. Записи в очереди помечены владельцем
+  // (ownerId), и отправлять чужие нельзя: сервер берёт автора из сессии, а не
+  // из запроса, поэтому заказы, выручка и комиссия ушли бы не тому человеку.
+  // Телефон в поле часто общий: агент сдаёт смену и передаёт его сменщику.
+  //
+  // Но проверка владельца сверяется с текущим пользователем, а он появляется
+  // только после hydrate() — тот идёт в сеть за профилем. Чтение очереди с
+  // диска занимает миллисекунды и завершается заведомо раньше, поэтому синх
+  // стартовал, пока user был ещё null: проверка пропускалась, и очередь
+  // прошлой смены уходила под токеном нового человека. То есть защита,
+  // написанная ровно от этого случая, не срабатывала ни разу на холодном
+  // старте — единственном, когда она и нужна.
   const loaded = useOfflineStore((s) => s.loaded);
+  const user = useAuthStore((s) => s.user);
+  const authLoading = useAuthStore((s) => s.isLoading);
   useEffect(() => {
-    if (loaded) runSync();
-  }, [loaded, runSync]);
+    if (loaded && !authLoading && user) runSync();
+  }, [loaded, authLoading, user, runSync]);
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
