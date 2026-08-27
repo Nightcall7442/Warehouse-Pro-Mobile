@@ -11,41 +11,15 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getAgentLocations, getShopScores, AgentLocation, ShopScore } from "../../src/api";
+import { getAgentLocations, AgentLocation } from "../../src/api";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
 import { Card, ScreenHeader, Badge } from "../../src/components/ui";
 import { ShimmerSkeleton, PressableScale, FadeInItem } from "../../src/components/Animated";
-import YandexMapView, { centerOnAgent, fitAllMarkers, SHOP_PIN_ANIMATION_LIMIT } from "../../src/components/YandexMapView";
+import YandexMapView, { centerOnAgent, fitAllMarkers } from "../../src/components/YandexMapView";
 import type { WebView } from "react-native-webview";
 
 const ONLINE_WINDOW = 600;
-
-/**
- * Цвета магазинов на карте.
- *
- * Те же значения, что на веб-карте (src/lib/shop-tier.ts): супервайзер за
- * компьютером и агент в поле должны видеть одинаковый цвет у одного и того же
- * магазина, иначе разговор о «красных точках» превращается в спор.
- *
- * Шестнадцатеричные литералы, а не токены темы: метка рисуется SVG внутри
- * data-URI, куда переменная CSS не доходит.
- */
-const TIER_COLOR: Record<ShopScore["tier"], string> = {
-  red: "#c0392b",
-  yellow: "#d4a017",
-  green: "#2e8b57",
-  new: "#9aa0a6",
-};
-
-const TIER_LABEL: Record<ShopScore["tier"], string> = {
-  red: "Долго не платят",
-  yellow: "Есть долг",
-  green: "Рассчитываются",
-  new: "Заказов не было",
-};
-
-const TIER_ORDER: Array<ShopScore["tier"]> = ["red", "yellow", "green", "new"];
 
 function isOnline(createdAt: string | undefined): boolean {
   if (!createdAt) return false;
@@ -94,59 +68,24 @@ export default function TrackingScreen() {
     if (polledLocations) setLocations(polledLocations);
   }, [polledLocations]);
 
-  // Магазины на той же карте. Оценка меняется от заказов и оплат, то есть
-  // медленно, поэтому она живёт своим сроком годности и не перечитывается
-  // каждые тридцать секунд вместе с метками агентов.
-  const [showShops, setShowShops] = useState(true);
-  const { data: shopScores } = useQuery({
-    queryKey: ["shopScores"],
-    queryFn: () => getShopScores(500),
-    staleTime: 5 * 60_000,
-  });
-
   const onlineCount = locations.filter(l => isOnline(l.createdAt)).length;
   const offlineCount = locations.length - onlineCount;
 
-  const mapMarkers = useMemo(() => {
-    const agents = locations
-      .filter(l => Number(l.lat) && Number(l.lng))
-      .map(l => ({
-        id: l.agentId,
-        lat: Number(l.lat),
-        lng: Number(l.lng),
-        label: l.agentName ?? `Agent #${l.agentId}`,
-        color: isOnline(l.createdAt) ? KpiColors.teal : colors.text.muted,
-        online: isOnline(l.createdAt),
-        batteryLevel: l.batteryLevel ?? null,
-        kind: "agent" as const,
-      }));
-
-    if (!showShops || !shopScores) return agents;
-
-    const visible = shopScores.filter(sc => sc.lat != null && sc.lng != null);
-    // Покачивание — только пока меток немного: каждая метка отдельная
-    // картинка, и её анимацию считает движок телефона.
-    const animated = visible.length <= SHOP_PIN_ANIMATION_LIMIT;
-
-    // Магазины идут ПЕРЕД агентами: карта рисует метки по порядку, и человек
-    // должен оказаться поверх точки, а не под ней.
-    const shops = visible
-      .map(sc => ({
-        // Идентификаторы агентов и магазинов независимы и пересекаются,
-        // поэтому у магазина он смещён — иначе метка агента №7 и магазина №7
-        // считались бы одной.
-        id: -sc.shopId,
-        lat: sc.lat as number,
-        lng: sc.lng as number,
-        label: sc.name,
-        color: TIER_COLOR[sc.tier],
-        kind: "shop" as const,
-        note: sc.reason,
-        animated,
-      }));
-
-    return [...shops, ...agents];
-  }, [locations, shopScores, showShops, colors.text.muted]);
+  const mapMarkers = useMemo(
+    () =>
+      locations
+        .filter(l => Number(l.lat) && Number(l.lng))
+        .map(l => ({
+          id: l.agentId,
+          lat: Number(l.lat),
+          lng: Number(l.lng),
+          label: l.agentName ?? `Agent #${l.agentId}`,
+          color: isOnline(l.createdAt) ? KpiColors.teal : colors.text.muted,
+          online: isOnline(l.createdAt),
+          batteryLevel: l.batteryLevel ?? null,
+        })),
+    [locations]
+  );
 
   const center = useMemo(() => {
     if (mapMarkers.length === 0) return { lat: 41.2995, lng: 69.2401 };
@@ -234,48 +173,6 @@ export default function TrackingScreen() {
           >
             <Feather name="crosshair" size={18} color={colors.accent.primary} />
           </TouchableOpacity>
-        </View>
-      </FadeInItem>
-
-      {/* Легенда магазинов.
-          Цвет без подписи — ребус: красная точка на карте может означать что
-          угодно. Счётчик рядом отвечает на первый же вопрос супервайзера —
-          «сколько их». */}
-      <FadeInItem delay={40}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, marginHorizontal: Spacing.lg, marginTop: Spacing.sm }}>
-          <TouchableOpacity
-            onPress={() => setShowShops(v => !v)}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: showShops }}
-            accessibilityLabel="Показывать магазины на карте"
-            style={{
-              flexDirection: "row", alignItems: "center", gap: 6,
-              paddingHorizontal: 12, height: 36, borderRadius: Radii.md,
-              backgroundColor: showShops ? colors.accent.primary + "1A" : colors.bg.elevated,
-              borderWidth: 1, borderColor: showShops ? colors.accent.primary + "40" : colors.border.default,
-            }}
-          >
-            <Feather name="shopping-bag" size={13} color={showShops ? colors.accent.primary : colors.text.secondary} />
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: showShops ? colors.accent.primary : colors.text.secondary }}>
-              Магазины
-            </Text>
-          </TouchableOpacity>
-
-          {showShops && TIER_ORDER.map(tier => {
-            const count = shopScores?.filter(sc => sc.tier === tier).length ?? 0;
-            if (count === 0) return null;
-            return (
-              <View key={tier} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                <View style={{ width: 9, height: 9, borderRadius: 3, backgroundColor: TIER_COLOR[tier] }} />
-                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary }}>
-                  {TIER_LABEL[tier]}
-                </Text>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.primary }}>
-                  {count}
-                </Text>
-              </View>
-            );
-          })}
         </View>
       </FadeInItem>
 
