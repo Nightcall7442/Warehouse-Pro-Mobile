@@ -418,6 +418,33 @@ export async function getMe(): Promise<User> {
   };
 }
 
+/**
+ * Магазин с оценкой: сколько принёс за всю историю и как платит.
+ *
+ * Считается на сервере одним запросом (api/services/shop-scoring.ts) — здесь
+ * только форма ответа. Держать правило раскраски на клиенте нельзя: на карте
+ * в вебе и на телефоне цвет одного и того же магазина обязан совпадать, иначе
+ * супервайзер и агент будут спорить о разных картинах.
+ */
+export interface ShopScore {
+  shopId: number;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  ltv: number;
+  debt: number;
+  orderCount: number;
+  debtShare: number;
+  oldestUnpaidDays: number;
+  lastOrderAt: string | null;
+  tier: "green" | "yellow" | "red" | "new";
+  reason: string;
+}
+
+export async function getShopScores(limit = 500): Promise<ShopScore[]> {
+  return trpcQuery<ShopScore[]>("shop.scores", { limit });
+}
+
 export async function getMyShops(): Promise<Shop[]> {
   return trpcQuery<Shop[]>("agent.myShops");
 }

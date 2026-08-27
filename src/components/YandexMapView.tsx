@@ -26,6 +26,16 @@ export interface MapMarker {
   color: string;
   online?: boolean;
   batteryLevel?: number | null;
+  /**
+   * Кто это на карте.
+   *
+   * Агент и магазин рисуются по-разному намеренно: одинаковые кружки разного
+   * цвета супервайзер прочитал бы как «агент онлайн» и «агент офлайн», а не
+   * как две разные сущности. Круг — человек, квадрат — точка на местности.
+   */
+  kind?: "agent" | "shop";
+  /** Строка под названием: чем магазин заслужил свой цвет. */
+  note?: string;
 }
 
 interface YandexMapViewProps {
@@ -43,6 +53,17 @@ function batteryDotColor(level: number): string {
 }
 
 function buildMarkerSvg(m: MapMarker): string {
+  // Магазин — небольшой квадрат со скруглением и без буквы: точек на карте
+  // сотни, буква на каждой ничего не сообщает, а размер отличает магазин от
+  // человека даже боковым зрением.
+  if (m.kind === "shop") {
+    return (
+      `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">` +
+      `<rect x="2" y="2" width="16" height="16" rx="5" fill="${m.color}" stroke="white" stroke-width="2"/>` +
+      `</svg>`
+    );
+  }
+
   const initial = m.label.charAt(0).toUpperCase();
   const pulse = m.online
     ? `<circle cx="20" cy="20" r="16" fill="none" stroke="${m.color}" stroke-width="1.5" opacity="0.5">
