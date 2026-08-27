@@ -67,7 +67,9 @@ describe("разбор ошибки: что считать сбоем доста
     // очередь и всплывал бы снова и снова, а курьер считал бы его принятым.
     expect(isRetryableError({ serverRejected: true, trpcMessage: "Недостаточно товара" })).toBe(false);
     expect(isRetryableError({ response: { status: 400 } })).toBe(false);
-    expect(isRetryableError({ response: { status: 403 } })).toBe(false);
+    // 401 и 403 намеренно НЕ здесь: они говорят про доступ, а не про заказ,
+    // и повторяются — см. отдельный случай в offline.test.ts.
+    expect(isRetryableError({ response: { status: 404 } })).toBe(false);
   });
 
   it("429 и 408 — повторяем, хотя это 4xx", () => {

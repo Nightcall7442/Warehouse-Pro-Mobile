@@ -21,8 +21,51 @@ interface OrderLine {
   unitPrice: number;
   quantity: string;
   discount: string;
-  available: number;
+  /**
+   * Остаток на складе. null — остаток ещё не известен.
+   *
+   * Заказ, начатый со сканера штрих-кода, приходит сюда параметрами маршрута,
+   * и остатка среди них нет. Раньше в этом случае подставлялся ноль — и он
+   * ничем не отличался от честного нуля: кнопка «Продолжить» гасла при любом
+   * количестве, а рядом с товаром стояло «Остаток: 0 (превышено!)». Агент у
+   * полки читал это как «товара нет на складе» и уходил, хотя товар был у него
+   * в руках. Весь путь «отсканировал у полки → оформил заказ» не работал.
+   *
+   * Отдельное значение для «не знаем» позволяет не врать и не блокировать:
+   * остаток дочитывается из каталога, а пока не дочитан — ограничение не
+   * применяется.
+   */
+  available: number | null;
   unit?: string;
+}
+
+/**
+ * Запомнить магазин как недавний, не мешая выбору.
+ *
+ * Список недавних — удобство, а не часть заказа: если запись не удалась,
+ * выбор магазина всё равно должен состояться. По той же причине, что и в
+ * эффекте выше, здесь require, а не динамический import.
+ */
+function addRecentShopSafely(shopId: number) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const recentShops = require("../../src/store/recentShops") as typeof import("../../src/store/recentShops");
+    void recentShops.addRecentShop(shopId);
+  } catch { /* недавние магазины — не повод срывать оформление заказа */ }
+}
+
+/**
+ * Остаток из каталога в число — или null, если сервер его не прислал.
+ *
+ * Остатки приходят строкой DECIMAL(15,3). Number(null) даёт 0, и товар без
+ * заполненного остатка выглядел бы как «нет на складе»: кнопка «Продолжить»
+ * гасла, а рядом стояло «превышено!». Отсутствие данных и настоящий ноль —
+ * разные вещи, и агенту у полки они говорят прямо противоположное.
+ */
+function parseStock(raw: string | number | null | undefined): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
 // ── Step Indicator (matches web Steps) ───────────────────────────────────────
@@ -63,7 +106,13 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
 
   // Load recent shop IDs on mount
   useEffect(() => {
-    import("../../src/store/recentShops").then(m => m.getRecentShopIds()).then(setRecentIds);
+    // require, а не динамический import: последний в тестовой среде падает без
+    // отдельного флага узла, и экран нельзя было отрисовать в тесте целиком —
+    // а именно на этом экране проверяется, что заказ со сканера доводится до
+    // конца. Модуль лёгкий (только хранилище), на загрузку это не влияет.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const recentShops = require("../../src/store/recentShops") as typeof import("../../src/store/recentShops");
+    recentShops.getRecentShopIds().then(setRecentIds);
   }, []);
 
   // Unique cities for quick filter
@@ -195,6 +244,9 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
       {/* Line items */}
       {lines.map((line, idx) => {
         const total = lineTotal(line);
+        // Пока остаток неизвестен (строка пришла со сканера и ещё не найдена в
+        // каталоге), превышения быть не может: сравнивать не с чем.
+        const overStock = line.available != null && Number(line.quantity) > line.available;
         return (
           <Card key={line.productId} style={{ padding: Spacing.base, gap: 8 }}>
             {/* Header */}
@@ -210,8 +262,8 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
             {/* Price info */}
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
               <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>{line.unitPrice.toLocaleString("ru")} сум / {line.unit ?? "кг"}</Text>
-              <Text style={{ fontSize: Typography.size.xs, color: Number(line.quantity) > line.available ? colors.status.danger : colors.text.tertiary }}>
-                Остаток: {line.available}{Number(line.quantity) > line.available ? " (превышено!)" : ""}
+              <Text style={{ fontSize: Typography.size.xs, color: overStock ? colors.status.danger : colors.text.tertiary }}>
+                {line.available == null ? "Остаток уточняется" : `Остаток: ${line.available}${overStock ? " (превышено!)" : ""}`}
               </Text>
             </View>
             {/* Inputs */}
@@ -310,7 +362,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                 return (
                   <PressableScale onPress={() => {
                     if (added) return;
-                    onChange([...lines, { productId: p.id, name: p.name, unitPrice: Number(p.unitPrice), quantity: "1", discount: "0", available: Number(p.available), unit: p.unit }]);
+                    onChange([...lines, { productId: p.id, name: p.name, unitPrice: Number(p.unitPrice), quantity: "1", discount: "0", available: parseStock(p.available), unit: p.unit }]);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }} haptic="light">
                     <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 4, borderWidth: 1, borderColor: added ? colors.status.success : colors.border.default, backgroundColor: added ? colors.status.success + "0D" : colors.bg.card }}>
@@ -485,9 +537,13 @@ export default function NewOrderScreen() {
   const [selectedShop, setSelectedShop] = useState<Shop | null>(
     params.shopId ? ({ id: Number(params.shopId), name: params.shopName ?? "" } as Shop) : null
   );
-  const [lines, setLines] = useState<OrderLine[]>(() => {
+  const [rawLines, setLines] = useState<OrderLine[]>(() => {
     if (params.productId && params.productPrice) {
-      return [{ productId: Number(params.productId), name: params.productName ?? "", unitPrice: Number(params.productPrice), quantity: "1", discount: "0", available: 0 }];
+      // Остаток со сканера не приходит, поэтому здесь честное «не знаю», а не
+      // ноль. Ноль на этом месте гасил кнопку «Продолжить» и рисовал агенту
+      // «Остаток: 0 (превышено!)» на товар, который он держал в руках.
+      // Настоящее значение дочитывается ниже из каталога.
+      return [{ productId: Number(params.productId), name: params.productName ?? "", unitPrice: Number(params.productPrice), quantity: "1", discount: "0", available: null }];
     }
     return [];
   });
@@ -499,6 +555,54 @@ export default function NewOrderScreen() {
   // the order but the response was lost (timeout/network blip), retrying with
   // the SAME key makes the backend return the existing order instead of a duplicate.
   const idempotencyKeyRef = useRef<string | null>(null);
+
+  /**
+   * Дочитывание товара, пришедшего со сканера штрих-кода.
+   *
+   * Экран сканера отдаёт только id, название и цену — остатка среди параметров
+   * маршрута нет, и подставить его неоткуда. Берётся он тем же запросом
+   * каталога и под тем же ключом кэша, что и в ручном выборе товара
+   * (ProductPicker), поэтому лишнего похода в сеть не будет: если каталог уже
+   * открывали, ответ придёт из кэша, а если нет — этот запрос пригодится
+   * выбору товара.
+   *
+   * Заодно обновляется цена: сканер передал ту, что была на экране сканера, а
+   * каталог отвечает текущей.
+   */
+  const seededProductId = params.productId ? Number(params.productId) : null;
+  const { data: catalog } = useQuery({
+    queryKey: ["products"],
+    queryFn: () => getProducts(),
+    enabled: seededProductId != null && Number.isFinite(seededProductId),
+  });
+
+  /**
+   * Строки заказа с подставленным остатком.
+   *
+   * Подстановка сделана вычислением при отрисовке, а не записью в состояние из
+   * эффекта: состояние принадлежит агенту (он правит количество и скидку), и
+   * дописывать в него ответ сети — лишний круг перерисовок и лишний источник
+   * правды. Дополняются только строки, у которых остаток неизвестен, то есть
+   * пришедшие со сканера; выбранные вручную уже несут остаток из каталога.
+   */
+  const lines = useMemo(() => {
+    if (!catalog || rawLines.length === 0) return rawLines;
+    let enriched = false;
+    const next = rawLines.map(l => {
+      if (l.available != null) return l;
+      const product = catalog.find(p => p.id === l.productId);
+      if (!product) return l;
+      enriched = true;
+      return {
+        ...l,
+        name: l.name || product.name,
+        unitPrice: Number(product.unitPrice) || l.unitPrice,
+        available: parseStock(product.available),
+        unit: l.unit ?? product.unit,
+      };
+    });
+    return enriched ? next : rawLines;
+  }, [rawLines, catalog]);
 
   // Check for saved draft on mount
   useEffect(() => {
@@ -577,7 +681,26 @@ export default function NewOrderScreen() {
       // (src/store/offline.ts), но точка входа сохраняла старую копию.
       if (isRetryableError(e) && selectedShop) {
         const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
-        await addOrder(offlineOrder);
+        const queued = await addOrder(offlineOrder);
+        if (!queued) {
+          // Запись очереди на диск не удалась — на рабочих телефонах кончается
+          // место. Заказ остался только в памяти и не переживёт выгрузки
+          // приложения системой, а происходит она сама, пока телефон лежит в
+          // кармане.
+          //
+          // Раньше здесь безусловно звался clearDraft() и router.back(), а
+          // тост «Заказ сохранён офлайн» затирал предупреждение о нехватке
+          // места. Агент уходил уверенным, что заказ сохранён, и терял его
+          // целиком: ни черновика, ни записи в очереди. Теперь черновик
+          // остаётся, экран не закрывается, а сказано это модальным окном —
+          // тост следующее сообщение перекрывает, окно нужно закрыть рукой.
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert(
+            "Заказ НЕ сохранён",
+            "На телефоне нет места, заказ не записался. Он остался на экране как черновик — освободите место и попробуйте снова или продиктуйте заказ в офис. Не закрывайте экран.",
+          );
+          return;
+        }
         clearDraft();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         // Про цену сказано прямо: сервер посчитает итог по своим ценам на
@@ -594,8 +717,28 @@ export default function NewOrderScreen() {
 
   // No `l.available > 0` guard: a line whose catalog stock is genuinely 0 must
   // still be caught here, not silently let through because "0 > 0" is false.
-  const quantityError = lines.find(l => Number(l.quantity) > 0 && Number(l.quantity) > l.available);
+  //
+  // Строки с неизвестным остатком (available === null) не блокируются: остаток
+  // не «ноль», его просто ещё нет. Проверку всё равно повторит сервер при
+  // создании заказа — а вот молча запретить агенту оформить отсканированный
+  // товар нельзя, из-за этого весь путь от сканера был непроходим.
+  const quantityError = lines.find(l => l.available != null && Number(l.quantity) > 0 && Number(l.quantity) > l.available);
   const canNext = step === 1 ? !!selectedShop : step === 2 ? lines.length > 0 && lines.every(l => Number(l.quantity) > 0) && !quantityError : true;
+
+  /**
+   * Почему кнопка «Продолжить» неактивна.
+   *
+   * Раньше кнопка просто гасла, и догадываться приходилось самому — а на шаге
+   * товаров причин четыре. Агент у полки читал единственную подсказку рядом,
+   * «Остаток: 0 (превышено!)», как «товара нет на складе» и уходил.
+   */
+  const blockedReason = canNext ? null
+    : step === 1 ? "Выберите магазин"
+    : step === 2
+      ? lines.length === 0 ? "Добавьте хотя бы один товар"
+        : quantityError ? `«${quantityError.name}»: на складе ${quantityError.available}, в заказе ${quantityError.quantity}`
+        : "Укажите количество больше нуля для каждого товара"
+      : null;
 
   const handleSubmit = async () => {
     if (!selectedShop) return;
@@ -630,7 +773,7 @@ export default function NewOrderScreen() {
 
       {/* Content */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); import("../../src/store/recentShops").then(m => m.addRecentShop(s.id)); }} colors={colors} />}
+        {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); addRecentShopSafely(s.id); }} colors={colors} />}
         {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} />}
         {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} colors={colors} />}
       </ScrollView>
@@ -638,11 +781,16 @@ export default function NewOrderScreen() {
       {/* Bottom CTA */}
       <View style={{ padding: Spacing.base, paddingBottom: safeBottomPadding(insets.bottom, 16), borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
         {step < 3 ? (
+          <>
+          {blockedReason && (
+            <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary, textAlign: "center", marginBottom: 8 }}>{blockedReason}</Text>
+          )}
           <PressableScale onPress={() => { setStep(s => s + 1); }} disabled={!canNext} haptic="medium">
             <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: canNext ? 1 : 0.45 }}>
               <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>Продолжить →</Text>
             </View>
           </PressableScale>
+          </>
         ) : (
           <PressableScale onPress={handleSubmit} disabled={createMutation.isPending} haptic="medium">
             <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: createMutation.isPending ? 0.6 : 1 }}>

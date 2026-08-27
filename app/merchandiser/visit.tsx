@@ -1,6 +1,6 @@
 // Warehouse Pro — Merchandiser Visit Report v2 (cold palette, Card, Badge, Button)
-import { useState, useEffect, useRef } from "react";
-import { View, Text, ScrollView, TextInput, ActivityIndicator, Alert, Image } from "react-native";
+import { memo, useCallback, useState, useEffect, useMemo, useRef } from "react";
+import { View, Text, FlatList, TextInput, ActivityIndicator, Alert, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -63,6 +63,46 @@ async function clearVisitDraft(planId: string) {
   try { await AsyncStorage.removeItem(draftKey(planId)); } catch { /* ignore */ }
 }
 
+/** Строка чек-листа: имя товара, галочка «есть на полке», цена и акция. */
+interface ChecklistRowData {
+  productId: number;
+  productName: string;
+}
+
+// Строка перерисовывается только когда меняется что-то её собственное.
+// Раньше цена и галочка жили в одном массиве на весь чек-лист: каждый символ
+// в поле «Цена» пересоздавал массив, и React перерисовывал все строки разом —
+// у арендатора с сотнями SKU это два нативных TextInput на строку, и ввод на
+// бюджетном Android шёл по букве в секунду.
+const ChecklistRow = memo(function ChecklistRow({
+  productId, productName, present, price, promoNote, onToggle, onPrice, onPromo,
+}: ChecklistRowData & {
+  present: boolean;
+  price: string;
+  promoNote: string;
+  onToggle: (productId: number) => void;
+  onPrice: (productId: number, value: string) => void;
+  onPromo: (productId: number, value: string) => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View style={{ backgroundColor: colors.bg.card, paddingHorizontal: Spacing.lg }}>
+      <PressableScale onPress={() => onToggle(productId)} haptic="light">
+        <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, backgroundColor: present ? colors.accent.primary + "10" : "transparent", borderRadius: Radii.md, marginBottom: 4 }}>
+          <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: present ? colors.accent.primary : colors.border.strong, alignItems: "center", justifyContent: "center", marginRight: 12, backgroundColor: present ? colors.accent.primary : "transparent" }}>
+            {present && <Feather name="check" size={14} color="#fff" />}
+          </View>
+          <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: present ? colors.text.primary : colors.text.secondary }}>{productName}</Text>
+          <TextInput value={price} onChangeText={v => onPrice(productId, v)} placeholder="Цена" keyboardType="numeric"
+            style={{ width: 60, textAlign: "right", fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 6, paddingVertical: 4, marginRight: 4 }} />
+          <TextInput value={promoNote} onChangeText={v => onPromo(productId, v)} placeholder="Акция"
+            style={{ width: 70, fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 6, paddingVertical: 4 }} />
+        </View>
+      </PressableScale>
+    </View>
+  );
+});
+
 // ── CardDots (matches web) ───────────────────────────────────────────────────
 function CardDots() {
   const colors = useThemeColors();
@@ -82,22 +122,29 @@ export default function MerchandiserVisitScreen() {
   const qc = useQueryClient();
 
   const [photos, setPhotos] = useState<string[]>([]);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  // Список товаров и правки по нему держатся раздельно: строки меняются только
+  // при загрузке каталога, а нажатия и ввод трогают маленькие Record'ы по
+  // productId, а не массив на весь чек-лист.
+  const [rows, setRows] = useState<ChecklistRowData[]>([]);
+  const [present, setPresent] = useState<Record<number, boolean>>({});
+  const [prices, setPrices] = useState<Record<number, string>>({});
+  const [promos, setPromos] = useState<Record<number, string>>({});
   const [competitorNotes, setCompetitorNotes] = useState("");
   const draftChecked = useRef(false);
 
   const { data: products, isLoading: productsLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
 
   useEffect(() => {
-    if (!products || checklist.length > 0) return;
-    const fresh = products.map((p: Product) => ({ productId: p.id, productName: p.name, present: false }));
+    if (!products || rows.length > 0) return;
+    const fresh: ChecklistRowData[] = products.map((p: Product) => ({ productId: p.id, productName: p.name }));
+    const known = new Set(fresh.map(r => r.productId));
     loadVisitDraft(planId).then(draft => {
       if (draft && (draft.photos.length > 0 || draft.checklist.some(i => i.present) || draft.competitorNotes)) {
         Alert.alert(
           "Продолжить черновик?",
           "Найден незавершённый отчёт по этому визиту — сеть, видимо, прервалась при отправке.",
           [
-            { text: "Начать заново", style: "cancel", onPress: () => { setChecklist(fresh); clearVisitDraft(planId); } },
+            { text: "Начать заново", style: "cancel", onPress: () => { setRows(fresh); clearVisitDraft(planId); } },
             { text: "Продолжить", onPress: () => {
               setPhotos(draft.photos);
               // Merge on productId rather than trusting the two lists to line
@@ -105,34 +152,59 @@ export default function MerchandiserVisitScreen() {
               // product silently threw away every tick the merchandiser had
               // made — and since photos and notes still came back, nothing on
               // screen suggested the checklist had been reset.
-              const ticked = new Map(draft.checklist.map(i => [i.productId, i.present]));
-              setChecklist(fresh.map(i => ({ ...i, present: ticked.get(i.productId) ?? i.present })));
+              // Заодно возвращаются цены и заметки об акциях: прежнее слияние
+              // переносило только галочки, и всё набранное в полях пропадало.
+              const nextPresent: Record<number, boolean> = {};
+              const nextPrices: Record<number, string> = {};
+              const nextPromos: Record<number, string> = {};
+              for (const item of draft.checklist) {
+                if (!known.has(item.productId)) continue;
+                if (item.present) nextPresent[item.productId] = true;
+                if (item.price) nextPrices[item.productId] = item.price;
+                if (item.promoNote) nextPromos[item.productId] = item.promoNote;
+              }
+              setRows(fresh);
+              setPresent(nextPresent);
+              setPrices(nextPrices);
+              setPromos(nextPromos);
               setCompetitorNotes(draft.competitorNotes);
             } },
           ],
         );
       } else {
-        setChecklist(fresh);
+        setRows(fresh);
       }
       draftChecked.current = true;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
 
+  /** Плоский вид чек-листа — только для отправки и для черновика. */
+  const buildChecklist = useCallback((): ChecklistItem[] => rows.map(r => ({
+    productId: r.productId,
+    productName: r.productName,
+    present: present[r.productId] ?? false,
+    price: prices[r.productId],
+    promoNote: promos[r.productId],
+  })), [rows, present, prices, promos]);
+
   // Auto-save so a killed app or a lost connection doesn't erase the whole
   // checklist and every already-uploaded photo — matches order/new.tsx's draft
   // pattern. Skipped until the initial load/restore above has run, so it can't
   // overwrite a still-unread draft with an empty in-progress state.
+  // Плоский чек-лист собирается внутри таймера, а не на каждое нажатие: при
+  // сотнях позиций пересборка массива на каждый символ и была той самой
+  // задержкой ввода.
   useEffect(() => {
-    if (!draftChecked.current || checklist.length === 0) return;
+    if (!draftChecked.current || rows.length === 0) return;
     const timer = setTimeout(() => {
-      saveVisitDraft(planId, { photos, checklist, competitorNotes });
+      saveVisitDraft(planId, { photos, checklist: buildChecklist(), competitorNotes });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [planId, photos, checklist, competitorNotes]);
+  }, [planId, photos, rows, present, prices, promos, competitorNotes, buildChecklist]);
 
   const submitReport = useMutation({
-    mutationFn: () => submitVisitReport({ planId: Number(planId), shopId: Number(shopId), photos, checklist, competitorNotes: competitorNotes || undefined }),
+    mutationFn: () => submitVisitReport({ planId: Number(planId), shopId: Number(shopId), photos, checklist: buildChecklist(), competitorNotes: competitorNotes || undefined }),
     onSuccess: async () => {
       try { await updatePlanStatus(Number(planId), "visited"); } catch { /* plan status update is best-effort */ }
       await clearVisitDraft(planId);
@@ -166,12 +238,13 @@ export default function MerchandiserVisitScreen() {
   };
 
   const removePhoto = (index: number) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setPhotos(prev => prev.filter((_, i) => i !== index)); };
-  const toggleChecklist = (productId: number) => { Haptics.selectionAsync(); setChecklist(prev => prev.map(item => item.productId === productId ? { ...item, present: !item.present } : item)); };
-  const updatePrice = (productId: number, price: string) => setChecklist(prev => prev.map(item => item.productId === productId ? { ...item, price } : item));
-  const updatePromo = (productId: number, promoNote: string) => setChecklist(prev => prev.map(item => item.productId === productId ? { ...item, promoNote } : item));
+  // Обработчики стабильны по ссылке, иначе memo на строке ничего не даст.
+  const toggleChecklist = useCallback((productId: number) => { Haptics.selectionAsync(); setPresent(prev => ({ ...prev, [productId]: !prev[productId] })); }, []);
+  const updatePrice = useCallback((productId: number, price: string) => setPrices(prev => ({ ...prev, [productId]: price })), []);
+  const updatePromo = useCallback((productId: number, promoNote: string) => setPromos(prev => ({ ...prev, [productId]: promoNote })), []);
 
-  const presentCount = checklist.filter(i => i.present).length;
-  const totalItems = checklist.length;
+  const presentCount = useMemo(() => rows.reduce((n, r) => n + (present[r.productId] ? 1 : 0), 0), [rows, present]);
+  const totalItems = rows.length;
   const completionPct = totalItems > 0 ? Math.round((presentCount / totalItems) * 100) : 0;
 
   if (productsLoading) {
@@ -194,7 +267,36 @@ export default function MerchandiserVisitScreen() {
         </View>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 100 }}>
+      {/* Чек-лист — виртуализованный список, а не .map внутри ScrollView.
+          У арендатора с сотнями активных SKU прежняя разметка монтировала все
+          строки сразу (по два нативных TextInput на каждую), и экран отчёта
+          открывался с многосекундной паузой. Шапка и заметки живут в
+          ListHeaderComponent/ListFooterComponent — вкладывать FlatList в
+          ScrollView нельзя, виртуализация в нём не работает. */}
+      <FlatList
+        data={rows}
+        keyExtractor={r => String(r.productId)}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 100 }}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={12}
+        windowSize={7}
+        // Состояние строк лежит вне data, поэтому список нужно уведомить явно.
+        extraData={{ present, prices, promos }}
+        renderItem={({ item }) => (
+          <ChecklistRow
+            productId={item.productId}
+            productName={item.productName}
+            present={present[item.productId] ?? false}
+            price={prices[item.productId] ?? ""}
+            promoNote={promos[item.productId] ?? ""}
+            onToggle={toggleChecklist}
+            onPrice={updatePrice}
+            onPromo={updatePromo}
+          />
+        )}
+        ListHeaderComponent={
+      <>
         {/* Photos */}
         <FadeInItem delay={0}>
           <Card style={{ padding: Spacing.lg, marginBottom: Spacing.md }}>
@@ -222,9 +324,9 @@ export default function MerchandiserVisitScreen() {
           </Card>
         </FadeInItem>
 
-        {/* Checklist */}
+        {/* Checklist header — сами строки идёт списком ниже */}
         <FadeInItem delay={40}>
-          <Card style={{ padding: Spacing.lg, marginBottom: Spacing.md }}>
+          <Card style={{ padding: Spacing.lg, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <IconCircle name="check-square" size={14} variant="brand" />
@@ -233,26 +335,17 @@ export default function MerchandiserVisitScreen() {
               <Badge variant={completionPct === 100 ? "success" : "info"}>{presentCount}/{totalItems} ({completionPct}%)</Badge>
             </View>
             {/* Progress */}
-            <View style={{ height: 5, backgroundColor: colors.bg.elevated, borderRadius: 3, marginBottom: 16, overflow: "hidden" }}>
+            <View style={{ height: 5, backgroundColor: colors.bg.elevated, borderRadius: 3, overflow: "hidden" }}>
               <View style={{ height: "100%", borderRadius: 3, width: `${completionPct}%`, backgroundColor: completionPct === 100 ? colors.status.success : colors.accent.primary }} />
             </View>
-            {/* Items */}
-            {checklist.map(item => (
-              <PressableScale key={item.productId} onPress={() => toggleChecklist(item.productId)} haptic="light">
-                <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, backgroundColor: item.present ? colors.accent.primary + "10" : "transparent", borderRadius: Radii.md, marginBottom: 4 }}>
-                  <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: item.present ? colors.accent.primary : colors.border.strong, alignItems: "center", justifyContent: "center", marginRight: 12, backgroundColor: item.present ? colors.accent.primary : "transparent" }}>
-                    {item.present && <Feather name="check" size={14} color="#fff" />}
-                  </View>
-                  <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: item.present ? colors.text.primary : colors.text.secondary }}>{item.productName}</Text>
-                  <TextInput value={item.price ?? ""} onChangeText={v => updatePrice(item.productId, v)} placeholder="Цена" keyboardType="numeric"
-                    style={{ width: 60, textAlign: "right", fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 6, paddingVertical: 4, marginRight: 4 }} />
-                  <TextInput value={item.promoNote ?? ""} onChangeText={v => updatePromo(item.productId, v)} placeholder="Акция"
-                    style={{ width: 70, fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 6, paddingVertical: 4 }} />
-                </View>
-              </PressableScale>
-            ))}
           </Card>
         </FadeInItem>
+      </>
+        }
+        ListFooterComponent={
+      <>
+        {/* Нижняя кромка блока строк — чтобы список читался как одна карточка */}
+        <View style={{ height: Spacing.lg, backgroundColor: colors.bg.card, borderBottomLeftRadius: Radii.xxl, borderBottomRightRadius: Radii.xxl, marginBottom: Spacing.md }} />
 
         {/* Competitor Notes */}
         <FadeInItem delay={80}>
@@ -265,7 +358,9 @@ export default function MerchandiserVisitScreen() {
               style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingHorizontal: 12, paddingVertical: 10, fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.primary, textAlignVertical: "top", minHeight: 100 }} />
           </Card>
         </FadeInItem>
-      </ScrollView>
+      </>
+        }
+      />
 
       {/* Submit */}
       <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: Spacing.base, paddingBottom: safeBottomPadding(insets.bottom, 16), paddingTop: 12, backgroundColor: colors.bg.primary, borderTopWidth: 1, borderTopColor: colors.border.default }}>

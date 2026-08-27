@@ -15,6 +15,7 @@ import { notify } from "../../src/store/toast";
 import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { SearchInput, Card } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
+import { useDebounce } from "../../src/hooks/useDebounce";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -272,6 +273,12 @@ export default function CatalogScreen() {
   const { user } = useAuthStore();
 
   const [search, setSearch] = useState("");
+  // Запрос уходит по осевшему тексту, а не по каждой нажатой клавише. «кока-кола»
+  // на 3G — это девять запросов полного каталога, каждый со своим таймаутом в
+  // 15 секунд и повтором, и ни один не отменяется: между символами экран замирал,
+  // а трафик за смену агент оплачивал сам. Мгновенная фильтрация уже загруженного
+  // ниже (filtered) по-прежнему идёт по «сырому» search, поэтому набор не тормозит.
+  const debouncedSearch = useDebounce(search, 300);
   const [selectedCat, setSelectedCat] = useState("all");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -290,20 +297,26 @@ export default function CatalogScreen() {
   const canAccessAgent = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo";
   const { data: products = [], isLoading, isError, error } = useQuery({
-    queryKey: ["products", search],
-    queryFn: () => getProducts(search),
+    queryKey: ["products", debouncedSearch],
+    queryFn: () => getProducts(debouncedSearch),
     enabled: canAccessAgent,
   });
   const { data: shopsData } = useQuery({ queryKey: ["availableShops"], queryFn: isSupervisor ? getAllShopsForSupervisor : getAvailableShops, enabled: canAccessAgent });
   const { data: serverCategories = [] } = useQuery({ queryKey: ["categories"], queryFn: getCategories, enabled: canAccessAgent });
 
-  // Save products to cache on successful fetch
+  // Офлайн-кэш пополняет только полная выдача. Раньше сюда попадал любой ответ,
+  // в том числе результат поиска: набрал агент в офисе «кола», сервер отдал три
+  // позиции — и они легли поверх всего каталога. Через час в подвале магазина
+  // запрос падал, и «Офлайн данные» показывали те самые три товара, ничем не
+  // намекая, что виноват давний поиск; собрать заказ было не из чего.
   useEffect(() => {
-    if (products.length > 0) {
+    if (products.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsFromCache(false);
+    if (!debouncedSearch) {
       AsyncStorage.setItem("cached_products", JSON.stringify(products)).catch(() => {});
-      setIsFromCache(false);
     }
-  }, [products]);
+  }, [products, debouncedSearch]);
 
   // Load cached products on error (offline)
   useEffect(() => {

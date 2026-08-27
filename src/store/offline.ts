@@ -97,8 +97,17 @@ interface OfflineStore {
   syncingOrders: boolean;
   syncingActions: boolean;
   load: () => Promise<void>;
-  addOrder: (order: OfflineOrder) => Promise<void>;
-  addDeliveryAction: (action: OfflineDeliveryAction) => Promise<void>;
+  /**
+   * Ставит запись в очередь. Возвращает, дошла ли она до диска.
+   *
+   * Раньше возвращалось void, и экран заказа считал постановку в очередь
+   * всегда удавшейся. При переполненном хранилище заказ оставался только в
+   * памяти, а экран стирал черновик и закрывался — заказ исчезал вместе с
+   * процессом. Теперь вызывающий может не стирать черновик и сказать агенту
+   * правду.
+   */
+  addOrder: (order: OfflineOrder) => Promise<boolean>;
+  addDeliveryAction: (action: OfflineDeliveryAction) => Promise<boolean>;
   syncAll: () => Promise<{ synced: number; failed: number }>;
   syncDeliveryActions: () => Promise<{ synced: number; failed: number }>;
   remove: (id: string) => Promise<void>;
@@ -128,13 +137,19 @@ async function readQueue(): Promise<OfflineOrder[]> {
  *
  * Молчать об этом нельзя: агент должен знать, что заказ надо продиктовать в
  * офис, а не обнаружить пропажу вечером.
+ *
+ * Признак успеха возвращается наверх: одного тоста мало. Экран заказа
+ * показывал свой тост «Заказ сохранён офлайн» сразу после этого и затирал
+ * предупреждение, а заодно стирал черновик и закрывался.
  */
-async function writeQueue(orders: OfflineOrder[]) {
+async function writeQueue(orders: OfflineOrder[]): Promise<boolean> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    return true;
   } catch (e) {
     if (__DEV__) console.warn("[OfflineStore] Failed to write queue:", e);
     notify.error("Не удалось сохранить заказ на телефон — освободите место и передайте заказ в офис");
+    return false;
   }
 }
 
@@ -147,12 +162,15 @@ async function readDeliveryActionsQueue(): Promise<OfflineDeliveryAction[]> {
   }
 }
 
-async function writeDeliveryActionsQueue(actions: OfflineDeliveryAction[]) {
+/** Как и writeQueue: возвращает, дошла ли запись до диска. */
+async function writeDeliveryActionsQueue(actions: OfflineDeliveryAction[]): Promise<boolean> {
   try {
     await AsyncStorage.setItem(DELIVERY_ACTIONS_KEY, JSON.stringify(actions));
+    return true;
   } catch (e) {
     if (__DEV__) console.warn("[OfflineStore] Failed to write delivery actions queue:", e);
     notify.error("Не удалось сохранить отметку о доставке — освободите место на телефоне");
+    return false;
   }
 }
 
@@ -185,16 +203,44 @@ export function isRetryableError(e: unknown): boolean {
     response?: { status?: number };
   };
 
-  // The server received it and said no. Retrying changes nothing.
-  if (err?.serverRejected || err?.trpcMessage) return false;
-
   const status = err?.response?.status;
   if (typeof status === "number") {
-    // 408 Request Timeout and 429 Too Many Requests are transient despite being 4xx.
+    // Разбор статуса стоит ВЫШЕ разбора конверта, и это принципиально.
+    //
+    // Раньше первой строкой шла проверка конверта, а 401 сервер отдаёт именно
+    // конвертом tRPC — то есть с trpcMessage и serverRejected. Из-за этого вся
+    // ветка со статусами была для 401/403 недостижима, и истёкший за ночь
+    // токен помечал все накопленные за смену заказы retryable:false. После
+    // такого их не берёт ни один автоматический проход (shouldAutoSync), и
+    // повторный вход не помогает: в баннере остаются красные строки, которые
+    // агент может только удалить, потеряв работу целиком.
+    //
+    // Истёкшая или отозванная сессия — не отказ по существу заказа. Заказ не
+    // рассматривали; его надо отправить снова, когда человек войдёт заново.
+    //
+    // 403 входит сюда вместе с 401, и это сознательный выбор в пользу работы
+    // агента. Клиент не может отличить «этот заказ не ваш» от «у организации
+    // кончилась подписка» — оба приходят как FORBIDDEN. Первый случай сюда всё
+    // равно не доходит: чужие записи отсеивает проверка владельца в
+    // shouldAutoSync. Второй — обычное дело в этом продукте, и после продления
+    // в офисе смена агента должна уехать сама, а не ждать, пока он вручную
+    // ткнёт «Повторить» на каждой из пятнадцати красных строк.
+    //
+    // Цена ошибки несимметрична: лишние попытки — это шум в сети, застрявшая
+    // очередь — это потерянный день работы.
+    if (status === 401 || status === 403) return true;
+    // 408 Request Timeout и 429 Too Many Requests — временные, хотя и 4xx.
     if (status === 408 || status === 429) return true;
+    // Сервер принял и отказал по существу (нет товара, магазин удалён).
+    // Повтор ничего не изменит.
+    if (err?.serverRejected || err?.trpcMessage) return false;
     // 5xx without an envelope never reached a handler — infrastructure, not a verdict.
     return status >= 500;
   }
+
+  // Ответа не было вовсе, но конверт остался — так выглядит ошибка, поднятая
+  // из tRPC без HTTP-статуса. Решение сервером принято.
+  if (err?.serverRejected || err?.trpcMessage) return false;
 
   if (!(e instanceof Error)) return false;
   const msg = e.message.toLowerCase();
@@ -272,13 +318,16 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     };
     const orders = [...get().orders, withKey];
     set({ orders });
-    await writeQueue(orders);
+    // Результат записи на диск отдаётся вызывающему: заказ, оставшийся только
+    // в памяти, не переживёт выгрузки приложения системой, и экран не должен
+    // отчитываться об успехе.
+    return writeQueue(orders);
   },
 
   addDeliveryAction: async (action) => {
     const deliveryActions = [...get().deliveryActions, { ...action, ownerId: action.ownerId ?? currentUserId(), status: "pending" as const }];
     set({ deliveryActions });
-    await writeDeliveryActionsQueue(deliveryActions);
+    return writeDeliveryActionsQueue(deliveryActions);
   },
 
   syncDeliveryActions: async () => {
@@ -339,8 +388,21 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
         return { ...a, synced: true, status: "pending" as const };
       });
 
-      set({ deliveryActions: finalActions });
-      await writeDeliveryActionsQueue(finalActions);
+      // Смерживаем с тем, что появилось, пока шёл проход — так же, как в
+      // syncAll.
+      //
+      // Проход держит запросы до таймаута в 15 секунд. За это время курьер на
+      // следующей точке успевает отметить заказ доставленным с суммой
+      // наличных: addDeliveryAction дописывает запись в стейт и на диск, а
+      // здесь стейт и диск перезаписывались срезом, снятым ДО отправки, — и
+      // новая отметка исчезала. Ни ошибки, ни красной строки: заказ снова
+      // числился «В пути», а принятые наличные не попадали никуда.
+      const latest = get().deliveryActions;
+      const addedDuringSync = latest.filter(a => !finalActions.some(f => f.id === a.id));
+      const merged = [...finalActions, ...addedDuringSync];
+
+      set({ deliveryActions: merged });
+      await writeDeliveryActionsQueue(merged);
       return { synced, failed };
     } finally {
       set({ syncingActions: false });

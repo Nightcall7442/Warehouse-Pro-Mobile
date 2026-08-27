@@ -57,8 +57,16 @@ api.interceptors.response.use(
       // Required lazily (not as a top-level import) — auth.ts imports
       // from this file, so a top-level import here would be circular.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { useAuthStore } = require("./store/auth");
+      const { useAuthStore, clearUserScopedCaches } = require("./store/auth");
       useAuthStore.setState({ user: null, isAuthenticated: false });
+      // Сессия кончилась, а данные предыдущего пользователя оставались на
+      // диске: logout() здесь не вызывается, и его очистка не срабатывала.
+      // Агент Б входил на том же сменном телефоне, открывал «Новый заказ» и
+      // получал «Продолжить черновик?» с магазином, позициями, количествами и
+      // скидками клиента агента А — и мог отправить этот заказ от своего
+      // имени. Очереди отправки не трогаются: там несделанная работа, она
+      // помечена автором и ждёт его возвращения.
+      await clearUserScopedCaches?.().catch(() => {});
     }
     return Promise.reject(err);
   }

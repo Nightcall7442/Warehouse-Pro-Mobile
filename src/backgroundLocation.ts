@@ -17,6 +17,20 @@ const BACKGROUND_LOCATION_TASK = "background-location-task";
 const PENDING_KEY = "pending_locations";
 const PENDING_MAX = 200;
 
+/**
+ * Сколько точек отдаём за один заход и какая пауза между ними.
+ *
+ * Раньше буфер выливался целиком, точка за точкой без пауз. Двести накопленных
+ * за день точек съедали минутный лимит запросов агента подчистую: сервер начинал
+ * отвечать 429 и буферу, и экранным запросам — каталог с планами переставали
+ * грузиться прямо во время объезда. Теперь заход отдаёт порцию и уходит; остаток
+ * дождётся следующей точки от системы, то есть не дольше двух минут.
+ */
+const FLUSH_BATCH = 20;
+const FLUSH_GAP_MS = 250;
+
+const delay = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms); });
+
 interface PendingPoint {
   lat: number;
   lng: number;
@@ -60,25 +74,37 @@ async function writePending(points: PendingPoint[]): Promise<void> {
  * itself is unsalvageable. 401/403 mean the session token needs refreshing,
  * not that the point was bad — discarding on those was wiping a whole day's
  * buffered route the moment the token expired mid-shift.
+ *
+ * 429 и 408 — то же самое по сути: сервер не сказал «точка плохая», он сказал
+ * «не сейчас». 429 приходит от общего для пользователя лимита запросов, и
+ * попадал на него как раз тот, кто вернулся из долгого офлайна с полным
+ * буфером: после первого отказа цикл за секунды удалял все оставшиеся точки,
+ * и маршрут за время отсутствия связи стирался навсегда — дыра на карте
+ * супервайзера и пустой отчёт по посещениям, восстановить неоткуда.
  */
 function isPermanentlyRejected(e: unknown): boolean {
   const status = (e as { response?: { status?: number } })?.response?.status;
   if (status == null) return false;
-  if (status === 401 || status === 403) return false;
+  if (status === 401 || status === 403 || status === 408 || status === 429) return false;
   return status >= 400 && status < 500;
 }
 
-/** Drain whatever the last dead zone left behind, oldest first. */
+/** Drain whatever the last dead zone left behind, oldest first — порцией. */
 async function flushPending(): Promise<void> {
   const pending = await readPending();
   if (pending.length === 0) return;
 
   const remaining = [...pending];
-  while (remaining.length > 0) {
+  let sent = 0;
+  while (remaining.length > 0 && sent < FLUSH_BATCH) {
     const point = remaining[0];
     try {
       await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt);
       remaining.shift();
+      sent += 1;
+      // Пауза между точками: залп подряд упирается в лимит запросов и роняет
+      // заодно экранные запросы того же агента.
+      if (remaining.length > 0 && sent < FLUSH_BATCH) await delay(FLUSH_GAP_MS);
     } catch (e) {
       // Still offline, or session needs refreshing — stop draining and keep
       // the rest for the next fix. Only a point the server definitively
@@ -121,23 +147,33 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   }));
 
   const toBuffer: PendingPoint[] = [];
-  for (const point of points) {
+  // Как только сервер отказал по причине, которую можно пережить (нет сети,
+  // 429 от лимита запросов), остальные точки этой пачки даже не пробуем: после
+  // разрыва связи система отдаёт разом всё накопленное, и отправка десятков
+  // точек подряд в уже отказывающий сервер только добивала лимит агента —
+  // вместе с ним переставали грузиться каталог и планы на его же экране.
+  let serverRefusing = false;
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    if (serverRefusing) { toBuffer.push(point); continue; }
     try {
       await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt);
+      if (i < points.length - 1) await delay(FLUSH_GAP_MS);
     } catch (e) {
       if (__DEV__) console.warn("Background location upload failed, buffering:", e);
       // Tracking deliberately stays on. The previous version stopped itself after
       // five consecutive failures — and since a lost connection produced exactly
       // that, driving through one dead zone silently killed GPS for the rest of
       // the day, with no way back until the agent reopened the GPS tab by hand.
-      if (!isPermanentlyRejected(e)) toBuffer.push(point);
+      if (!isPermanentlyRejected(e)) { toBuffer.push(point); serverRefusing = true; }
     }
   }
   if (toBuffer.length > 0) {
     const pending = await readPending();
     await writePending([...pending, ...toBuffer]);
   }
-  await flushPending();
+  // Разбирать накопленное имеет смысл только если сервер сейчас отвечает.
+  if (!serverRefusing) await flushPending();
 });
 
 export async function startBackgroundTracking(): Promise<{ success: boolean; reason?: string }> {

@@ -65,12 +65,17 @@ function buildMarkerSvg(m: MapMarker): string {
   );
 }
 
-function buildHtml(
-  markers: MapMarker[],
-  center: { lat: number; lng: number },
-  zoom: number
-): string {
-  const markersJson = JSON.stringify(markers.map(m => ({ ...m, svg: buildMarkerSvg(m) })));
+/**
+ * Страница карты. Строится ОДИН раз, без меток.
+ *
+ * Раньше html пересобирался на каждую новую выдачу getAgentLocations — то есть
+ * каждые несколько секунд, стоило хоть одному агенту сдвинуться, — и WebView
+ * получал новый source и перезагружался: заново тянул api-maps.yandex.ru,
+ * заново создавал плейсмарки, заново звал setBounds. Супервайзер, приблизивший
+ * карту к нужному кварталу, терял и масштаб, и позицию, и открытый балун.
+ * Теперь метки приезжают через updateMarkers() поверх живой карты.
+ */
+function buildHtml(center: { lat: number; lng: number }, zoom: number): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -81,15 +86,13 @@ function buildHtml(
   </style>
   <script src="https://api-maps.yandex.ru/2.1/?apikey=${YANDEX_API_KEY}&lang=ru_RU"></script>
   <script>
-    var markers = ${markersJson};
+    var markers = [];
     var map;
+    var pendingMarkers = null;
+    var didFit = false;
 
-    ymaps.ready(function() {
-      map = new ymaps.Map("map", {
-        center: [${center.lat}, ${center.lng}],
-        zoom: ${zoom},
-        controls: ["zoomControl", "geolocationControl"]
-      });
+    function renderMarkers() {
+      map.geoObjects.removeAll();
 
       markers.forEach(function(m) {
         var placemark = new ymaps.Placemark([m.lat, m.lng], {
@@ -111,11 +114,29 @@ function buildHtml(
         map.geoObjects.add(placemark);
       });
 
-      if (markers.length > 1) {
-        map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 40 });
-      } else if (markers.length === 1) {
-        map.setCenter([markers[0].lat, markers[0].lng], 14);
+      // Подгон вида — только когда метки пришли впервые. Делать это на каждой
+      // выдаче значило бы отменять любое приближение супервайзера примерно
+      // раз в несколько секунд; дальше вид меняет он сам или кнопка «Все».
+      if (!didFit && markers.length > 0) {
+        didFit = true;
+        fitAll();
       }
+    }
+
+    function updateMarkers(list) {
+      markers = list || [];
+      if (!map) { pendingMarkers = markers; return; }
+      renderMarkers();
+    }
+
+    ymaps.ready(function() {
+      map = new ymaps.Map("map", {
+        center: [${center.lat}, ${center.lng}],
+        zoom: ${zoom},
+        controls: ["zoomControl", "geolocationControl"]
+      });
+
+      if (pendingMarkers) { pendingMarkers = null; renderMarkers(); }
     });
 
     function centerOn(lat, lng, zoom) {
@@ -123,8 +144,10 @@ function buildHtml(
     }
 
     function fitAll() {
-      if (map && markers.length > 0) {
+      if (map && markers.length > 1) {
         map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 40 });
+      } else if (map && markers.length === 1) {
+        map.setCenter([markers[0].lat, markers[0].lng], 14);
       }
     }
   </script>
@@ -142,11 +165,6 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
   const webRef = useRef<WebView>(null);
   useImperativeHandle(ref, () => webRef.current as WebView);
 
-  const centerRef = useRef(center);
-  useEffect(() => {
-    centerRef.current = center;
-  }, [center]);
-
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
@@ -161,7 +179,11 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
     [onMarkerPress]
   );
 
-  const html = React.useMemo(() => {
+  // Страница собирается один раз, по первому известному виду: и center, и zoom
+  // на экране трекинга пересчитываются из выдачи локаций, поэтому реагировать на
+  // их изменение — это и есть та самая перезагрузка карты под руками у человека.
+  const htmlRef = useRef<string | null>(null);
+  if (htmlRef.current === null) {
     const c =
       center ||
       (markers.length > 0
@@ -170,8 +192,33 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
             lng: markers.reduce((s, m) => s + m.lng, 0) / markers.length,
           }
         : { lat: 41.2995, lng: 69.2401 });
-    return buildHtml(markers, c, zoom);
-  }, [markers, center, zoom]);
+    htmlRef.current = buildHtml(c, zoom);
+  }
+  // Объект source тоже должен быть стабильным: новый объект с тем же html
+  // на Android всё равно считается новым источником и перезагружает страницу.
+  const source = React.useMemo(() => ({ html: htmlRef.current as string }), []);
+
+  // Метки доезжают до уже загруженной страницы инъекцией. Пока страница не
+  // готова, последняя выдача лежит здесь и уйдёт в onLoadEnd — иначе первая
+  // порция агентов терялась бы при холодном открытии экрана.
+  const markersJsRef = useRef<string | null>(null);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    const json = JSON.stringify(markers.map(m => ({ ...m, svg: buildMarkerSvg(m) })));
+    if (json === markersJsRef.current) return;
+    markersJsRef.current = json;
+    if (loadedRef.current) {
+      webRef.current?.injectJavaScript(`updateMarkers(${json}); true;`);
+    }
+  }, [markers]);
+
+  const handleLoadEnd = useCallback(() => {
+    loadedRef.current = true;
+    if (markersJsRef.current) {
+      webRef.current?.injectJavaScript(`updateMarkers(${markersJsRef.current}); true;`);
+    }
+  }, []);
 
   // A map with no key renders as a blank rectangle, which reads as a broken
   // screen rather than as a missing setting. Say which it is.
@@ -188,12 +235,13 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
   return (
     <WebView
       ref={webRef}
-      source={{ html }}
+      source={source}
       style={[{ flex: 1 }, style]}
       javaScriptEnabled
       allowsInlineMediaPlayback
       scrollEnabled={false}
       onMessage={handleMessage}
+      onLoadEnd={handleLoadEnd}
       originWhitelist={["about:srcdoc", "https://yandex.ru", "https://*.yandex.ru", "https://yastatic.net"]}
     />
   );
