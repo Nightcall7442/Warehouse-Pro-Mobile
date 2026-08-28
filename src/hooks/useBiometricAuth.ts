@@ -4,6 +4,24 @@ import { SecureStore } from "../storage";
 
 const BIOMETRIC_ENABLED_KEY = "biometric_enabled";
 
+/**
+ * Вход по отпечатку выключен.
+ *
+ * Заглушка по просьбе владельца: до сборки APK эта возможность не нужна.
+ * Код не удалён — выключен одним значением, чтобы вернуть его было делом
+ * одной строки, а не восстановления по истории.
+ *
+ * Что при этом меняется: с экрана входа пропадает кнопка «Войти с
+ * отпечатком» (её условие включает biometricEnabled, app/(auth)/login.tsx),
+ * и сам вход по биометрии не срабатывает.
+ *
+ * Чего НЕ меняется: экран автоблокировки (src/components/LockScreen.tsx)
+ * работает по-прежнему. Он спрашивает отпечаток напрямую у системы и
+ * допускает подмену кодом устройства (disableDeviceFallback: false), так что
+ * запереть человека в приложении это выключение не может.
+ */
+const BIOMETRIC_LOGIN_ENABLED = false;
+
 export interface BiometricCapabilities {
   hasHardware: boolean;
   isEnrolled: boolean;
@@ -21,6 +39,14 @@ export function useBiometricAuth() {
 
   async function checkBiometricStatus() {
     setLoading(true);
+    // Выключено — отвечаем «оборудования нет»: экран входа сам скроет кнопку,
+    // и трогать его условие не приходится.
+    if (!BIOMETRIC_LOGIN_ENABLED) {
+      setCapabilities({ hasHardware: false, isEnrolled: false, supportedTypes: [] });
+      setBiometricEnabled(false);
+      setLoading(false);
+      return;
+    }
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
@@ -59,6 +85,10 @@ export function useBiometricAuth() {
   }, []);
 
   const loginWithBiometric = useCallback(async (): Promise<boolean> => {
+    // Второй рубеж заглушки: кнопку с экрана уже убрали, но вызвать функцию
+    // можно и из другого места — пусть она честно отвечает «не вышло», а не
+    // поднимает системное окно отпечатка при выключенной возможности.
+    if (!BIOMETRIC_LOGIN_ENABLED) return false;
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
     if (!hasHardware || !isEnrolled) return false;

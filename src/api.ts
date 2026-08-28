@@ -34,6 +34,39 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+/**
+ * Отказ, который человек вызвал сам, а не «сессия кончилась».
+ *
+ * ── Что было ────────────────────────────────────────────────────────────────
+ *
+ * Смена пароля с неверным текущим отдаёт 401 (api/user-router.ts бросает
+ * UNAUTHORIZED, api/lib/errors.ts переводит его в этот код). Перехватчик
+ * реагировал на ЛЮБОЙ 401: стирал токен, обнулял сессию и чистил кэши
+ * пользователя.
+ *
+ * Итог в поле: агент открывает «Профиль», меняет пароль, ошибается в текущем
+ * на одну букву — и его выбрасывает на экран входа. Вместе с сессией
+ * пропадает незаконченный черновик заказа: clearUserScopedCaches стирает
+ * order_draft, recent_shops, cached_products и черновики визитов.
+ *
+ * Показать «неверный пароль» приложение не успевает: AuthGate уводит на вход
+ * раньше, чем обработчик ошибки дорисует сообщение.
+ *
+ * ── Почему проверка по адресу ───────────────────────────────────────────────
+ *
+ * Отличить «пароль не подошёл» от «сессия истекла» на стороне клиента больше
+ * не по чему: код один и тот же, а текст сообщения зависит от сервера и
+ * языка. Адрес процедуры — единственный устойчивый признак, и он уже есть в
+ * перехватчике (err.config.url).
+ *
+ * Список намеренно короткий: сюда попадает только то, где 401 означает
+ * «человек ввёл не то», а не «пусти меня обратно».
+ */
+function isSelfInflicted401(url: unknown): boolean {
+  const path = String(url ?? "");
+  return path.includes("user.changePassword");
+}
+
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
@@ -48,7 +81,7 @@ api.interceptors.response.use(
       (err as Error & { trpcMessage?: string; trpcData?: unknown }).trpcMessage = trpcMsg;
       (err as Error & { trpcMessage?: string; trpcData?: unknown }).trpcData = trpcData;
     }
-    if (status === 401) {
+    if (status === 401 && !isSelfInflicted401(url)) {
       await SecureStore.deleteItemAsync("session_token").catch(() => {});
       // Clearing the token alone isn't enough — without this, the auth
       // store still thinks the user is logged in (isAuthenticated stays
