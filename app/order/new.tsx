@@ -1,7 +1,7 @@
 // Warehouse Pro — New Order (matches web NewOrder.tsx — 3-step wizard)
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useDebounce } from "../../src/hooks/useDebounce";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -333,7 +333,14 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
             <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold }}>Выбор товара</Text>
-            <TouchableOpacity onPress={onClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+            {/* Область нажатия была 32×32 при норме 44: попасть в неё на
+                ходу, одной рукой, нельзя. Размер кружка оставлен прежним —
+                hitSlop расширяет только область отклика. */}
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}
+            >
               <Feather name="x" size={16} color={colors.text.primary} />
             </TouchableOpacity>
           </View>
@@ -341,7 +348,12 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingHorizontal: 14, paddingVertical: 10 }}>
             <Feather name="search" size={16} color={colors.text.muted} />
             <TextInput style={{ flex: 1, color: colors.text.primary, fontSize: Typography.size.base, fontFamily: Typography.fontRegular }} placeholder="Название или артикул…" placeholderTextColor={colors.text.muted} value={search} onChangeText={setSearch} autoFocus />
-            {search.length > 0 && <TouchableOpacity onPress={() => setSearch("")}><Feather name="x-circle" size={16} color={colors.text.muted} /></TouchableOpacity>}
+            {/* Очистка поиска была голой иконкой 16 точек. */}
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <Feather name="x-circle" size={16} color={colors.text.muted} />
+              </TouchableOpacity>
+            )}
           </View>
           {/* Stock filter */}
           <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
@@ -766,7 +778,20 @@ export default function NewOrderScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
+    // Клавиатура закрывала поля, у которых её и открывают.
+    //
+    // На шаге 2 поля «КОЛ-ВО» и «СКИДКА» стоят у нижних позиций списка, на
+    // шаге 3 «Примечания» — в самом низу. Агент нажимал поле, клавиатура
+    // выезжала и накрывала его вместе с кнопкой «Далее»: набирать
+    // приходилось вслепую или прокручивать список пальцем поверх клавиатуры.
+    //
+    // На других экранах приложения обёртка уже стоит — login, shop/new,
+    // deliver, планы супервайзера. Сюда, в самый частый экран агента, не
+    // добавили.
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.bg.primary }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       {/* Header */}
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -816,6 +841,6 @@ export default function NewOrderScreen() {
           </PressableScale>
         )}
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

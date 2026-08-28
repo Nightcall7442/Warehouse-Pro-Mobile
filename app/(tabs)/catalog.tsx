@@ -1,9 +1,11 @@
 // Warehouse Pro — Catalog v2 (cold palette, Card from ui.tsx)
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
+// Имя qty в этом файле уже занято состоянием выбранного количества,
+// поэтому форматирование остатка ввозится под своим именем.
+import { qty as formatQty } from "../../src/lib/format";
 import {
   View, Text, FlatList, TouchableOpacity, Modal, Pressable,
-  Image, ScrollView, useWindowDimensions,
-} from "react-native";
+  Image, ScrollView, useWindowDimensions, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -66,7 +68,7 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
           {product.code && <Text style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMono, marginBottom: 6 }}>Артикул: {product.code}</Text>}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}<Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>/{unitLabel(product.unit)}</Text></Text>
-            {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{product.available} {unitLabel(product.unit)}</Text>}
+            {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{formatQty(product.available)} {unitLabel(product.unit)}</Text>}
           </View>
         </View>
       </Card>
@@ -116,7 +118,7 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
                 <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Остаток</Text>
                 <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: Number(product.available) > 0 ? colors.status.success : colors.status.danger, marginTop: 4 }}>
-                  {product.available} {unitLabel(product.unit)}
+                  {formatQty(product.available)} {unitLabel(product.unit)}
                 </Text>
               </View>
             </View>
@@ -219,8 +221,10 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
 }
 
 // ── Payment Picker Modal ─────────────────────────────────────────────────────
-function PaymentPicker({ visible, onSelect, onClose, colors }: {
+function PaymentPicker({ visible, onSelect, onClose, colors, submitting }: {
   visible: boolean; onSelect: (method: "cash" | "card" | "transfer" | "debt") => void; onClose: () => void; colors: ThemeColors;
+  /** Заказ уже уходит на сервер: второе нажатие создаст второй. */
+  submitting: boolean;
 }) {
   const [selected, setSelected] = useState<"cash" | "card" | "transfer" | "debt">("cash");
   const options: Array<{ key: "cash" | "card" | "transfer" | "debt"; label: string; icon: "dollar-sign" | "credit-card" | "send" | "alert-circle" }> = [
@@ -252,9 +256,24 @@ function PaymentPicker({ visible, onSelect, onClose, colors }: {
               );
             })}
           </View>
-          <TouchableOpacity onPress={() => onSelect(selected)}
-            style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center" }}>
-            <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Подтвердить</Text>
+          {/* Кнопка не знала об отправке: признак isPending у мутации в этом
+              файле не читался нигде, а окно закрывается только по успеху.
+              На медленной сети агент видел неотзывчивую кнопку и жал второй
+              раз — уходила вторая мутация. От дубля спасал только ключ
+              идемпотентности, то есть сервер, а не приложение. */}
+          <TouchableOpacity
+            onPress={() => { if (!submitting) onSelect(selected); }}
+            disabled={submitting}
+            style={{
+              backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15,
+              alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8,
+              opacity: submitting ? 0.6 : 1,
+            }}
+          >
+            {submitting && <ActivityIndicator size="small" color="#fff" />}
+            <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>
+              {submitting ? "Отправляется…" : "Подтвердить"}
+            </Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
@@ -453,7 +472,7 @@ export default function CatalogScreen() {
           setShowPaymentPicker(true);
         }} />
 
-      <PaymentPicker visible={showPaymentPicker} colors={colors}
+      <PaymentPicker visible={showPaymentPicker} colors={colors} submitting={createOrderMutation.isPending}
         onClose={() => { setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null); pendingIdempotencyKeyRef.current = null; }}
         onSelect={(method) => {
           if (pendingProduct && pendingShopId) {

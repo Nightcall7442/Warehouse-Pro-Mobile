@@ -1,6 +1,6 @@
 // Warehouse Pro — Agent Shops v2 (cold palette, Card from ui.tsx)
-import React, { useMemo, useState } from "react";
-import { View, Text, Image, RefreshControl, ScrollView, Modal, Pressable, FlatList } from "react-native";
+import React, { useMemo, useState , useEffect } from "react";
+import { View, Text, Image, RefreshControl, ScrollView, Modal, Pressable, FlatList, BackHandler } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
@@ -110,6 +110,35 @@ export default function ShopsScreen() {
   const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
   const [showWorkZones, setShowWorkZones] = useState(false);
   const { location } = useLocation();
+
+  /**
+   * Аппаратная «назад» возвращает из территории к списку территорий.
+   *
+   * Заход в территорию — это не переход, а смена состояния экрана: на нём
+   * появляется своя стрелка «назад» (ниже), но система о ней не знает.
+   * Поэтому кнопка «назад» на телефоне уводила с вкладки целиком, а из
+   * первой вкладки — и вовсе закрывала приложение. Человек видит стрелку на
+   * экране, жмёт привычную системную — и оказывается не там.
+   *
+   * Тот же разлад есть у окна рабочих зон: пока оно открыто, «назад» должна
+   * закрывать его, а не экран под ним.
+   */
+  useEffect(() => {
+    const onBack = () => {
+      if (showWorkZones) {
+        setShowWorkZones(false);
+        return true;
+      }
+      if (selectedTerritory) {
+        setSelectedTerritory(null);
+        return true;
+      }
+      // Ничего своего не открыто — пусть система делает обычное.
+      return false;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [showWorkZones, selectedTerritory]);
 
   const { data: workZones } = useQuery({
     queryKey: ["myWorkZones"],
