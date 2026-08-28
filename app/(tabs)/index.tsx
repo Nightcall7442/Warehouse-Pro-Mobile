@@ -15,9 +15,20 @@ import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
+import { money } from "../../src/components/order/OrderStyles";
 import { LinearGradient } from "expo-linear-gradient";
 
 type IconName = keyof typeof Feather.glyphMap;
+
+/** «1 заказ», «2 заказа», «5 заказов» — число всегда рядом со словом. */
+function ordersWord(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 14) return "заказов";
+  const ones = n % 10;
+  if (ones === 1) return "заказ";
+  if (ones >= 2 && ones <= 4) return "заказа";
+  return "заказов";
+}
 
 // ── CardDots — 3 colored dots (cold palette) ──────────────────────────────────
 function CardDots() {
@@ -137,7 +148,7 @@ function AgentHome() {
     retry: false, enabled: isAgentRole,
   });
 
-  const { data: myOrders, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
+  const { data: myOrders, isLoading: ordersLoading, isError: ordersFailed, refetch: refetchOrders } = useQuery({
     queryKey: ["myOrders"], queryFn: getMyOrders, retry: false, enabled: isAgentRole,
   });
 
@@ -150,6 +161,35 @@ function AgentHome() {
     return (myOrders ?? [])
       .filter(o => (o.createdAt ?? "").slice(0, 10) === today)
       .slice(0, 5);
+  }, [myOrders]);
+
+  /**
+   * Выручка за сегодня.
+   *
+   * Считается по ВСЕМ сегодняшним заказам, а не по пяти, что показаны в
+   * списке ниже: там стоит slice(0, 5) — это витрина, а не итог. Сложить
+   * витрину значило бы показывать агенту заниженную сумму ровно с шестого
+   * заказа за день, причём молча.
+   *
+   * Отменённые и возвращённые не в счёт: товар вернулся, денег за него нет.
+   *
+   * Оговорка про частичный возврат. У заказа со статусом partially_returned
+   * поле total — это сумма ЗАКАЗА, а сколько из неё вернули, мобильному
+   * приложению сейчас не приходит (см. Order в src/api.ts). Такие заказы
+   * считаются целиком, то есть сумма может быть завышена на возвращённую
+   * часть. Занижать было бы хуже — агент недосчитается заработанного, — но
+   * честно это станет только тогда, когда сервер начнёт отдавать сумму
+   * возврата в списке.
+   */
+  const todayTotals = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const NOT_REVENUE = new Set(["cancelled", "returned"]);
+    const counted = (myOrders ?? []).filter(o =>
+      (o.createdAt ?? "").slice(0, 10) === today && !NOT_REVENUE.has(o.status));
+    return {
+      count: counted.length,
+      sum: counted.reduce((acc, o) => acc + (Number(o.total) || 0), 0),
+    };
   }, [myOrders]);
 
   const hour = new Date().getHours();
@@ -338,6 +378,62 @@ function AgentHome() {
             <Feather name="arrow-right" size={16} color={isDark ? "#8a8478" : "#8b9bb4"} />
           </PressableScale>
         </View>
+        {/* Итог дня — над списком.
+            Агент за смену спрашивает себя ровно об этом: сколько сегодня
+            наторговал. Раньше в приложении этого числа не было нигде: заказы
+            он видел по одному, а складывать их приходилось в уме.
+
+            Сбой связи НЕ рисуется нулём. Пустой ответ и не пришедший ответ
+            выглядят на экране одинаково — «0 сум», — и агент решает, что день
+            пустой, хотя это просто нет сети в подвале магазина. Ровно на этом
+            уже обжигались соседние экраны: «На сегодня визитов нет» вместо
+            «связь пропала». */}
+        {isAgentRole && (
+          <View style={{
+            backgroundColor: isDark ? "#221f1c" : "#efedea",
+            borderRadius: 20, padding: 16, marginBottom: 12,
+            borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
+            flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <View style={{ flex: 1 }}>
+              {/* Подпись 12-м, а не восьмым: восьмой на солнце не читается, и
+                  от показателя остаётся голое число без имени. */}
+              <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 12, letterSpacing: 0.6, color: isDark ? "#a39d92" : "#5b6d8a" }}>
+                ВЫРУЧКА ЗА СЕГОДНЯ
+              </Text>
+              {ordersFailed ? (
+                <>
+                  <Text style={{ fontFamily: "DM Sans", fontWeight: "700", fontSize: 22, marginTop: 4, color: isDark ? "#a39d92" : "#5b6d8a" }}>
+                    —
+                  </Text>
+                  <Text style={{ fontFamily: "DM Sans", fontSize: 13, marginTop: 2, color: isDark ? "#a39d92" : "#5b6d8a" }}>
+                    Нет связи — потяните вниз, чтобы обновить
+                  </Text>
+                </>
+              ) : ordersLoading ? (
+                <ShimmerSkeleton width={160} height={26} radius={8} style={{ marginTop: 6 }} />
+              ) : (
+                <>
+                  <Text style={{ fontFamily: "DM Sans", fontWeight: "800", fontSize: 24, marginTop: 4, color: isDark ? "#ede9e3" : "#2d3748" }}>
+                    {money(todayTotals.sum)}
+                  </Text>
+                  <Text style={{ fontFamily: "DM Sans", fontSize: 13, marginTop: 2, color: isDark ? "#a39d92" : "#5b6d8a" }}>
+                    {todayTotals.count === 0
+                      ? "заказов ещё нет"
+                      : `${todayTotals.count} ${ordersWord(todayTotals.count)}`}
+                  </Text>
+                </>
+              )}
+            </View>
+            <View style={{
+              width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center",
+              backgroundColor: isDark ? "rgba(201,162,39,0.16)" : "rgba(201,162,39,0.12)",
+            }}>
+              <Feather name="trending-up" size={20} color="#c9a227" />
+            </View>
+          </View>
+        )}
+
         {/* This section was a hardcoded "Создайте первый заказ" panel — it never
             queried anything, so it read as empty however many orders the agent
             had actually placed that day. */}
