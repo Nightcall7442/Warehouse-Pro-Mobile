@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { View, Text, TouchableOpacity, Modal, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Plan } from "../../api";
 import { Typography, Spacing, Radii, Shadows, ThemeColors } from "../../theme";
 import { PressableScale } from "../Animated";
@@ -49,6 +50,7 @@ export function BottomSheet({
   colors: ThemeColors;
   children: ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: colors.bg.overlayDark }} onPress={onClose}>
@@ -63,6 +65,13 @@ export function BottomSheet({
             borderTopLeftRadius: Radii.xxl,
             borderTopRightRadius: Radii.xxl,
             overflow: "hidden",
+            // Шторка прижата к самому низу экрана, а внизу Android рисует свою
+            // панель — полосу жестов или три кнопки. Без этого отступа нижняя
+            // часть содержимого (а это как раз кнопки «Создать» и «Отмена»)
+            // уходит под систему: их видно, но нажатие достаётся не
+            // приложению. Отступ поставлен здесь, в самой шторке, а не в
+            // каждом окне: тогда его нельзя забыть в новом.
+            paddingBottom: insets.bottom,
           }}
           onPress={e => e.stopPropagation()}
         >

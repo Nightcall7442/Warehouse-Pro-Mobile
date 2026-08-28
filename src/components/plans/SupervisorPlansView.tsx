@@ -217,7 +217,7 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
                   <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={colors.text.muted} /></View>
                 </PressableScale>
               </View>
-              <FlatList data={agents} keyExtractor={a => String(a.id)} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 20 }}
+              <FlatList data={agents} keyExtractor={a => String(a.id)} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 100 }}
                 ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border.subtle }} />}
                 renderItem={({ item: agent }) => (
                   <PressableScale onPress={() => { setAgentId(agent.id); setShowAgentPicker(false); }} haptic="light">

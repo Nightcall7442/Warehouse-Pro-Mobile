@@ -100,8 +100,18 @@ export default function BarcodeScannerScreen() {
           </Text>
         </View>
 
-        {/* Bottom bar */}
-        <View style={{ padding: 20, paddingBottom: 32 }}>
+        {/* Нижняя панель.
+            Стояло paddingBottom: 32 числом. На Android с полосой жестов или
+            тремя кнопками (Redmi, MIUI и почти всё современное) системная
+            панель занимает у нижнего края 24–48 точек, а поверх экрана ещё
+            висит плавающий таб-бар приложения — он абсолютный и места в
+            разметке не занимает.
+            Итог: кнопку «Заказать этот товар» видно, а нажать нельзя —
+            нижняя треть уходит под систему. Товар отсканирован, добавить в
+            заказ нечем. Верх того же оверлея insets.top учитывал, низ забыли.
+            Число ниже — то же, что на остальных вкладках: отступ системы
+            плюс высота плавающего бара. */}
+        <View style={{ padding: 20, paddingBottom: insets.bottom + 100 }}>
           {searching ? (
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, paddingVertical: 20, borderRadius: Radii.lg, backgroundColor: colors.bg.overlay }}>
               <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 3, borderColor: "rgba(255,255,255,0.3)", borderTopColor: "#fff" }} />

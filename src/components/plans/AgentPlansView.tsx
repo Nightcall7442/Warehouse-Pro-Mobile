@@ -231,7 +231,11 @@ export function AgentPlansView() {
               })
             : plans ?? []}
           keyExtractor={p => String(p.id)}
-          contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 24 }}
+          // У последнего магазина в списке кнопки «Готово» и «Пропустить» стоят в
+        // самом низу карточки и уходили под плавающий таб-бар: визит нельзя
+        // было отметить, не создав план после него. В соседнем
+        // SupervisorPlansView отступ с самого начала +100.
+        contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 100 }}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
           refreshControl={
             <RefreshControl

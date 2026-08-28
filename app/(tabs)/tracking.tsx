@@ -208,7 +208,10 @@ export default function TrackingScreen() {
       <FlatList
         data={locations}
         keyExtractor={l => String(l.id)}
-        contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 24 }}
+        // Плавающий таб-бар висит поверх и места в разметке не занимает, поэтому
+        // отступ снизу должен покрывать и системную полосу, и его высоту.
+        // Стояло +24 — последняя строка списка агентов уходила под бар.
+        contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 100 }}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.accent.primary} colors={[colors.accent.primary]} />
         }
