@@ -59,7 +59,7 @@ export default function OrdersScreen() {
   const offline = useOfflineStore();
   const { orders: offlineOrders, deliveryActions, syncAll, retry, retryDeliveryAction, syncingOrders, syncingActions } = offline;
 
-  const { data: orders, isLoading, refetch, isRefetching } = useQuery({
+  const { data: orders, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ["myOrders"],
     queryFn: getMyOrders,
     retry: false, staleTime: 2 * 60 * 1000,
@@ -320,7 +320,17 @@ export default function OrdersScreen() {
             <View style={{ width: 64, height: 64, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center", marginBottom: Spacing.md }}>
               <Feather name="clipboard" size={28} color={colors.text.muted} />
             </View>
-            <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.secondary }}>Заказов пока нет</Text>
+            {/* Сбой связи и пустой список выглядели одинаково: «Заказов пока
+                нет». Агент решал, что за день ничего не оформил, и заказывал
+                заново — а первый заказ при этом лежал на сервере. */}
+            <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.secondary }}>
+              {isError ? "Не удалось загрузить заказы" : "Заказов пока нет"}
+            </Text>
+            {isError && (
+              <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 6, textAlign: "center", paddingHorizontal: 32 }}>
+                Это сбой связи, а не пустой день. Потяните вниз, чтобы обновить.
+              </Text>
+            )}
           </View>
         ) : null}
         renderItem={({ item }) => {

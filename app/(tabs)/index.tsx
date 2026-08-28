@@ -142,7 +142,7 @@ function AgentHome() {
 
   // Today's route. getPlans() with no arguments already scopes to today and to
   // the calling agent server-side, so nothing needs passing here.
-  const { data: todayPlans, isLoading: plansLoading, refetch: refetchPlans } = useQuery({
+  const { data: todayPlans, isLoading: plansLoading, isError: plansFailed, refetch: refetchPlans } = useQuery({
     queryKey: ["plans", "today"],
     queryFn: async () => { const r = await getPlans(); return Array.isArray(r) ? r : []; },
     retry: false, enabled: isAgentRole,
@@ -255,6 +255,22 @@ function AgentHome() {
             <View style={{ padding: 16, gap: 10 }}>
               <ShimmerSkeleton height={44} radius={Radii.md} />
               <ShimmerSkeleton height={44} radius={Radii.md} />
+            </View>
+          ) : plansFailed ? (
+            /* Сбой связи — не пустой маршрут.
+               Раньше этой ветки не было: при неудачном запросе список выходил
+               пустым, и экран честно писал «На сегодня визитов нет». Агент,
+               открывший приложение в подвале магазина, делал единственный
+               разумный вывод — что маршрут не назначили — и уезжал.
+               Так же уже обжигался экран доставок, там ветка появилась. */
+            <View style={{ padding: 24, alignItems: "center", gap: 8 }}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="wifi-off" size={20} color={isDark ? "#8a8478" : "#8b9bb4"} />
+              </View>
+              <Text style={{ fontFamily: "DM Sans", fontWeight: "600", fontSize: 13, color: isDark ? "#ede9e3" : "#2d3748" }}>Не удалось загрузить визиты</Text>
+              <Text style={{ fontFamily: "DM Sans", fontSize: 12, color: isDark ? "#a39d92" : "#5a6a7f", textAlign: "center" }}>
+                Это сбой связи, а не пустой маршрут. Потяните вниз, чтобы обновить.
+              </Text>
             </View>
           ) : (todayPlans?.length ?? 0) === 0 ? (
             <View style={{ padding: 24, alignItems: "center", gap: 8 }}>
@@ -449,7 +465,9 @@ function AgentHome() {
                 <Feather name="clipboard" size={20} color={isDark ? "#8a8478" : "#8b9bb4"} />
               </View>
               <Text style={{ fontFamily: "DM Sans", fontWeight: "500", fontSize: 13, color: isDark ? "#8a8478" : "#5a6a7f" }}>
-                {(myOrders?.length ?? 0) > 0 ? "Сегодня заказов ещё нет" : "Создайте первый заказ"}
+                {ordersFailed
+                  ? "Не удалось загрузить заказы — это сбой связи"
+                  : (myOrders?.length ?? 0) > 0 ? "Сегодня заказов ещё нет" : "Создайте первый заказ"}
               </Text>
             </View>
           ) : (

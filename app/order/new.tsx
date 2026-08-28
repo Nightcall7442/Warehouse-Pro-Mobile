@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useDebounce } from "../../src/hooks/useDebounce";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, ActivityIndicator, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getAvailableShops, getProducts, createOrder, Shop } from "../../src/api";
@@ -661,9 +661,22 @@ export default function NewOrderScreen() {
     [lines],
   );
 
+  const queryClient = useQueryClient();
+
   const createMutation = useMutation({
     mutationFn: createOrder,
-    onSuccess: () => { clearDraft(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); notify.success("Заказ создан!"); router.back(); },
+    onSuccess: () => {
+      clearDraft();
+      // Списки заказов надо пометить устаревшими, иначе агент вернётся на
+      // вкладку и не увидит только что созданного: вкладки не размонтируются,
+      // пока сверху лежит этот экран, а у запроса ["myOrders"] выдержка две
+      // минуты. Заказ на сервере есть, на экране его нет — и агент оформляет
+      // второй. В быстром заказе из каталога это давно сделано, здесь забыли.
+      queryClient.invalidateQueries({ queryKey: ["myOrders"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notify.success("Заказ создан!");
+      router.back();
+    },
     onError: async (e: Error) => {
       // Разбор ошибки отдан общей функции, которая уже умеет отличать отказ
       // сервера от неудачи доставки запроса.
