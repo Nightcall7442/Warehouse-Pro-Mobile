@@ -49,14 +49,25 @@ function CustomTabBar(props: BottomTabBarProps) {
 
   // Agent: Главная, Магазины, Каталог, Заказы, Профиль
   // Supervisor: Главная, Магазины, Планы, Нормы
-  const ALWAYS_HIDDEN = ["gps", "barcode", "tracking", "plan", "deliveries"];
+  const ALWAYS_HIDDEN = ["gps", "barcode", "tracking", "plan"];
 
   const visibleRoutes = state.routes.filter((route: { name: string }) => {
     if (ALWAYS_HIDDEN.includes(route.name)) return false;
     // Agent-only tabs
-    if (route.name === "catalog" || route.name === "orders" || route.name === "profile") {
+    if (route.name === "catalog" || route.name === "orders") {
       return !isSupervisor && !isCourier && !isMerchandiser;
     }
+    // Профиль — ещё и доставщику: без него в панели остаётся один пункт.
+    if (route.name === "profile") {
+      return (!isSupervisor && !isMerchandiser) || isCourier;
+    }
+    // Доставки — работа доставщика, и до сих пор её не было в панели вовсе.
+    //
+    // «deliveries» лежал в списке всегда скрытых, поэтому у доставщика
+    // оставалась ровно одна вкладка — «Главная». На сам экран доставок он
+    // попадал с главной, но панель внизу этого экрана не показывала: человек
+    // стоял на странице, которой в панели нет.
+    if (route.name === "deliveries") return isCourier;
     // Supervisor-only tabs
     if (route.name === "plans" || route.name === "targets") {
       return isSupervisor;

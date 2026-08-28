@@ -45,11 +45,23 @@ export default function DeliveriesScreen() {
   // (or markFailed) for the same order before the first ever syncs. The
   // backend now rejects a duplicate on sync, but it still shows up in the
   // queue as a confusing "failed" entry instead of never being created.
-  const queuedOrderIds = new Set(
+  const queuedActionByOrder = new Map<number, string>(
     deliveryActions
       .filter(a => !a.synced)
-      .map(a => (a.action.type === "completeDelivery" ? a.action.input.orderId : a.action.orderId)),
+      .map(a => [
+        a.action.type === "completeDelivery" ? a.action.input.orderId : a.action.orderId,
+        a.action.type,
+      ]),
   );
+  const queuedOrderIds = new Set(queuedActionByOrder.keys());
+
+  /** Подпись к отложенной отметке — что курьер уже сделал. */
+  const QUEUED_LABEL: Record<string, string> = {
+    markOutForDelivery: "Выехал",
+    markDelivered: "Доставлено",
+    completeDelivery: "Доставлено",
+    markFailed: "Не доставлено",
+  };
 
   const markOut = useMutation({
     mutationFn: async (orderId: number) => {
@@ -192,6 +204,15 @@ export default function DeliveriesScreen() {
     onError: (e: Error) => notify.error(e.message),
   });
 
+  // Отмеченные без сети видны отдельным разделом.
+  //
+  // Раньше такой заказ просто выпадал из списка: сервер о нём ещё не знает,
+  // поэтому в «ожидают» и «в пути» его не показывали, а в «доставлены» он
+  // попасть не мог — там только то, что подтвердил сервер. Курьер нажимал
+  // «Доставлено», карточка исчезала, и понять, записалось ли что-нибудь,
+  // было нельзя. Оставить карточку на месте с рабочими кнопками тоже нельзя:
+  // тогда ту же доставку можно отметить дважды.
+  const queued = (deliveries ?? []).filter((d: Delivery) => queuedOrderIds.has(d.id));
   const assigned = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "assigned" && !queuedOrderIds.has(d.id));
   const inTransit = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "out_for_delivery" && !queuedOrderIds.has(d.id));
   const delivered = (deliveries ?? []).filter((d: Delivery) => d.deliveryStatus === "delivered");
@@ -290,6 +311,36 @@ export default function DeliveriesScreen() {
           </Card>
         </View>
         <NeumorphicProgressBar value={totalDeliveries > 0 ? Math.round(delivered.length / Math.max(totalDeliveries, 1) * 100) : 0} height={6} color={KpiColors.green} />
+
+        {/* Отмечено без сети — ждёт отправки */}
+        {queued.length > 0 && (
+          <>
+            <SectionHeader title="ЖДУТ ОТПРАВКИ" />
+            {queued.map((order: Delivery) => (
+              <Card key={order.id} style={{ marginBottom: 12, padding: 16, opacity: 0.75 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>
+                      {order.orderNumber}
+                    </Text>
+                    <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
+                      {order.shopName}
+                    </Text>
+                  </View>
+                  <Badge variant="warning">
+                    {QUEUED_LABEL[queuedActionByOrder.get(order.id) ?? ""] ?? "Отмечено"}
+                  </Badge>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
+                  <Feather name="clock" size={13} color={colors.text.tertiary} />
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary, flex: 1 }}>
+                    Записано на телефоне. Уйдёт на сервер, когда появится связь.
+                  </Text>
+                </View>
+              </Card>
+            ))}
+          </>
+        )}
 
         {/* In Transit */}
         {inTransit.length > 0 && (
