@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { validateDeliveryForm } from "../../src/lib/delivery-validation";
+import { Button } from "../../src/components/ui";
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform,
 } from "react-native";
@@ -49,7 +51,7 @@ export default function DeliveryScreen() {
   const { branding } = useBrandingStore();
   const { addDeliveryAction } = useOfflineStore();
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: ["order", id],
     queryFn: () => getOrderById(Number(id)),
     enabled: !!id,
@@ -99,7 +101,10 @@ export default function DeliveryScreen() {
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      // Ключа "orders" нет ни у одного запроса: списки живут под "myOrders",
+      // карточка — под ["order", id]. Строка не делала ничего, и список
+      // заказов после завершённой доставки оставался прежним.
+      queryClient.invalidateQueries({ queryKey: ["myOrders"] });
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myDeliveries"] });
       const labels: Record<string, string> = {
@@ -142,16 +147,22 @@ export default function DeliveryScreen() {
   const handleSubmit = () => {
     if (submitting) return;
 
-    if ((result === "paid" || result === "partial_paid") && Number(paidAmount || 0) <= 0) {
-      Alert.alert("Ошибка", "Укажите сумму оплаты");
-      return;
-    }
-    if (result === "partial_paid" && Number(paidAmount) >= orderTotal) {
-      Alert.alert("Ошибка", "При частичной оплате сумма должна быть меньше итого");
-      return;
-    }
-    if (result === "partial_returned" && returnedItemsList.length === 0) {
-      Alert.alert("Ошибка", "Укажите возвращённое количество хотя бы одного товара");
+    // Проверки живут в src/lib/delivery-validation: экран без навигации,
+    // запросов и темы в тесте не поднять, а ошибка была именно в них.
+    //
+    // Поле «Сумма оплаты» рисуется только для частичной оплаты, а требовалось
+    // и для полной. «Оплачен полностью» — исход по умолчанию и самый частый:
+    // курьер выбирал его, жал «Завершить» и получал «Укажите сумму оплаты»,
+    // не находя на экране поля, о котором речь. Завершить доставку было
+    // нельзя вообще. Сумма при полной оплате и так берётся из итога заказа.
+    const problem = validateDeliveryForm({
+      result,
+      paidAmount,
+      orderTotal,
+      returnedItemsCount: returnedItemsList.length,
+    });
+    if (problem) {
+      Alert.alert("Ошибка", problem);
       return;
     }
 
@@ -188,6 +199,28 @@ export default function DeliveryScreen() {
   };
 
   const s = makeStyles(colors);
+
+  // Раньше стояло только `isLoading || !order`. При сбое запроса isLoading
+  // становится false, order остаётся пустым — и курьер у двери магазина
+  // смотрел на «Загрузка...» бесконечно, без объяснения и без повтора.
+  if (isError && !order) {
+    return (
+      <View style={[s.screen, { justifyContent: "center", alignItems: "center", padding: 24 }]}>
+        <Feather name="wifi-off" size={32} color={colors.text.muted} />
+        <Text style={{ color: colors.text.primary, fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, marginTop: 12, textAlign: "center" }}>
+          Не удалось загрузить заказ
+        </Text>
+        <Text style={{ color: colors.text.secondary, fontSize: Typography.size.sm, marginTop: 6, textAlign: "center" }}>
+          Это сбой связи, а не отсутствие заказа.
+        </Text>
+        <View style={{ marginTop: 16, minWidth: 160 }}>
+          <Button variant="primary" icon="refresh-cw" onPress={() => refetch()}>
+            Повторить
+          </Button>
+        </View>
+      </View>
+    );
+  }
 
   if (isLoading || !order) {
     return (

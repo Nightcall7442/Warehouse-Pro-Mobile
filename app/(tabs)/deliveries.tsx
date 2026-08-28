@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import {
   View, Text, ScrollView, TextInput,
   RefreshControl, ActivityIndicator, Linking, Alert,
@@ -27,6 +28,7 @@ const STATUS_CONFIG: Record<string, { icon: keyof typeof Feather.glyphMap; varia
 export default function DeliveriesScreen() {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
+  const router = useRouter();
   const qc = useQueryClient();
   const [cashInputs, setCashInputs] = useState<Record<number, string>>({});
 
@@ -314,14 +316,19 @@ export default function DeliveriesScreen() {
                     },
                   ]);
                 }}
+                onOpenFull={() => router.push({ pathname: "/order/deliver", params: { id: String(order.id) } })}
                 onFail={() => {
                   Alert.alert("Не доставлено?", `Заказ ${order.orderNumber} → ${order.shopName}`, [
                     { text: "Отмена", style: "cancel" },
                     { text: "Да", onPress: () => markFail.mutate({ orderId: order.id }) },
                   ]);
                 }}
-                isPending={markDel.isPending}
-                failPending={markFail.isPending}
+                // Ожидание — только на своей карточке. Общий на весь экран
+                // признак зажигал спиннер и блокировал кнопки на ВСЕХ
+                // заказах в пути: курьер нажимал «Доставлено» на одном, а
+                // остальные становились недоступны.
+                isPending={markDel.isPending && markDel.variables?.orderId === order.id}
+                failPending={markFail.isPending && markFail.variables?.orderId === order.id}
               />
             ))}
           </>
@@ -436,7 +443,7 @@ export default function DeliveriesScreen() {
 }
 
 function DeliveryCard({
-  order, colors, cashInput, onCashChange, onOpenMap, onDeliver, onFail, isPending, failPending,
+  order, colors, cashInput, onCashChange, onOpenMap, onDeliver, onOpenFull, onFail, isPending, failPending,
 }: {
   order: Delivery;
   colors: ThemeColors;
@@ -444,6 +451,8 @@ function DeliveryCard({
   onCashChange: (v: string) => void;
   onOpenMap: () => void;
   onDeliver: () => void;
+  /** Полное оформление: частичная оплата, срок долга, возврат по позициям. */
+  onOpenFull: () => void;
   onFail: () => void;
   isPending: boolean;
   failPending: boolean;
@@ -507,6 +516,17 @@ function DeliveryCard({
           <Button variant="success" icon="check-circle" onPress={onDeliver} loading={isPending}>
             Доставлено
           </Button>
+          <View style={{ marginTop: 8 }}>
+            {/* Экран полного оформления существовал, но попасть на него было
+                нельзя: маршрут order/deliver зарегистрирован, а перехода на
+                него не было ни одного во всём приложении. Курьеру оставались
+                только «Доставлено» и «Не доставлено», а частичная оплата,
+                срок долга и возврат по позициям — 496 строк готового
+                экрана — лежали мёртвым грузом. */}
+            <Button variant="secondary" icon="edit-3" onPress={onOpenFull}>
+              Оформить подробно
+            </Button>
+          </View>
           <View style={{ marginTop: 8 }}>
             <Button variant="danger" icon="x-circle" onPress={onFail} loading={failPending}>
               Не доставлено
