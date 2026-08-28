@@ -323,7 +323,7 @@ export default function ShopsScreen() {
       )}
 
       {/* Work Zones Modal */}
-      <Modal visible={showWorkZones} animationType="slide" transparent>
+      <Modal visible={showWorkZones} animationType="slide" transparent onRequestClose={() => setShowWorkZones(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => setShowWorkZones(false)}>
           <Pressable style={{
             position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "60%",

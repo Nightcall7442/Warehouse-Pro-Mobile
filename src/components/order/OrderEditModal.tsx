@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable, ScrollView } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable, ScrollView, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
   Typography,
@@ -46,13 +46,25 @@ export function OrderEditModal({
   const [editItems, setEditItems] = useState<EditableItem[]>([]);
   const [activeTab, setActiveTab] = useState<"items" | "details">("items");
 
+  // Количества заполняются ОДИН раз — при открытии окна.
+  //
+  // Раньше в зависимостях стоял items, а родитель собирает этот массив заново
+  // на каждом рендере (.map() прямо в разметке). Значит эффект срабатывал на
+  // любое изменение состояния родителя — в том числе на каждую букву в поле
+  // «Заметки», — и молча возвращал количества к исходным.
+  //
+  // Для агента это выглядело так: правит 12 на 8, переходит на «Детали»,
+  // печатает первый символ заметки, возвращается на «Товары» — там снова 12.
+  // Ни сообщения, ни следа. Он правит второй раз и теряет снова.
+  const wasVisible = useRef(false);
   useEffect(() => {
-    if (visible) {
+    if (visible && !wasVisible.current) {
       setEditItems(items.map(item => ({
         ...item,
         newQuantity: item.quantity,
       })));
     }
+    wasVisible.current = visible;
   }, [visible, items]);
 
   function updateQuantity(idx: number, qty: string) {
@@ -71,9 +83,34 @@ export function OrderEditModal({
 
   const hasChanges = editItems.some(it => it.newQuantity !== it.quantity);
 
+  /**
+   * Выход из окна.
+   *
+   * Выйти отсюда было можно единственным способом — нажать мимо панели, — и
+   * он молча стирал правки. Ни крестика, ни «Отмена», ни onRequestClose:
+   * аппаратная кнопка «назад» на Android в этом окне не делала ВООБЩЕ
+   * ничего, потому что без обработчика диалог поглощает событие.
+   *
+   * Теперь выходов три, и ни один не теряет работу без вопроса.
+   */
+  function requestClose() {
+    if (!hasChanges) {
+      onClose();
+      return;
+    }
+    Alert.alert(
+      "Закрыть без сохранения?",
+      "Изменённые количества пропадут.",
+      [
+        { text: "Остаться", style: "cancel" },
+        { text: "Закрыть", style: "destructive", onPress: onClose },
+      ],
+    );
+  }
+
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={requestClose}>
+      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={requestClose}>
         <Pressable style={{
           position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "80%",
           backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
@@ -81,7 +118,20 @@ export function OrderEditModal({
           <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
             <View style={{ width: 40, height: 4, borderRadius: Radii.full, backgroundColor: colors.border.default }} />
           </View>
-          <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.md }}>Редактировать заказ</Text>
+          {/* Крестика в этом окне не было вовсе: единственным выходом
+              оставалось нажатие мимо панели. */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.md }}>
+            <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold }}>Редактировать заказ</Text>
+            <TouchableOpacity
+              onPress={requestClose}
+              // Область нажатия — не меньше 44 точек: попасть пальцем в
+              // иконку 18×18 на ходу нельзя.
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={{ width: 32, height: 32, borderRadius: Radii.full, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.card }}
+            >
+              <Feather name="x" size={18} color={colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
 
           {/* Tabs */}
           <View style={{ flexDirection: "row", marginBottom: Spacing.lg, backgroundColor: colors.bg.card, borderRadius: Radii.md, padding: 3 }}>

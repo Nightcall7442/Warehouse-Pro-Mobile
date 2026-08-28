@@ -181,12 +181,44 @@ export default function NewShopScreen() {
     },
   });
 
+  /**
+   * Уход с формы с вопросом, если в ней что-то есть.
+   *
+   * Считается заполненным всё, что человек внёс руками, и снятая точка GPS:
+   * её получают, стоя у витрины, и потерять её обиднее прочего.
+   */
+  const hasInput =
+    Boolean(name || owner || phone || city || district || address || notes || photo || gpsLat);
+
+  function requestClose() {
+    if (!hasInput) {
+      router.back();
+      return;
+    }
+    Alert.alert(
+      "Выйти без сохранения?",
+      "Заполненное пропадёт.",
+      [
+        { text: "Остаться", style: "cancel" },
+        { text: "Выйти", style: "destructive", onPress: () => router.back() },
+      ],
+    );
+  }
+
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg.primary }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       {/* Header gradient */}
       <LinearGradient colors={Gradients.primary} style={{ paddingTop: insets.top + 12, paddingBottom: 20, paddingHorizontal: 20 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <TouchableOpacity onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
+          {/* Крестик стирал заполненную анкету без единого вопроса.
+              Магазин заводят при живом разговоре с владельцем: название,
+              хозяин, телефон, город, район, адрес, фото витрины, координаты.
+              Одно нажатие — и всё заново, вместе с уже снятой точкой GPS. */}
+          <TouchableOpacity
+            onPress={requestClose}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
+          >
             <Feather name="x" size={20} color="#fff" />
           </TouchableOpacity>
           <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: "#fff" }}>Новый магазин</Text>

@@ -84,7 +84,7 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
   if (!product) return null;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={onClose}>
         <Pressable style={{
           position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "92%",
@@ -169,7 +169,7 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
   }, [shops, search, cityFilter]);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
         <Pressable style={{
           position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "80%",
@@ -230,7 +230,7 @@ function PaymentPicker({ visible, onSelect, onClose, colors }: {
     { key: "debt", label: "Долг", icon: "alert-circle" },
   ];
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
         <Pressable style={{
           position: "absolute", bottom: 0, left: 0, right: 0,

@@ -322,7 +322,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   const already = useMemo(() => new Set(lines.map(l => l.productId)), [lines]);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
         <Pressable style={{
           position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "80%",
