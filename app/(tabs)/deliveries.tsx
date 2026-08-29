@@ -8,6 +8,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { reportNotQueued } from "../../src/lib/offline-guard";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors, KpiColors } from "../../src/theme";
 import { Card, Button, Badge, SectionHeader, EmptyState } from "../../src/components/ui";
@@ -67,13 +68,13 @@ export default function DeliveriesScreen() {
     mutationFn: async (orderId: number) => {
       const net = await Network.getNetworkStateAsync();
       if (!net.isConnected) {
-        await addDeliveryAction({
+        const queued = await addDeliveryAction({
           id: `markOut-${orderId}-${Date.now()}`,
           action: { type: "markOutForDelivery", orderId },
           createdAt: new Date().toISOString(),
           synced: false,
         });
-        return { offline: true };
+        return { offline: true, queued };
       }
       const { markOutForDelivery } = await import("../../src/api");
       try {
@@ -88,17 +89,20 @@ export default function DeliveriesScreen() {
         // действие не сохранялось нигде: ни на сервере, ни в очереди.
         // Товар отдан, деньги в кармане, в системе ничего.
         if (!isRetryableError(e)) throw e;
-        await addDeliveryAction({
+        const queued = await addDeliveryAction({
           id: `markOut-${orderId}-${Date.now()}`,
           action: { type: "markOutForDelivery", orderId },
           createdAt: new Date().toISOString(),
           synced: false,
         });
-        return { offline: true };
+        return { offline: true, queued };
       }
     },
-    onSuccess: (result: { offline?: boolean } | void) => {
+    onSuccess: (result: { offline?: boolean; queued?: boolean } | void) => {
       if (result?.offline) {
+        // Запись могла не лечь на диск — тогда она держится только в памяти
+        // и пропадёт при выгрузке приложения. Молчать об этом нельзя.
+        if (!result.queued) { reportNotQueued("Отметка"); return; }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         notify.info("Нет подключения. Действие сохранено офлайн.");
         return;
@@ -114,13 +118,13 @@ export default function DeliveriesScreen() {
     mutationFn: async ({ orderId, cashAmount }: { orderId: number; cashAmount?: string }) => {
       const net = await Network.getNetworkStateAsync();
       if (!net.isConnected) {
-        await addDeliveryAction({
+        const queued = await addDeliveryAction({
           id: `markDel-${orderId}-${Date.now()}`,
           action: { type: "markDelivered", orderId, cashAmount },
           createdAt: new Date().toISOString(),
           synced: false,
         });
-        return { offline: true };
+        return { offline: true, queued };
       }
       const { markDelivered } = await import("../../src/api");
       try {
@@ -135,17 +139,20 @@ export default function DeliveriesScreen() {
         // действие не сохранялось нигде: ни на сервере, ни в очереди.
         // Товар отдан, деньги в кармане, в системе ничего.
         if (!isRetryableError(e)) throw e;
-        await addDeliveryAction({
+        const queued = await addDeliveryAction({
           id: `markDel-${orderId}-${Date.now()}`,
           action: { type: "markDelivered", orderId, cashAmount },
           createdAt: new Date().toISOString(),
           synced: false,
         });
-        return { offline: true };
+        return { offline: true, queued };
       }
     },
-    onSuccess: (result: { offline?: boolean } | void) => {
+    onSuccess: (result: { offline?: boolean; queued?: boolean } | void) => {
       if (result?.offline) {
+        // Запись могла не лечь на диск — тогда она держится только в памяти
+        // и пропадёт при выгрузке приложения. Молчать об этом нельзя.
+        if (!result.queued) { reportNotQueued("Отметка"); return; }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         notify.info("Нет подключения. Действие сохранено офлайн.");
         return;
@@ -161,13 +168,13 @@ export default function DeliveriesScreen() {
     mutationFn: async ({ orderId, reason }: { orderId: number; reason?: string }) => {
       const net = await Network.getNetworkStateAsync();
       if (!net.isConnected) {
-        await addDeliveryAction({
+        const queued = await addDeliveryAction({
           id: `markFail-${orderId}-${Date.now()}`,
           action: { type: "markFailed", orderId, reason },
           createdAt: new Date().toISOString(),
           synced: false,
         });
-        return { offline: true };
+        return { offline: true, queued };
       }
       const { markFailed } = await import("../../src/api");
       try {
@@ -182,17 +189,20 @@ export default function DeliveriesScreen() {
         // действие не сохранялось нигде: ни на сервере, ни в очереди.
         // Товар отдан, деньги в кармане, в системе ничего.
         if (!isRetryableError(e)) throw e;
-        await addDeliveryAction({
+        const queued = await addDeliveryAction({
           id: `markFail-${orderId}-${Date.now()}`,
           action: { type: "markFailed", orderId, reason },
           createdAt: new Date().toISOString(),
           synced: false,
         });
-        return { offline: true };
+        return { offline: true, queued };
       }
     },
-    onSuccess: (result: { offline?: boolean } | void) => {
+    onSuccess: (result: { offline?: boolean; queued?: boolean } | void) => {
       if (result?.offline) {
+        // Запись могла не лечь на диск — тогда она держится только в памяти
+        // и пропадёт при выгрузке приложения. Молчать об этом нельзя.
+        if (!result.queued) { reportNotQueued("Отметка"); return; }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         notify.info("Нет подключения. Действие сохранено офлайн.");
         return;

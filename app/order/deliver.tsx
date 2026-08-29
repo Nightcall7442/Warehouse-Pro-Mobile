@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { validateDeliveryForm } from "../../src/lib/delivery-validation";
+import { reportNotQueued } from "../../src/lib/offline-guard";
 import { Button } from "../../src/components/ui";
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform,
@@ -67,13 +68,15 @@ export default function DeliveryScreen() {
   const [returnedQty, setReturnedQty] = useState<Record<number, string>>({});
 
   const queueOffline = async (input: CompleteDeliveryInput) => {
-    await addDeliveryAction({
+    // Признак записи на диск обязан дойти до onSuccess: без него экран
+    // рапортовал «сохранено офлайн» даже тогда, когда ничего не сохранил.
+    const queued = await addDeliveryAction({
       id: `completeDelivery-${input.orderId}-${Date.now()}`,
       action: { type: "completeDelivery", input },
       createdAt: new Date().toISOString(),
       synced: false,
     });
-    return { offline: true as const, result: input.result, finalStatus: "" };
+    return { offline: true as const, queued, result: input.result, finalStatus: "" };
   };
 
   const mutation = useMutation({
@@ -114,6 +117,13 @@ export default function DeliveryScreen() {
         partial_returned: "Частичный возврат",
       };
       if ("offline" in data && data.offline) {
+        // Курьер к этому мигу уже отдал товар и, возможно, взял деньги. Если
+        // запись не легла на диск — сказать об этом и НЕ закрывать экран:
+        // закрытый экран курьер прочитает как «всё в порядке».
+        if (!data.queued) {
+          reportNotQueued("Отметка о доставке");
+          return;
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         notify.info("Нет подключения. Доставка сохранена офлайн и отправится автоматически.");
       } else {
