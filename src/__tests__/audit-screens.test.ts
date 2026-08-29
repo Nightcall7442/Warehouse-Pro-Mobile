@@ -57,7 +57,6 @@ const mockWebViewProps: Record<string, unknown>[] = [];
 const mockInjectJavaScript = jest.fn();
 
 jest.mock("react-native-webview", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ReactLib = require("react");
   const WebViewMock = ReactLib.forwardRef(function WebViewMock(props: Record<string, unknown>, ref: unknown) {
     ReactLib.useImperativeHandle(ref, () => ({ injectJavaScript: mockInjectJavaScript }));
@@ -151,11 +150,8 @@ describe("backgroundLocation: буфер точек и 429", () => {
   let realSetTimeout: typeof setTimeout;
 
   beforeAll(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const TaskManager = require("expo-task-manager");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     api = require("../api");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require("../backgroundLocation");
     locationTask = TaskManager.defineTask.mock.calls[0][1];
   });
@@ -241,7 +237,6 @@ describe("YandexMapView: обновление меток без перезагр
   });
 
   it("новые координаты не пересобирают source — карта не перезагружается", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const YandexMapView = require("../components/YandexMapView").default;
 
     const first = React.createElement(YandexMapView, {
@@ -278,7 +273,6 @@ describe("YandexMapView: обновление меток без перезагр
   });
 
   it("одинаковая выдача не дёргает карту вовсе", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const YandexMapView = require("../components/YandexMapView").default;
 
     const markers = [marker(7, 41.31, 69.24)];
@@ -292,7 +286,6 @@ describe("YandexMapView: обновление меток без перезагр
   });
 
   it("страница карты строится без меток и умеет их принимать", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const YandexMapView = require("../components/YandexMapView").default;
     render(React.createElement(YandexMapView, { markers: [marker(3, 41.31, 69.24)], zoom: 11 }));
 
@@ -324,7 +317,6 @@ describe("catalog: поиск и офлайн-кэш", () => {
   let api: any;
 
   beforeAll(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     api = require("../api");
   });
 
@@ -338,7 +330,6 @@ describe("catalog: поиск и офлайн-кэш", () => {
   });
 
   async function renderCatalog() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const CatalogScreen = require("../../app/(tabs)/catalog").default;
     render(withQueryClient(React.createElement(CatalogScreen)));
     await waitFor(() => expect(api.getProducts).toHaveBeenCalledTimes(1));
@@ -387,7 +378,6 @@ describe("merchandiser/visit: чек-лист на большом каталог
   let api: any;
 
   beforeAll(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     api = require("../api");
   });
 
@@ -399,7 +389,6 @@ describe("merchandiser/visit: чек-лист на большом каталог
   });
 
   async function renderVisit() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const VisitScreen = require("../../app/merchandiser/visit").default;
     render(withQueryClient(React.createElement(VisitScreen)));
     await waitFor(() => expect(screen.getAllByPlaceholderText("Цена").length).toBeGreaterThan(0));

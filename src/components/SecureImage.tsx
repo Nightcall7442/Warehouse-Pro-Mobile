@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Image, type ImageStyle, type StyleProp, View } from "react-native";
+import { Image, type ImageStyle, type StyleProp } from "react-native";
 import { SecureStore } from "../storage";
 import { API_BASE } from "../api";
 

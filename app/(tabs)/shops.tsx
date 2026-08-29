@@ -1,6 +1,6 @@
 // Warehouse Pro — Agent Shops v2 (cold palette, Card from ui.tsx)
 import React, { useMemo, useState , useEffect } from "react";
-import { View, Text, Image, RefreshControl, ScrollView, Modal, Pressable, FlatList, BackHandler } from "react-native";
+import { View, Text, RefreshControl, ScrollView, Modal, Pressable, FlatList, BackHandler } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";

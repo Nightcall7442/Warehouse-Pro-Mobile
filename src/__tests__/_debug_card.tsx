@@ -18,7 +18,7 @@ jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
 jest.mock('@expo/vector-icons', () => ({ Feather: 'Feather' }));
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { Card } from '../components/ui';
 
 it('debug render', () => {

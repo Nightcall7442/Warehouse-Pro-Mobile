@@ -3,11 +3,11 @@ import { View, Text, FlatList, SectionList, RefreshControl, TextInput, KeyboardA
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getPlans, getAgentsList, getSalesTargetSummary, createSalesTarget, Plan } from "../../api";
+import { getPlans, getAgentsList, createSalesTarget, Plan } from "../../api";
 import { useThemeColors, useThemeStore } from "../../store/theme";
 import { Typography, Spacing, Radii, Gradients } from "../../theme";
-import { ScreenHeader, EmptyState, Card } from "../ui";
-import { ProgressRing, NeumorphicProgressBar } from "../Charts";
+import { ScreenHeader, EmptyState } from "../ui";
+import { NeumorphicProgressBar } from "../Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../Animated";
 import { fmtDate } from "./PlanHelpers";
 import { PlanRow } from "./PlanRow";

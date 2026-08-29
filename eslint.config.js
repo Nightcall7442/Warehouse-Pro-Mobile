@@ -39,5 +39,18 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
     },
+  },
+  {
+    // Тесты: require обязателен, а не небрежность.
+    //
+    // Фабрики jest.mock поднимаются выше импортов, поэтому модуль, который
+    // должен увидеть подмену, приходится брать ПОСЛЕ них — обычным require.
+    // Тот же приём нужен после сброса реестра модулей: import вернул бы уже
+    // загруженный экземпляр. Заменить их на import — значит сломать проверки,
+    // и это уже проверялось на деле.
+    files: ['src/__tests__/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
   }
 );

@@ -10,7 +10,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import * as Network from "expo-network";
-import { getOrderById, completeDelivery, type OrderDetail, type CompleteDeliveryInput } from "../../src/api";
+import { getOrderById, completeDelivery, type CompleteDeliveryInput } from "../../src/api";
 import { Typography, Radii } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
 import { notify } from "../../src/store/toast";

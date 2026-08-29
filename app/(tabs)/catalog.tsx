@@ -5,11 +5,11 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from "react"
 import { qty as formatQty } from "../../src/lib/format";
 import {
   View, Text, FlatList, TouchableOpacity, Modal, Pressable,
-  Image, ScrollView, useWindowDimensions, ActivityIndicator } from "react-native";
+  ScrollView, useWindowDimensions, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
-import { getProducts, getCategories, createOrder, getMyShops, getAvailableShops, getAllShopsForSupervisor, Product, Shop } from "../../src/api";
+import { getProducts, getCategories, createOrder, getAvailableShops, getAllShopsForSupervisor, Product, Shop } from "../../src/api";
 import { uuidv4 } from "../../src/store/offline";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";

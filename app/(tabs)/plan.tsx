@@ -1,25 +1,24 @@
 // Warehouse Pro — Plan tab: monthly norms + today's visits + KPI
 import React, { useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert, TextInput, Modal } from "react-native";
-import { useRouter } from "expo-router";
+import { View, Text, ScrollView, RefreshControl } from "react-native";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { useAuthStore } from "../../src/store/auth";
+
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Shadows, KpiColors, Gradients } from "../../src/theme";
+import { Typography, Spacing, Radii, Shadows, KpiColors } from "../../src/theme";
 import { Card, Badge, EmptyState } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
-import { LinearGradient } from "expo-linear-gradient";
-import { getPlans, updatePlanStatus, getMyShops, getMyQuota, getAgentKpi, Plan } from "../../src/api";
+import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, Plan } from "../../src/api";
 import { notify } from "../../src/store/toast";
 
 type IconName = keyof typeof Feather.glyphMap;
 
 // ── Quota Card (monthly norms) ───────────────────────────────────────────────
-function QuotaCard({ colors, isDark }: { colors: ReturnType<typeof useThemeColors>; isDark: boolean }) {
+function QuotaCard({ colors, isDark: _isDark }: { colors: ReturnType<typeof useThemeColors>; isDark: boolean }) {
   const { data: quota, isLoading } = useQuery({
     queryKey: ["myQuota"],
     queryFn: () => getMyQuota().catch(() => null),
@@ -199,9 +198,7 @@ export default function PlanScreen() {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
-  const { user } = useAuthStore();
   const qc = useQueryClient();
-  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: plans, isLoading: plansLoading, isError: plansError, refetch: refetchPlans } = useQuery({

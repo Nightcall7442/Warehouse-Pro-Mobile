@@ -2,8 +2,6 @@ import React, { useEffect } from "react";
 import { View, Text, ScrollView } from "react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import { format, parseISO } from "date-fns";
-import { ru } from "date-fns/locale";
 import {
   Typography,
   Spacing,

@@ -27,7 +27,6 @@ import {
   type OrderDetail,
 } from "../../src/api";
 import {
-  Typography,
   Radii,
 } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";

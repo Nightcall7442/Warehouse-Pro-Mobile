@@ -7,8 +7,8 @@ import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
-import { getSupervisorDashboard, getPlans, updatePlanStatus, getMyOrders, getRevenueTrend, getDashboardKpis, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, Plan } from "../../src/api";
-import { Card, SectionHeader } from "../../src/components/ui";
+import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, Plan } from "../../src/api";
+import { Card } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
 import { Typography, Spacing, Radii, Shadows, KpiColors, ThemeColors, Gradients } from "../../src/theme";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
@@ -41,69 +41,6 @@ function CardDots() {
   );
 }
 
-// ── Plan card (matches web PlanCard) ─────────────────────────────────────────
-function PlanRow({ plan, onDone, onSkip, onPress, colors, isDark, index }: {
-  plan: Plan; onDone: () => void; onSkip: () => void; onPress?: () => void; colors: ThemeColors; isDark: boolean; index: number;
-}) {
-  const STATUS_META: Record<string, { icon: IconName; color: string; bg: string; label: string }> = {
-    visited: { icon: "check-circle", color: colors.status.success, bg: colors.status.successDim, label: "Посещён" },
-    skipped: { icon: "clock", color: colors.status.warning, bg: colors.status.warningDim, label: "Пропущен" },
-    planned: { icon: "circle", color: colors.status.info, bg: colors.status.infoDim, label: "Запланирован" },
-  };
-  const cfg = STATUS_META[plan.status] ?? STATUS_META.planned;
-  const hasDebt = Number(plan.shopDebt ?? 0) > 0;
-  const shadowColor = isDark ? "#000" : Shadows.xs.shadowColor;
-
-  return (
-    <FadeInItem delay={index * 60}>
-      <PressableScale onPress={onPress} haptic="light">
-        <View style={{
-          flexDirection: "row", alignItems: "center",
-          backgroundColor: colors.bg.card, borderRadius: Radii.lg,
-          padding: 12, marginBottom: 8, borderWidth: 1,
-          borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
-          shadowColor, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation,
-          opacity: plan.status === "visited" ? 0.6 : 1,
-        }}>
-        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: cfg.bg, alignItems: "center", justifyContent: "center" }}>
-          <Feather name={cfg.icon} size={14} color={cfg.color} />
-        </View>
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>
-            {plan.shopName ?? "Магазин"}
-          </Text>
-          <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 1 }} numberOfLines={1}>
-            {plan.shopAddress ?? "Адрес не указан"}
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end", gap: 4 }}>
-          {hasDebt && (
-            <Text style={{ fontFamily: Typography.fontMono, fontSize: Typography.size.xs, color: colors.status.danger }}>
-              {Number(plan.shopDebt).toLocaleString("ru")} сум
-            </Text>
-          )}
-          {plan.status === "planned" && (
-            <View style={{ flexDirection: "row", gap: 6 }}>
-              <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSkip(); }} haptic="none" scaleTo={0.93}>
-                <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingVertical: 5, paddingHorizontal: 10 }}>
-                  <Feather name="clock" size={12} color={colors.accent.warning} />
-                </View>
-              </PressableScale>
-              <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDone(); }} haptic="none" scaleTo={0.93}>
-                <View style={{ backgroundColor: colors.accent.success, borderRadius: Radii.sm, paddingVertical: 5, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Feather name="check" size={12} color="#fff" />
-                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: "#fff" }}>Готово</Text>
-                </View>
-              </PressableScale>
-            </View>
-          )}
-        </View>
-      </View>
-      </PressableScale>
-    </FadeInItem>
-  );
-}
-
 // Visit and order statuses, worded as they are on the plan and orders tabs so
 // the same record doesn't get two different names in two places.
 const PLAN_STATUS: Record<string, { icon: "check-circle" | "clock" | "circle"; color: string; bg: string; label: string }> = {
@@ -127,7 +64,6 @@ const ORDER_STATUS: Record<string, { color: string; label: string }> = {
 // ── Agent Home (Premium — matching web Dashboard.tsx style) ────────────────────
 function AgentHome() {
   const router = useRouter();
-  const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
@@ -522,7 +458,6 @@ function AlertIcon({ severity, size = 14 }: { severity: string; size?: number })
 function SupervisorHome() {
   const router = useRouter();
   const colors = useThemeColors();
-  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -550,7 +485,7 @@ function SupervisorHome() {
   const ordersTrend = (trends ?? []).slice(-7).map(t => t.orderCount);
   const statusTotal = (statusData ?? []).reduce((s, d) => s + d.count, 0) || 1;
 
-  const donutSegments = (statusData ?? []).map((s, i) => ({
+  const donutSegments = (statusData ?? []).map((s) => ({
     value: s.count,
     color: STATUS_COLOR[s.status] ?? "#5b6d8a",
     label: STATUS_LABEL[s.status] ?? s.status,
