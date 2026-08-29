@@ -55,13 +55,18 @@ export default function ShopDetailScreen() {
     enabled: !!id,
   });
 
-  // Initialize territoryId from shop data
+  /**
+   * Территория магазина подставляется при отрисовке, а не эффектом.
+   *
+   * Эффект выполняется уже после кадра, поэтому выбор территории на мгновение
+   * показывался пустым, хотя у магазина она задана. Условная запись при
+   * отрисовке сходится за один лишний проход: после присвоения territoryId уже
+   * не undefined, и условие больше не выполняется.
+   */
   const shopTerritoryId = shop ? (shop as unknown as Record<string, unknown>).territoryId as number | undefined : undefined;
-  useEffect(() => {
-    if (shopTerritoryId && territoryId === undefined) {
-      setTerritoryId(shopTerritoryId);
-    }
-  }, [shopTerritoryId, territoryId]);
+  if (shopTerritoryId !== undefined && territoryId === undefined) {
+    setTerritoryId(shopTerritoryId);
+  }
 
   const updateMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

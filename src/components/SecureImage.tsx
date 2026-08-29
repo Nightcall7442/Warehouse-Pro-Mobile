@@ -8,26 +8,34 @@ import { API_BASE } from "../api";
  * External (S3/http) URLs pass through untouched.
  */
 export function SecureImage({ uri, style, resizeMode }: { uri?: string | null; style?: StyleProp<ImageStyle>; resizeMode?: "cover" | "contain" | "stretch" | "center" }) {
-  const [resolved, setResolved] = useState<string | undefined>(undefined);
+  /**
+   * Внешние ссылки и пустая ссылка — это чистые производные от uri, состояние
+   * им не нужно. Раньше их выставлял эффект, то есть уже ПОСЛЕ кадра: внешняя
+   * картинка один кадр не показывалась вовсе (resolved ещё undefined, а при
+   * undefined компонент возвращает null), и в списке товаров это читалось как
+   * моргание. Состояние осталось только там, где без него нельзя — под
+   * подписанную токеном внутреннюю ссылку.
+   */
+  const external = !!uri && (uri.startsWith("http://") || uri.startsWith("https://"));
+  const [signed, setSigned] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!uri) { setResolved(undefined); return; }
-    // External URLs don't need auth
-    if (uri.startsWith("http://") || uri.startsWith("https://")) { setResolved(uri); return; }
-    // Internal /api/photos URL — append token
+    if (!uri || external) return;
     let cancelled = false;
     (async () => {
       try {
         const token = await SecureStore.getItemAsync("session_token");
         if (cancelled) return;
         const full = uri.startsWith("/") ? `${API_BASE}${uri}` : uri;
-        setResolved(token ? (full.includes("?") ? `${full}&token=${token}` : `${full}?token=${token}`) : full);
+        setSigned(token ? (full.includes("?") ? `${full}&token=${token}` : `${full}?token=${token}`) : full);
       } catch {
-        if (!cancelled) setResolved(uri.startsWith("/") ? `${API_BASE}${uri}` : uri);
+        if (!cancelled) setSigned(uri.startsWith("/") ? `${API_BASE}${uri}` : uri);
       }
     })();
     return () => { cancelled = true; };
-  }, [uri]);
+  }, [uri, external]);
+
+  const resolved = !uri ? undefined : external ? uri : signed;
 
   if (!resolved) return null;
   return <Image source={{ uri: resolved }} style={style} resizeMode={resizeMode} />;

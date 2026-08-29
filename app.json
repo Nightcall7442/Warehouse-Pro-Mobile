@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0A0B10"
+      "backgroundColor": "#0f5e57"
     },
     "ios": {
       "bundleIdentifier": "com.warehousepro.agent",
@@ -26,7 +26,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0A0B10"
+        "backgroundColor": "#0f5e57"
       },
       "package": "com.warehousepro.agent",
       "permissions": [
@@ -34,7 +34,8 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.CAMERA"
-      ]
+      ],
+      "backgroundColor": "#0f5e57"
     },
     "plugins": [
       "expo-router",
@@ -63,6 +64,7 @@
         "projectId": "e5d30f54-2b04-473c-988f-4715f4946a01"
       },
       "router": {}
-    }
+    },
+    "primaryColor": "#0d9488"
   }
 }

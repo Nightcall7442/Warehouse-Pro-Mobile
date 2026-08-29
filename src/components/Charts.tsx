@@ -99,13 +99,16 @@ export function DonutChart({ segments, size = 140, strokeWidth = 20, centerLabel
   const circumference = 2 * Math.PI * radius;
   const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;
 
-  let accumulated = 0;
-  const arcs = segments.map((seg) => {
+  const arcs = segments.map((seg, i) => {
+    // Сумма всех сегментов до текущего — начало его дуги.
+    const before = segments.slice(0, i).reduce((sum, s) => sum + s.value, 0);
     const pct = seg.value / total;
-    const offset = circumference * (1 - pct);
-    const rotation = (accumulated / total) * 360 - 90;
-    accumulated += seg.value;
-    return { ...seg, pct, offset, rotation };
+    return {
+      ...seg,
+      pct,
+      offset: circumference * (1 - pct),
+      rotation: (before / total) * 360 - 90,
+    };
   });
 
   return (

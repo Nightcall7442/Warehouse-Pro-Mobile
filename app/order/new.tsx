@@ -561,7 +561,13 @@ export default function NewOrderScreen() {
   });
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [draftChecked, setDraftChecked] = useState(false);
+  /**
+   * Когда экран открыт с уже выбранным магазином или товаром, черновик не
+   * спрашивается вовсе — значит проверка пройдена сразу, и это начальное
+   * состояние, а не то, что должен выставить эффект после первого кадра.
+   */
+  const skipDraft = !!(params.shopId || params.productId);
+  const [draftChecked, setDraftChecked] = useState(skipDraft);
   // Generated once per order attempt and reused for both the initial online
   // submission and any offline-queue retry — if the server actually created
   // the order but the response was lost (timeout/network blip), retrying with
@@ -618,7 +624,7 @@ export default function NewOrderScreen() {
 
   // Check for saved draft on mount
   useEffect(() => {
-    if (params.shopId || params.productId) { setDraftChecked(true); return; }
+    if (skipDraft) return;
     loadDraft().then(draft => {
       if (draft && draft.lines.length > 0) {
         Alert.alert(

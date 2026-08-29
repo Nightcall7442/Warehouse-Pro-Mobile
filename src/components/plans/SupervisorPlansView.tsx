@@ -27,7 +27,6 @@ export function SupervisorPlansView() {
   const [showCreate, setShowCreate] = useState(false);
   const [showCreateTarget, setShowCreateTarget] = useState(false);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
-  const [createMode, setCreateMode] = useState<"visit" | "target">("visit");
 
   const dateStr = fmtDate(date);
   const isToday = dateStr === fmtDate(new Date());
@@ -62,7 +61,7 @@ export function SupervisorPlansView() {
         title="Планы"
         right={
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <PressableScale onPress={() => { setCreateMode("target"); setShowCreateTarget(true); }} haptic="light">
+            <PressableScale onPress={() => setShowCreateTarget(true)} haptic="light">
               <View style={{ backgroundColor: colors.accent.warning, borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="target" size={18} color="#fff" />
               </View>
