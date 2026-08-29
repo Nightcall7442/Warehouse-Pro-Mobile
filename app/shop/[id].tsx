@@ -1,5 +1,5 @@
 // Warehouse Pro — Shop Detail v2 (cold palette, Card, Badge, FadeInItem)
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Linking, RefreshControl, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";

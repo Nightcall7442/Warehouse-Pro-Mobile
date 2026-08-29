@@ -12,6 +12,7 @@
     "build:ios": "eas build --platform ios",
     "prebuild": "expo prebuild --clean",
     "test": "jest",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
