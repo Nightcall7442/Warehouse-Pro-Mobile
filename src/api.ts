@@ -114,7 +114,20 @@ function unwrap<T>(resData: unknown): T {
   const resultData = envelope?.result?.data;
   if (resultData !== undefined && resultData !== null && typeof resultData === "object" && "json" in (resultData as Record<string, unknown>)) {
     const jsonPayload = (resultData as { json: unknown }).json;
-    if (jsonPayload === undefined || jsonPayload === null) {
+    /**
+     * null — законный ответ, а не сбой.
+     *
+     * Раньше здесь бросало исключение на любом null, и это ломало ровно те
+     * места, где сервер отвечает «ничего не найдено»: ProductService на
+     * ненайденном штрих-коде возвращает null, экран сканера ловил исключение
+     * и показывал «Ошибка. Не удалось найти товар». Ветка с честным «Товар не
+     * найден» рядом была недостижима: настоящее отсутствие товара показывали
+     * как поломку, и агент шёл искать неисправность там, где её нет.
+     *
+     * Ключ json в ответе есть — значит сервер именно ответил, и ответил
+     * пустотой. Отсутствие самого ключа разобрано ниже, как и было.
+     */
+    if (jsonPayload === undefined) {
       throw new Error("Unexpected API response: empty json payload");
     }
     return jsonPayload as T;

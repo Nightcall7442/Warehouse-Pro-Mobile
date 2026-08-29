@@ -19,6 +19,14 @@ interface OrderItem {
 
 interface EditableItem extends OrderItem {
   newQuantity: number;
+  /**
+   * Набранное в поле, как есть.
+   *
+   * Держать только число нельзя: поле показывало String(newQuantity), и на
+   * «12.» разбор давал NaN, то есть точка стиралась в тот же миг, когда её
+   * набрали. Дробное количество ввести было невозможно в принципе.
+   */
+  qtyText: string;
 }
 
 interface OrderEditModalProps {
@@ -62,16 +70,43 @@ export function OrderEditModal({
       setEditItems(items.map(item => ({
         ...item,
         newQuantity: item.quantity,
+        qtyText: String(item.quantity),
       })));
     }
     wasVisible.current = visible;
   }, [visible, items]);
 
+  /**
+   * Разбор количества.
+   *
+   * Здесь стоял parseInt, и любая правка заказа молча округляла дробное
+   * количество вниз: 12.5 кг превращались в 12, «плюс» давал 13, «минус» —
+   * 11. Ни предупреждения, ни подсветки. Сервер дробное принимает, а экран
+   * оформления заказа даже приводит запятую к точке — то есть 12.5 создать
+   * можно, а открыть и сохранить тот же заказ нельзя без потери.
+   *
+   * Запятая приводится к точке: на телефоне с русской раскладкой цифровая
+   * клавиатура даёт именно её.
+   */
   function updateQuantity(idx: number, qty: string) {
-    const num = parseInt(qty, 10);
+    const text = qty.replace(",", ".");
+    const num = Number(text);
     setEditItems(prev => prev.map((it, i) =>
-      i === idx ? { ...it, newQuantity: isNaN(num) ? 0 : num } : it
+      i === idx
+        ? { ...it, qtyText: text, newQuantity: Number.isFinite(num) && num >= 0 ? num : it.newQuantity }
+        : it
     ));
+  }
+
+  /** Шаг кнопками «плюс» и «минус». Дробную часть сохраняет: 12.5 → 13.5. */
+  function stepQuantity(idx: number, delta: number) {
+    setEditItems(prev => prev.map((it, i) => {
+      if (i !== idx) return it;
+      // Округление до сотых: количество в базе хранится с двумя знаками, а
+      // сложение чисел с плавающей точкой даёт хвосты вида 13.500000000000002.
+      const next = Math.max(0, Math.round((it.newQuantity + delta) * 100) / 100);
+      return { ...it, newQuantity: next, qtyText: String(next) };
+    }));
   }
 
   function handleSaveItems() {
@@ -198,7 +233,7 @@ export function OrderEditModal({
 
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                         <TouchableOpacity
-                          onPress={() => updateQuantity(idx, String(Math.max(0, item.newQuantity - 1)))}
+                          onPress={() => stepQuantity(idx, -1)}
                           style={{
                             width: 36, height: 36, borderRadius: Radii.md,
                             backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center",
@@ -207,9 +242,9 @@ export function OrderEditModal({
                           <Feather name="minus" size={16} color={colors.text.primary} />
                         </TouchableOpacity>
                         <TextInput
-                          value={String(item.newQuantity)}
+                          value={item.qtyText}
                           onChangeText={(v) => updateQuantity(idx, v)}
-                          keyboardType="numeric"
+                          keyboardType="decimal-pad"
                           style={{
                             flex: 1, textAlign: "center", backgroundColor: colors.bg.input,
                             borderRadius: Radii.md, borderWidth: 1,
@@ -219,7 +254,7 @@ export function OrderEditModal({
                           }}
                         />
                         <TouchableOpacity
-                          onPress={() => updateQuantity(idx, String(item.newQuantity + 1))}
+                          onPress={() => stepQuantity(idx, 1)}
                           style={{
                             width: 36, height: 36, borderRadius: Radii.md,
                             backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center",

@@ -88,7 +88,12 @@ jest.mock("../store/auth", () => ({
   useAuthStore: () => ({ user: { id: 1, role: "agent", tenantId: 1 } }),
 }));
 
-jest.mock("../store/offline", () => ({ uuidv4: () => "test-idempotency-key" }));
+jest.mock("../store/offline", () => ({
+  uuidv4: () => "test-idempotency-key",
+  // Каталог теперь умеет складывать заказ в очередь, когда связи нет.
+  useOfflineStore: () => ({ addOrder: jest.fn().mockResolvedValue(true) }),
+  isRetryableError: () => true,
+}));
 
 jest.mock("../components/SecureImage", () => ({ SecureImage: () => null }));
 

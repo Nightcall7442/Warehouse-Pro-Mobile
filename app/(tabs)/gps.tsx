@@ -14,7 +14,7 @@ import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/th
 import { useThemeColors } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FadeInItem } from "../../src/components/Animated";
-import { startBackgroundTracking, stopBackgroundTracking } from "../../src/backgroundLocation";
+import { startBackgroundTracking, stopBackgroundTracking, bufferLocation } from "../../src/backgroundLocation";
 
 type GpsState = "idle" | "locating" | "success" | "error";
 
@@ -69,24 +69,60 @@ export default function GpsScreen() {
       return;
     }
 
+    /**
+     * Снять точку и отправить — это два разных дела, и падают они по разным
+     * причинам.
+     *
+     * Раньше оба были под одним catch с текстом «Не удалось определить
+     * местоположение. Проверьте GPS». Координаты к тому мигу уже получены и
+     * показаны на экране, а виноватой названа спутниковая связь: агент лез
+     * чинить GPS, когда сломана сеть.
+     *
+     * Хуже: снятая точка при обрыве связи пропадала совсем. Рядом лежит
+     * буфер, сделанный для фоновых точек ровно на этот случай, — им и
+     * пользуемся. Дыру в маршруте потом нечем восстановить.
+     */
     try {
-      const [pos, battery] = await Promise.all([
-        Promise.race([
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("GPS timeout")), 15_000)),
-        ]),
-        Battery.getBatteryLevelAsync().catch(() => null),
-      ]);
-      const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 999 };
+      let c: { lat: number; lng: number; accuracy: number };
+      let batteryPct: number | undefined;
+
+      try {
+        const [pos, battery] = await Promise.all([
+          Promise.race([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error("GPS timeout")), 15_000)),
+          ]),
+          Battery.getBatteryLevelAsync().catch(() => null),
+        ]);
+        c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 999 };
+        batteryPct = battery !== null ? Math.round(battery * 100) : undefined;
+      } catch {
+        // Вот здесь виноват действительно GPS: координат нет.
+        setError("Не удалось определить местоположение. Проверьте, включён ли GPS.");
+        setState("error");
+        setLastSent(null);
+        return;
+      }
+
       setCoords(c);
-      const batteryPct = battery !== null ? Math.round(battery * 100) : undefined;
-      await saveLocation(c.lat, c.lng, c.accuracy, batteryPct);
-      setState("success");
-      setLastSent(new Date());
-    } catch {
-      setError("Не удалось определить местоположение. Проверьте GPS.");
-      setState("error");
-      setLastSent(null);
+
+      try {
+        await saveLocation(c.lat, c.lng, c.accuracy, batteryPct);
+        setState("success");
+        setLastSent(new Date());
+      } catch {
+        // Координаты есть, не дошла отправка. Точку в буфер, а не в мусор.
+        await bufferLocation({
+          lat: c.lat,
+          lng: c.lng,
+          accuracy: c.accuracy,
+          batteryLevel: batteryPct,
+          recordedAt: new Date().toISOString(),
+        });
+        setError("Точка снята, но не отправлена — нет связи. Она сохранена и уйдёт сама, когда связь появится.");
+        setState("error");
+        setLastSent(null);
+      }
     } finally {
       isLocating.current = false;
     }

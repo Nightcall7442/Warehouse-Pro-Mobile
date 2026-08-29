@@ -176,6 +176,22 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   if (!serverRefusing) await flushPending();
 });
 
+/**
+ * Положить точку в буфер, когда отправить её прямо сейчас не вышло.
+ *
+ * Нужна экрану ручной отправки: он звал saveLocation напрямую и при обрыве
+ * связи терял точку совсем, хотя рядом лежал этот буфер, аккуратно сделанный
+ * для фоновых точек. Дыра в маршруте, которую потом нечем восстановить.
+ *
+ * Буфер выливается сам при следующей точке от системы, то есть не дольше двух
+ * минут после возвращения связи.
+ */
+export async function bufferLocation(point: PendingPoint): Promise<void> {
+  const pending = await readPending();
+  pending.push(point);
+  await writePending(pending);
+}
+
 export async function startBackgroundTracking(): Promise<{ success: boolean; reason?: string }> {
   try {
     // Check foreground permission first

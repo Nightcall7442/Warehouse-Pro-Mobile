@@ -22,9 +22,22 @@ import { ShimmerSkeleton } from "./Animated";
 export function MonthlyPlanCard() {
   const colors = useThemeColors();
 
-  const { data: quota, isLoading } = useQuery({
+  /**
+   * Ошибку запроса нельзя выдавать за «нормы нет».
+   *
+   * Здесь стоял .catch(() => null), и любая неудача — нет сети, 500, истёкший
+   * токен — превращалась в null. Карточка рисовала «Норма на этот месяц не
+   * назначена» с подписью «Её ставит супервайзер»: утверждение о факте там,
+   * где приложение просто не смогло спросить. Агент шёл к супервайзеру,
+   * супервайзер показывал назначенную норму, и виноватым оказывалось
+   * приложение — но искали причину не там.
+   *
+   * Теперь отсутствие нормы (null) и неудача запроса (isError) — разные
+   * состояния и выглядят по-разному.
+   */
+  const { data: quota, isLoading, isError } = useQuery({
     queryKey: ["myQuota"],
-    queryFn: () => getMyQuota().catch(() => null),
+    queryFn: () => getMyQuota(),
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -42,6 +55,25 @@ export function MonthlyPlanCard() {
         <ShimmerSkeleton height={18} width={140} radius={Radii.sm} />
         <ShimmerSkeleton height={56} radius={Radii.md} />
         <ShimmerSkeleton height={40} radius={Radii.md} />
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View style={{ ...surface, padding: Spacing.lg, alignItems: "center", gap: 8 }}>
+        <View style={{
+          width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center",
+          backgroundColor: colors.bg.elevated,
+        }}>
+          <Feather name="wifi-off" size={18} color={colors.text.muted} />
+        </View>
+        <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.secondary }}>
+          Норму не удалось загрузить
+        </Text>
+        <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.muted, textAlign: "center" }}>
+          Это не значит, что её нет — проверьте связь
+        </Text>
       </View>
     );
   }

@@ -10,7 +10,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getProducts, getCategories, createOrder, getAvailableShops, getAllShopsForSupervisor, Product, Shop } from "../../src/api";
-import { uuidv4 } from "../../src/store/offline";
+import { uuidv4, useOfflineStore, isRetryableError } from "../../src/store/offline";
+import { reportNotQueued } from "../../src/lib/offline-guard";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
@@ -289,6 +290,7 @@ export default function CatalogScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { addOrder } = useOfflineStore();
   const { user } = useAuthStore();
 
   const [search, setSearch] = useState("");
@@ -306,9 +308,10 @@ export default function CatalogScreen() {
   const [pendingQty, setPendingQty] = useState(1);
   const [pendingShopId, setPendingShopId] = useState<number | null>(null);
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
-  // One key per "add to order" attempt, reused if the payment step is retried
-  // after a failure — this quick-add flow has no offline queue, so without an
-  // idempotency key a lost response + manual retry creates a duplicate order.
+  // Один ключ на попытку добавления, переиспользуется при повторе после
+  // неудачи: без него потерянный ответ и ручной повтор создали бы два заказа.
+  // Тот же ключ уходит в офлайн-очередь, поэтому и отложенная отправка не
+  // может задвоить заказ.
   const pendingIdempotencyKeyRef = useRef<string | null>(null);
   const [cachedProducts, setCachedProducts] = useState<Product[]>([]);
   const [isFromCache, setIsFromCache] = useState(false);
@@ -369,9 +372,59 @@ export default function CatalogScreen() {
     return Number(v ?? 0).toLocaleString("ru-RU", { style: "currency", currency: "UZS", maximumFractionDigits: 0 });
   }, []);
 
+  type QuickOrderInput = { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[]; paymentMethod?: "cash" | "card" | "transfer" | "debt"; idempotencyKey?: string };
+
+  const closePickers = useCallback(() => {
+    pendingIdempotencyKeyRef.current = null;
+    setShowShopPicker(false);
+    setShowPaymentPicker(false);
+    setPendingProduct(null);
+    setPendingShopId(null);
+  }, []);
+
   const createOrderMutation = useMutation({
-    mutationFn: (input: { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[]; paymentMethod?: "cash" | "card" | "transfer" | "debt"; idempotencyKey?: string }) => createOrder(input),
-    onSuccess: () => { notify.success("Заказ создан!"); pendingIdempotencyKeyRef.current = null; setShowShopPicker(false); setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null); queryClient.invalidateQueries({ queryKey: ["myOrders"] }); },
+    mutationFn: async (input: QuickOrderInput) => {
+      try {
+        return await createOrder(input);
+      } catch (e) {
+        /**
+         * Быстрый заказ из каталога уходил в никуда без связи.
+         *
+         * Здесь показывалось только сообщение с текстом ошибки, и заказ
+         * пропадал: ни на сервере, ни в очереди. Обман усиливался тем, что
+         * этот же экран офлайн рисует полосу «Офлайн данные» и оставляет
+         * кнопки добавления живыми — то есть сам говорит, что работает без
+         * связи, а заказ из него без связи исчезает.
+         *
+         * В app/order/new.tsx запасной путь есть давно. Здесь его не было,
+         * и это признавал комментарий рядом: «no offline queue».
+         */
+        if (!isRetryableError(e)) throw e;
+        const queued = await addOrder({
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          input,
+          shopName: shops.find(sh => sh.id === input.shopId)?.name ?? "",
+          createdAt: new Date().toISOString(),
+          synced: false,
+          quotedTotal: input.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
+        });
+        return { offline: true as const, queued };
+      }
+    },
+    onSuccess: (data) => {
+      if (data && typeof data === "object" && "offline" in data) {
+        // Запись могла не лечь на диск — тогда заказ держится только в
+        // памяти и пропадёт при выгрузке приложения.
+        if (!data.queued) { reportNotQueued("Заказ"); return; }
+        closePickers();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notify.info("Нет связи. Заказ сохранён и отправится сам. Итог посчитается по ценам на момент отправки.");
+        return;
+      }
+      notify.success("Заказ создан!");
+      closePickers();
+      queryClient.invalidateQueries({ queryKey: ["myOrders"] });
+    },
     onError: (e: Error) => notify.error(e.message || "Ошибка"),
   });
 
