@@ -110,7 +110,7 @@ export function Button({
   const inner = (
     <>
       {loading ? (
-        <ActivityIndicator size="small" color={variant === "primary" || variant === "danger" || variant === "success" ? "#fff" : colors.accent.primary} />
+        <ActivityIndicator testID="button-loading" size="small" color={variant === "primary" || variant === "danger" || variant === "success" ? "#fff" : colors.accent.primary} />
       ) : (
         <>
           {icon && <Feather name={icon} size={size === "sm" ? 15 : 17} color={textColor} style={{ marginRight: 7 }} />}
