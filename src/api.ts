@@ -5,21 +5,6 @@ export const API_BASE = (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUB
   ? process.env.EXPO_PUBLIC_API_URL
   : "https://www.warehouse-pro.uz";
 
-/** Append auth token to a URL so <Image source> can fetch protected resources. */
-export async function authUrl(url: string | null | undefined): Promise<string | undefined> {
-  if (!url) return undefined;
-  // S3 / external URLs don't need a token
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  try {
-    const token = await SecureStore.getItemAsync("session_token");
-    if (!token) return url;
-    const full = url.startsWith("/") ? `${API_BASE}${url}` : url;
-    return full.includes("?") ? `${full}&token=${token}` : `${full}?token=${token}`;
-  } catch {
-    return url.startsWith("/") ? `${API_BASE}${url}` : url;
-  }
-}
-
 const api = axios.create({
   baseURL: `${API_BASE}/api/trpc`,
   timeout: 15_000,
