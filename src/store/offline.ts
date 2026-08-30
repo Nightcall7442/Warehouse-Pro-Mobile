@@ -399,7 +399,10 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       // числился «В пути», а принятые наличные не попадали никуда.
       const latest = get().deliveryActions;
       const addedDuringSync = latest.filter(a => !finalActions.some(f => f.id === a.id));
-      const merged = [...finalActions, ...addedDuringSync];
+      // Удалённое во время прохода не воскрешаем — см. пояснение в syncAll.
+      const stillHere = new Set(latest.map(a => a.id));
+      const kept = finalActions.filter(a => stillHere.has(a.id));
+      const merged = [...kept, ...addedDuringSync];
 
       set({ deliveryActions: merged });
       await writeDeliveryActionsQueue(merged);
@@ -485,10 +488,27 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
         return { ...o, synced: true, status: "pending" as const };
       });
 
-      // Merge updated snapshot with any new orders added during sync
+      /**
+       * Слияние с тем, что успело измениться за время прохода.
+       *
+       * Итог строится от среза, снятого В НАЧАЛЕ прохода, и раньше к нему
+       * лишь ДОБАВЛялось появившееся, но никогда не вычиталось удалённое.
+       * Проход по сети занимает до двух минут; если агент за это время
+       * вычеркнул красную строку — а вычеркнуть можно только её, кнопка
+       * показывается лишь при retryable === false, — она возвращалась и в
+       * список, и на диск.
+       *
+       * Дубля заказа отсюда не выходит: такая запись исключена из
+       * автоматической отправки, а при ручном повторе уходит с прежним
+       * ключом идемпотентности, и сервер отдаёт уже созданный заказ. Но
+       * вычеркнутое, возвращающееся само, читается как поломка — и человек
+       * перестаёт верить кнопке.
+       */
       const latestOrders = get().orders;
       const addedDuringSync = latestOrders.filter(o => !finalSnapshot.some(s => s.id === o.id));
-      const finalOrders = [...finalSnapshot, ...addedDuringSync];
+      const stillHere = new Set(latestOrders.map(o => o.id));
+      const kept = finalSnapshot.filter(o => stillHere.has(o.id));
+      const finalOrders = [...kept, ...addedDuringSync];
 
       set({ orders: finalOrders });
       await writeQueue(finalOrders);
