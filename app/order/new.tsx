@@ -1,5 +1,6 @@
 // Warehouse Pro — New Order (matches web NewOrder.tsx — 3-step wizard)
 import { useState, useMemo, useEffect, useRef } from "react";
+import { clampDiscountText } from "../../src/lib/discount";
 import { useDebounce } from "../../src/hooks/useDebounce";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Modal, Pressable, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -278,7 +279,7 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>СКИДКА (%)</Text>
                 <TextInput value={line.discount} onChangeText={v => {
-                  const next = [...lines]; next[idx] = { ...next[idx], discount: v.replace(",", ".") }; onChange(next);
+                  const next = [...lines]; next[idx] = { ...next[idx], discount: clampDiscountText(v) }; onChange(next);
                 }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
                   style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
               </View>

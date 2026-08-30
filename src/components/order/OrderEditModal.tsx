@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { clampDiscountText } from "../../lib/discount";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable, ScrollView, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
@@ -299,7 +300,7 @@ export function OrderEditModal({
                 </View>
                 <View>
                   <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>Скидка (%)</Text>
-                  <TextInput value={discount} onChangeText={onDiscountChange} placeholder="0" keyboardType="numeric"
+                  <TextInput value={discount} onChangeText={v => onDiscountChange(clampDiscountText(v))} placeholder="0" keyboardType="decimal-pad"
                     placeholderTextColor={colors.text.muted}
                     style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base }} />
                 </View>
