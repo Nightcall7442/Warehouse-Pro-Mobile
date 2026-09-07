@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { errorText } from "../lib/error-text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "./auth";
 import { notify } from "./toast";
@@ -88,6 +89,44 @@ export interface OfflineDeliveryAction {
    * по-прежнему. Отбросить их значило бы потерять работу, уже сделанную в поле.
    */
   ownerId?: number;
+
+  /*
+    Номер заказа и название магазина, снятые в момент постановки в очередь.
+
+    Без них строка очереди читается как «Доставлен · #417»: агент не знает, о
+    каком магазине речь, пока не откроет заказ, — а заказа без сети под рукой
+    нет. Поля необязательные: записи со старых сборок их не имеют и должны
+    синхронизироваться по-прежнему.
+  */
+  orderNumber?: string;
+  shopName?: string | null;
+}
+
+/** Номер заказа, к которому относится отложенное действие. */
+export function deliveryActionOrderId(action: DeliveryAction): number {
+  return action.type === "completeDelivery" ? action.input.orderId : action.orderId;
+}
+
+const ACTION_LABEL: Record<DeliveryAction["type"], string> = {
+  markOutForDelivery: "Выезд",
+  markDelivered: "Доставлен",
+  completeDelivery: "Доставка завершена",
+  markFailed: "Проблема",
+};
+
+/**
+ * Как назвать строку очереди человеку.
+ *
+ * Живёт здесь, а не на экране, ради записей со старых сборок: у них нет ни
+ * номера заказа, ни магазина, и подстановка «#417» остаётся единственным, что о
+ * такой записи вообще известно. Развилка нужна одна на приложение — иначе
+ * следующий экран, показывающий очередь, забудет про старые записи и упадёт на
+ * undefined.
+ */
+export function deliveryActionTitle(entry: OfflineDeliveryAction): string {
+  const what = ACTION_LABEL[entry.action.type];
+  const which = entry.orderNumber ?? `#${deliveryActionOrderId(entry.action)}`;
+  return entry.shopName ? `${what} · ${which} · ${entry.shopName}` : `${what} · ${which}`;
 }
 
 interface OfflineStore {
@@ -379,7 +418,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
             ...a,
             status: "failed" as const,
             error: results[idx].reason instanceof Error
-              ? (results[idx].reason as Error).message
+              ? errorText(results[idx].reason)
               : "Sync failed",
             retryable: isRetryableError(results[idx].reason),
           };
@@ -479,7 +518,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
             ...o,
             status: "failed" as const,
             error: result.reason instanceof Error
-              ? (result.reason as Error).message
+              ? errorText(result.reason)
               : "Sync failed",
             retryable: isRetryableError(result.reason),
           };
@@ -561,7 +600,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     } catch (e) {
       const finalOrders = get().orders.map((o) =>
         o.id === id
-          ? { ...o, status: "failed" as const, error: e instanceof Error ? e.message : "Retry failed", retryable: isRetryableError(e) }
+          ? { ...o, status: "failed" as const, error: e instanceof Error ? errorText(e) : "Retry failed", retryable: isRetryableError(e) }
           : o
       );
       set({ orders: finalOrders });
@@ -599,7 +638,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     } catch (e) {
       const final = get().deliveryActions.map((a) =>
         a.id === id
-          ? { ...a, status: "failed" as const, error: e instanceof Error ? e.message : "Retry failed", retryable: isRetryableError(e) }
+          ? { ...a, status: "failed" as const, error: e instanceof Error ? errorText(e) : "Retry failed", retryable: isRetryableError(e) }
           : a
       );
       set({ deliveryActions: final });

@@ -1,34 +1,36 @@
 // Warehouse Pro — Catalog v2 (cold palette, Card from ui.tsx)
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
-// Имя qty в этом файле уже занято состоянием выбранного количества,
-// поэтому форматирование остатка ввозится под своим именем.
-import { qty as formatQty } from "../../src/lib/format";
+import { useRefreshOnFocus } from "../../src/hooks/useRefreshOnFocus";
 import {
   View, Text, FlatList, TouchableOpacity, Modal, Pressable,
-  ScrollView, useWindowDimensions, ActivityIndicator } from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+  ScrollView, useWindowDimensions, RefreshControl, ActivityIndicator,
+} from "react-native";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getProducts, getCategories, createOrder, getAvailableShops, getAllShopsForSupervisor, Product, Shop } from "../../src/api";
-import { uuidv4, useOfflineStore, isRetryableError } from "../../src/store/offline";
-import { reportNotQueued } from "../../src/lib/offline-guard";
+import { uuidv4 } from "../../src/store/offline";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
-import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
-import { SearchInput, Card } from "../../src/components/ui";
+import { Typography, Spacing, Radii, ThemeColors, modalBottomPadding } from "../../src/theme";
+import { SearchInput, Card, Button } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
 import { useDebounce } from "../../src/hooks/useDebounce";
+import { useOfflineStore, isRetryableError } from "../../src/store/offline";
+import { reportNotQueued } from "../../src/lib/offline-guard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// ── Unit label mapping ──────────────────────────────────────────────────────
-const UNIT_LABELS: Record<string, string> = {
-  kg: "кг", l: "л", pcs: "шт", box: "ящ", pack: "упак", m: "м",
-};
-function unitLabel(unit?: string | null): string {
-  return UNIT_LABELS[unit ?? ""] ?? unit ?? "шт";
-}
+import { formatMoney } from "../../src/store/branding";
+import { readableInk } from "../../src/lib/contrast";
+/*
+  Своей таблицы единиц у каталога больше нет — она была третьей в приложении и
+  расходилась с остальными: box здесь звался «ящ», а строки block не было
+  вовсе, и товар в блоках подписывался кодом из базы. Помощник количества тоже
+  жил здесь один, а корзина нового заказа печатала тот же остаток как есть.
+*/
+import { unitShort, formatQty } from "../../src/lib/units";
+import { PAYMENT_METHODS } from "../../src/lib/order-status";
 
 // ── Hero Product Card ────────────────────────────────────────────────────────
 function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, cardWidth }: {
@@ -68,8 +70,8 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, marginBottom: 4 }} numberOfLines={2}>{product.name}</Text>
           {product.code && <Text style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMono, marginBottom: 6 }}>Артикул: {product.code}</Text>}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}<Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>/{unitLabel(product.unit)}</Text></Text>
-            {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{formatQty(product.available)} {unitLabel(product.unit)}</Text>}
+            <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}<Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>/{unitShort(product.unit)}</Text></Text>
+            {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{formatQty(product.available)} {unitShort(product.unit)}</Text>}
           </View>
         </View>
       </Card>
@@ -78,27 +80,51 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
 }
 
 // ── Product Detail Modal ─────────────────────────────────────────────────────
-function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDark, fmt }: {
+/* Экспортируется ради проверки: кнопку «Добавить в заказ» уже один раз
+   обрезало нижним краем, и поймать это можно только отрисовкой. */
+export function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDark, fmt }: {
   product: Product | null; visible: boolean; onClose: () => void; onAdd: (qty: number) => void;
   colors: ThemeColors; isDark: boolean; fmt: (v: number | string | null | undefined) => string;
 }) {
+  /*
+    Лист приклеен к нижнему краю окна, а окно на Android заходит ПОД системную
+    панель. Без этого отступа нижние 20–30 точек главной кнопки листа лежали в
+    полосе жестов или под тремя кнопками: агент жал «Добавить в заказ», а
+    срабатывало системное «Назад». Помощник safeBottomPadding уже написан для
+    этого — src/theme.ts.
+  */
+  const insets = useSafeAreaInsets();
   const [qty, setQty] = useState(1);
   const { height: SCREEN_H } = useWindowDimensions();
   if (!product) return null;
+
+  /*
+    Товара нет — и кнопка это говорит, а не отправляет заказ в отказ.
+    Раньше при остатке 0 «плюс» продолжал считать, а «Добавить в заказ»
+    работала: агент узнавал о нехватке уже от сервера, посреди разговора
+    с хозяином магазина.
+  */
+  const available = Number(product.available ?? 0);
+  const outOfStock = !(available > 0);
+  // Надпись на заливке — по её яркости: фирменный цвет арендатора бывает светлым.
+  const ink = readableInk(colors.accent.primary);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={onClose}>
         <Pressable style={{
           position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "92%",
+          paddingBottom: modalBottomPadding(insets.bottom),
           backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, overflow: "hidden",
         }} onPress={e => e.stopPropagation()}>
           {/* Handle */}
           <View style={{ alignItems: "center", paddingVertical: 10 }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
           </View>
-          {/* Big photo — full width, 55% of screen height */}
-          <View style={{ width: "100%", height: SCREEN_H * 0.45, backgroundColor: colors.bg.elevated }}>
+          <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+          {/* Снимок — доля ОСТАВШЕГОСЯ места, а не всего экрана: лист и так
+              не выше 92%, а сверху ещё полоска-ручка. */}
+          <View style={{ width: "100%", height: SCREEN_H * 0.36, backgroundColor: colors.bg.elevated }}>
             {product.photoUrl ? (
               <SecureImage uri={product.photoUrl} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             ) : (
@@ -113,13 +139,13 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
             {/* Price + Stock row */}
             <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: 20 }}>
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
-                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Цена за {unitLabel(product.unit)}</Text>
+                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Цена за {unitShort(product.unit)}</Text>
                 <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: colors.accent.primary, marginTop: 4 }}>{fmt(product.unitPrice)}</Text>
               </View>
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
                 <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Остаток</Text>
                 <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: Number(product.available) > 0 ? colors.status.success : colors.status.danger, marginTop: 4 }}>
-                  {formatQty(product.available)} {unitLabel(product.unit)}
+                  {formatQty(product.available)} {unitShort(product.unit)}
                 </Text>
               </View>
             </View>
@@ -130,16 +156,26 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
                 <Feather name="minus" size={20} color={colors.text.primary} />
               </TouchableOpacity>
               <Text style={{ fontSize: 32, fontFamily: Typography.fontBold, color: colors.text.primary, minWidth: 50, textAlign: "center" }}>{qty}</Text>
-              <TouchableOpacity onPress={() => setQty(qty + 1)}
-                style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus" size={20} color="#fff" />
+              <TouchableOpacity
+                onPress={() => setQty(Math.min(available, qty + 1))}
+                disabled={outOfStock || qty >= available}
+                style={{ width: 48, height: 48, borderRadius: 24, opacity: outOfStock || qty >= available ? 0.4 : 1, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="plus" size={20} color={ink} />
               </TouchableOpacity>
             </View>
-            {/* Add button */}
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAdd(qty); setQty(1); }}
-              style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
-              <Feather name="shopping-cart" size={18} color="#fff" />
-              <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Добавить в заказ</Text>
+          </View>
+          </ScrollView>
+
+          {/* Кнопка вне прокрутки: она обязана быть видна всегда. */}
+          <View style={{ paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, paddingBottom: Spacing.md }}>
+            <TouchableOpacity
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAdd(qty); setQty(1); }}
+              disabled={outOfStock}
+              style={{ backgroundColor: colors.accent.primary, opacity: outOfStock ? 0.4 : 1, borderRadius: Radii.md, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              <Feather name={outOfStock ? "slash" : "shopping-cart"} size={18} color={ink} />
+              <Text style={{ color: ink, fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>
+                {outOfStock ? "Нет в наличии" : "Добавить в заказ"}
+              </Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -152,6 +188,14 @@ function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDa
 function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
   visible: boolean; shops: Shop[]; onSelect: (shopId: number) => void; onClose: () => void; colors: ThemeColors;
 }) {
+  /*
+    Лист приклеен к нижнему краю окна, а окно на Android заходит ПОД системную
+    панель. Без этого отступа нижние 20–30 точек главной кнопки листа лежали в
+    полосе жестов или под тремя кнопками: агент жал «Добавить в заказ», а
+    срабатывало системное «Назад». Помощник safeBottomPadding уже написан для
+    этого — src/theme.ts.
+  */
+  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("");
@@ -176,6 +220,7 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
         <Pressable style={{
           position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "80%",
+          paddingBottom: modalBottomPadding(insets.bottom),
           backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
         }} onPress={e => e.stopPropagation()}>
           <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
@@ -223,22 +268,29 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
 
 // ── Payment Picker Modal ─────────────────────────────────────────────────────
 function PaymentPicker({ visible, onSelect, onClose, colors, submitting }: {
-  visible: boolean; onSelect: (method: "cash" | "card" | "transfer" | "debt") => void; onClose: () => void; colors: ThemeColors;
-  /** Заказ уже уходит на сервер: второе нажатие создаст второй. */
-  submitting: boolean;
+  visible: boolean; onSelect: (method: "cash" | "card" | "transfer" | "debt") => void; onClose: () => void; colors: ThemeColors; submitting?: boolean;
 }) {
+  /*
+    Лист приклеен к нижнему краю окна, а окно на Android заходит ПОД системную
+    панель. Без этого отступа нижние 20–30 точек главной кнопки листа лежали в
+    полосе жестов или под тремя кнопками: агент жал «Добавить в заказ», а
+    срабатывало системное «Назад». Помощник safeBottomPadding уже написан для
+    этого — src/theme.ts.
+  */
+  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<"cash" | "card" | "transfer" | "debt">("cash");
   const options: Array<{ key: "cash" | "card" | "transfer" | "debt"; label: string; icon: "dollar-sign" | "credit-card" | "send" | "alert-circle" }> = [
-    { key: "cash", label: "Наличные", icon: "dollar-sign" },
-    { key: "card", label: "Карта", icon: "credit-card" },
-    { key: "transfer", label: "Перевод", icon: "send" },
-    { key: "debt", label: "Долг", icon: "alert-circle" },
+    { key: "cash", label: PAYMENT_METHODS.cash, icon: "dollar-sign" },
+    { key: "card", label: PAYMENT_METHODS.card, icon: "credit-card" },
+    { key: "transfer", label: PAYMENT_METHODS.transfer, icon: "send" },
+    { key: "debt", label: PAYMENT_METHODS.debt, icon: "alert-circle" },
   ];
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose}>
         <Pressable style={{
           position: "absolute", bottom: 0, left: 0, right: 0,
+          paddingBottom: modalBottomPadding(insets.bottom),
           backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
         }} onPress={e => e.stopPropagation()}>
           <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
@@ -257,22 +309,22 @@ function PaymentPicker({ visible, onSelect, onClose, colors, submitting }: {
               );
             })}
           </View>
-          {/* Кнопка не знала об отправке: признак isPending у мутации в этом
-              файле не читался нигде, а окно закрывается только по успеху.
-              На медленной сети агент видел неотзывчивую кнопку и жал второй
-              раз — уходила вторая мутация. От дубля спасал только ключ
-              идемпотентности, то есть сервер, а не приложение. */}
+          {/*
+            Окно закрывается только по ответу сервера, а на слабой связи он идёт
+            секунды. Раньше кнопка всё это время выглядела нетронутой: агент жал
+            её второй и третий раз и до самого сообщения не знал, ушёл заказ или
+            нет. Ключ идемпотентности спасал сервер от дублей, но человеку об
+            этом ничего не говорило.
+          */}
           <TouchableOpacity
             onPress={() => { if (!submitting) onSelect(selected); }}
             disabled={submitting}
             style={{
-              backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15,
-              alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8,
-              opacity: submitting ? 0.6 : 1,
-            }}
-          >
-            {submitting && <ActivityIndicator size="small" color="#fff" />}
-            <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>
+              backgroundColor: colors.accent.primary, opacity: submitting ? 0.6 : 1, borderRadius: Radii.md,
+              padding: 15, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8,
+            }}>
+            {submitting && <ActivityIndicator size="small" color={readableInk(colors.accent.primary)} />}
+            <Text style={{ color: readableInk(colors.accent.primary), fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>
               {submitting ? "Отправляется…" : "Подтвердить"}
             </Text>
           </TouchableOpacity>
@@ -284,6 +336,10 @@ function PaymentPicker({ visible, onSelect, onClose, colors, submitting }: {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
+  // Вкладку не размонтируют при переключении, поэтому запрос уходит один раз
+  // за запуск. Здесь данные этого экрана помечаются устаревшими при возврате
+  // на него — подробности в самом хуке.
+  useRefreshOnFocus([["products"], ["availableShops"], ["categories"]]);
   const { width: SCREEN_W } = useWindowDimensions();
   const CARD_W = useMemo(() => (SCREEN_W - Spacing.base * 2 - Spacing.md) / 2, [SCREEN_W]);
   const { isDark } = useThemeStore();
@@ -294,12 +350,6 @@ export default function CatalogScreen() {
   const { user } = useAuthStore();
 
   const [search, setSearch] = useState("");
-  // Запрос уходит по осевшему тексту, а не по каждой нажатой клавише. «кока-кола»
-  // на 3G — это девять запросов полного каталога, каждый со своим таймаутом в
-  // 15 секунд и повтором, и ни один не отменяется: между символами экран замирал,
-  // а трафик за смену агент оплачивал сам. Мгновенная фильтрация уже загруженного
-  // ниже (filtered) по-прежнему идёт по «сырому» search, поэтому набор не тормозит.
-  const debouncedSearch = useDebounce(search, 300);
   const [selectedCat, setSelectedCat] = useState("all");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -308,34 +358,44 @@ export default function CatalogScreen() {
   const [pendingQty, setPendingQty] = useState(1);
   const [pendingShopId, setPendingShopId] = useState<number | null>(null);
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
-  // Один ключ на попытку добавления, переиспользуется при повторе после
-  // неудачи: без него потерянный ответ и ручной повтор создали бы два заказа.
-  // Тот же ключ уходит в офлайн-очередь, поэтому и отложенная отправка не
-  // может задвоить заказ.
+  // Один ключ на попытку «добавить в заказ», переиспользуется при повторе
+  // шага оплаты: без него потерянный ответ и ручной повтор создают второй
+  // заказ. Очередь офлайна у этого пути теперь есть, но ключ нужен и с ней —
+  // он защищает от дубля, а не от отсутствия связи.
   const pendingIdempotencyKeyRef = useRef<string | null>(null);
   const [cachedProducts, setCachedProducts] = useState<Product[]>([]);
-  const [isFromCache, setIsFromCache] = useState(false);
 
   const canAccessAgent = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo";
-  const { data: products = [], isLoading, isError, error } = useQuery({
+  /*
+    Строка поиска в поле остаётся мгновенной, а на сервер уходит задержанная.
+    Раньше в ключе запроса стояла сама строка: каждая новая буква — новый ключ,
+    для которого в кэше пусто, значит isLoading и подмена сетки серыми
+    плитками. «Молоко» — это шесть запросов подряд и шесть раз исчезнувший
+    список; на EDGE у магазина экран почти всё время был серым.
+  */
+  const debouncedSearch = useDebounce(search, 300);
+  const { data: products = [], isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["products", debouncedSearch],
     queryFn: () => getProducts(debouncedSearch),
     enabled: canAccessAgent,
+    // Пока едет ответ на новый запрос, на экране остаются прежние карточки —
+    // вместо заглушек. Человеку видно, что список сужается, а не пропадает.
+    placeholderData: keepPreviousData,
   });
   const { data: shopsData } = useQuery({ queryKey: ["availableShops"], queryFn: isSupervisor ? getAllShopsForSupervisor : getAvailableShops, enabled: canAccessAgent });
   const { data: serverCategories = [] } = useQuery({ queryKey: ["categories"], queryFn: getCategories, enabled: canAccessAgent });
 
-  // Офлайн-кэш пополняет только полная выдача. Раньше сюда попадал любой ответ,
-  // в том числе результат поиска: набрал агент в офисе «кола», сервер отдал три
-  // позиции — и они легли поверх всего каталога. Через час в подвале магазина
-  // запрос падал, и «Офлайн данные» показывали те самые три товара, ничем не
-  // намекая, что виноват давний поиск; собрать заказ было не из чего.
+  // Складываем свежий список в кэш — это запись на диск, ей эффект нужен.
+  //
+  // Отсюда убран setIsFromCache(false). Признак «показываем кэш» — не состояние,
+  // а следствие двух уже известных величин: запрос упал и кэш непустой. Пока он
+  // лежал в состоянии, его выставляли из двух эффектов, и порядок их срабатывания
+  // решал, что увидит экран.
   useEffect(() => {
-    if (products.length === 0) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsFromCache(false);
-    if (!debouncedSearch) {
+    // Только полный список: выдача поиска затирала кэш, и агент без связи
+    // видел в каталоге одну позицию — ту, что искал последней.
+    if (products.length > 0 && !debouncedSearch) {
       AsyncStorage.setItem("cached_products", JSON.stringify(products)).catch(() => {});
     }
   }, [products, debouncedSearch]);
@@ -344,10 +404,7 @@ export default function CatalogScreen() {
   useEffect(() => {
     if (isError && !isLoading) {
       AsyncStorage.getItem("cached_products").then(raw => {
-        if (raw) {
-          setCachedProducts(JSON.parse(raw));
-          setIsFromCache(true);
-        }
+        if (raw) setCachedProducts(JSON.parse(raw));
       }).catch(() => {});
     }
   }, [isError, isLoading]);
@@ -359,8 +416,12 @@ export default function CatalogScreen() {
     return [{ key: "all", label: "Все" }, ...dynamic];
   }, [serverCategories]);
 
+  // Кэш показываем ровно тогда, когда сеть не ответила, а сохранённый список есть.
+  const isFromCache = isError && cachedProducts.length > 0;
   const effectiveProducts = isFromCache ? cachedProducts : products;
 
+  // Отбор по НЕзадержанной строке: пока едет ответ сервера, набранная буква
+  // сужает уже показанный список сразу, а не через 300 мс.
   const filtered = useMemo(() => {
     let result = effectiveProducts;
     if (search) { const q = search.toLowerCase(); result = result.filter(p => p.name.toLowerCase().includes(q) || p.code?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q)); }
@@ -369,36 +430,20 @@ export default function CatalogScreen() {
   }, [effectiveProducts, search, selectedCat]);
 
   const fmt = useCallback((v: number | string | null | undefined) => {
-    return Number(v ?? 0).toLocaleString("ru-RU", { style: "currency", currency: "UZS", maximumFractionDigits: 0 });
-  }, []);
-
-  type QuickOrderInput = { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[]; paymentMethod?: "cash" | "card" | "transfer" | "debt"; idempotencyKey?: string };
-
-  const closePickers = useCallback(() => {
-    pendingIdempotencyKeyRef.current = null;
-    setShowShopPicker(false);
-    setShowPaymentPicker(false);
-    setPendingProduct(null);
-    setPendingShopId(null);
+    return formatMoney(v);
   }, []);
 
   const createOrderMutation = useMutation({
-    mutationFn: async (input: QuickOrderInput) => {
+    mutationFn: async (input: { shopId: number; items: { productId: number; quantity: number; unitPrice: number }[]; paymentMethod?: "cash" | "card" | "transfer" | "debt"; idempotencyKey?: string }) => {
       try {
         return await createOrder(input);
       } catch (e) {
-        /**
-         * Быстрый заказ из каталога уходил в никуда без связи.
-         *
-         * Здесь показывалось только сообщение с текстом ошибки, и заказ
-         * пропадал: ни на сервере, ни в очереди. Обман усиливался тем, что
-         * этот же экран офлайн рисует полосу «Офлайн данные» и оставляет
-         * кнопки добавления живыми — то есть сам говорит, что работает без
-         * связи, а заказ из него без связи исчезает.
-         *
-         * В app/order/new.tsx запасной путь есть давно. Здесь его не было,
-         * и это признавал комментарий рядом: «no offline queue».
-         */
+        /*
+          Отказ по существу (нет товара, закрыт магазин) в очередь класть
+          нельзя — он будет всплывать снова и снова. А вот сетевой отказ
+          означает только «сейчас не дошло»: заказ уже составлен человеком, и
+          терять его нельзя.
+        */
         if (!isRetryableError(e)) throw e;
         const queued = await addOrder({
           id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -411,19 +456,35 @@ export default function CatalogScreen() {
         return { offline: true as const, queued };
       }
     },
+    /*
+      Сбрасывается не только список заказов.
+
+      Быстрый заказ уменьшает остаток на складе, а вкладка каталога остаётся
+      смонтированной: агент отгружал 40 из 50 единиц, а карточка по-прежнему
+      писала «50 шт» и «В наличии» — и он обещал владельцу магазина ещё 40.
+      Тот же устаревший остаток попадал в форму заказа, где проверка «хватит
+      ли товара» опирается на это же число. Ключ ["products"] сбрасывается по
+      префиксу, поэтому накрывает и все варианты поиска, и список в окне
+      выбора товара. В планах лежит долг магазина — он растёт при оплате
+      «Долг», значит устаревает тоже.
+    */
     onSuccess: (data) => {
       if (data && typeof data === "object" && "offline" in data) {
         // Запись могла не лечь на диск — тогда заказ держится только в
         // памяти и пропадёт при выгрузке приложения.
         if (!data.queued) { reportNotQueued("Заказ"); return; }
-        closePickers();
+        pendingIdempotencyKeyRef.current = null;
+        setShowShopPicker(false); setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         notify.info("Нет связи. Заказ сохранён и отправится сам. Итог посчитается по ценам на момент отправки.");
         return;
       }
       notify.success("Заказ создан!");
-      closePickers();
-      queryClient.invalidateQueries({ queryKey: ["myOrders"] });
+      pendingIdempotencyKeyRef.current = null;
+      setShowShopPicker(false); setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null);
+      for (const queryKey of [["myOrders"], ["products"], ["availableShops"], ["plans"]]) {
+        queryClient.invalidateQueries({ queryKey });
+      }
     },
     onError: (e: Error) => notify.error(e.message || "Ошибка"),
   });
@@ -443,7 +504,7 @@ export default function CatalogScreen() {
       {/* Header */}
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
         <Text style={{ color: colors.text.primary, fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, marginBottom: Spacing.md }}>Каталог</Text>
-        <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск товаров..." />
+        <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск товаров…" />
       </View>
 
       {/* Category chips */}
@@ -470,6 +531,15 @@ export default function CatalogScreen() {
           </View>
           <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>Ошибка загрузки</Text>
           <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>{error?.message ?? "Проверьте подключение"}</Text>
+          {/*
+            Повторить было нечем. Сетка с потягиванием вниз в этой ветке не
+            рисуется вовсе, а другого способа перезапустить запрос нет: агент в
+            первый день на телефоне, без сохранённого кэша, упирался в эту
+            надпись и перезапускал приложение.
+          */}
+          <Button onPress={() => { void refetch(); }} loading={isFetching} style={{ marginTop: Spacing.lg }}>
+            Повторить
+          </Button>
         </View>
       ) : isLoading && !isFromCache ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.md, paddingHorizontal: Spacing.base }}>
@@ -485,6 +555,9 @@ export default function CatalogScreen() {
           columnWrapperStyle={{ gap: Spacing.md, paddingHorizontal: Spacing.base }}
           contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
           showsVerticalScrollIndicator={false}
+          // Потягивание вниз не работало на этом экране никогда — ни при
+          // ошибке, ни на успешно загруженном каталоге.
+          refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.accent.primary} />}
           ListHeaderComponent={isFromCache ? (
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, paddingHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.status.warningDim, borderRadius: Radii.md, marginHorizontal: Spacing.base }}>
               <Feather name="wifi-off" size={14} color={colors.status.warning} />
@@ -502,11 +575,13 @@ export default function CatalogScreen() {
               <View style={{ width: 72, height: 72, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center", marginBottom: Spacing.md }}>
                 <Feather name="search" size={32} color={colors.text.muted} />
               </View>
+              {/* Пустой каталог — это пустой каталог, а не «введите запрос»:
+                  список товаров приходит и без поиска. */}
               <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>
-                {search ? "Товары не найдены" : "Введите запрос для поиска"}
+                {search ? "Товары не найдены" : "Каталог пуст"}
               </Text>
               <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>
-                {search ? "Попробуйте изменить запрос" : "Начните вводить название товара"}
+                {search ? "Попробуйте изменить запрос" : "Товары появятся, когда их заведут на складе"}
               </Text>
             </View>
           }

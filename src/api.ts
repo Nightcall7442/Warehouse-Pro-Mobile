@@ -250,6 +250,14 @@ export interface Plan {
   planDate: string;
   status: "planned" | "visited" | "skipped";
   photoUrl?: string;
+  /*
+    Когда визит отметили.
+
+    Строка маршрута показывает время рядом со снимком: «Посещён · 11:42».
+    Без него в списке видно только, что визит закрыт, — а супервайзеру важно,
+    в котором часу, чтобы сверить с порядком точек.
+  */
+  visitedAt?: string | null;
   notes?: string;
   shopId?: number;
   shopName?: string;
@@ -810,6 +818,44 @@ export interface TenantBranding {
 
 export async function getBranding(): Promise<TenantBranding> {
   return trpcQuery<TenantBranding>("settings.branding");
+}
+
+/** Оформление арендатора — branding.get. */
+export interface TenantBrandingResponse {
+  primaryColor: string | null;
+  secondaryColor: string | null;
+  accentColor: string | null;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  appName: string | null;
+  supportEmail: string | null;
+  supportPhone: string | null;
+  loginTitle: string | null;
+  loginSubtitle: string | null;
+  footerText: string | null;
+  mobileTheme: "light" | "dark" | "auto";
+}
+
+export async function getTenantBranding(): Promise<TenantBrandingResponse> {
+  return trpcQuery<TenantBrandingResponse>("branding.get");
+}
+
+/**
+ * Денежные настройки организации — settings.brandingAuth.
+ *
+ * Полный settings.get отдал бы заодно банковский счёт, ИНН и директора —
+ * агенту на телефон эти реквизиты незачем.
+ */
+export interface TenantMoneySettings {
+  companyName: string | null;
+  logoUrl: string | null;
+  currency: string | null;
+  currencySymbol: string | null;
+  symbolPosition: "before" | "after" | null;
+}
+
+export async function getTenantMoneySettings(): Promise<TenantMoneySettings> {
+  return trpcQuery<TenantMoneySettings>("settings.brandingAuth");
 }
 
 // ── Courier / Deliveries ──────────────────────────────────────────────────────

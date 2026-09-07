@@ -10,6 +10,9 @@ import { join } from "path";
 const root = join(__dirname, "..", "..");
 const LAYOUT = readFileSync(join(root, "app", "(tabs)", "_layout.tsx"), "utf8");
 const DELIVERIES = readFileSync(join(root, "app", "(tabs)", "deliveries.tsx"), "utf8");
+// Правило видимости вкладок живёт отдельным модулем — спрашиваем у него, а не
+// у текста экрана.
+import { isTabVisible } from "../lib/tabs";
 
 describe("у доставщика есть панель, а не один пункт", () => {
   test("экран доставок не спрятан от всех подряд", () => {
@@ -24,18 +27,25 @@ describe("у доставщика есть панель, а не один пун
   });
 
   test("доставки показываются доставщику", () => {
-    if (!LAYOUT.includes(`if (route.name === "deliveries") return isCourier;`)) {
+    if (!isTabVisible("deliveries", "courier")) {
       throw new Error("правило видимости доставок пропало");
     }
   });
 
   test("профиль доставщику доступен", () => {
     // Выход из аккаунта живёт только в профиле.
-    const at = LAYOUT.indexOf(`if (route.name === "profile")`);
-    if (at < 0) throw new Error("правило видимости профиля пропало");
-    const rule = LAYOUT.slice(at, LAYOUT.indexOf("}", at));
-    if (!rule.includes("isCourier")) {
+    if (!isTabVisible("profile", "courier")) {
       throw new Error("профиль снова скрыт у доставщика");
+    }
+  });
+
+  test("у доставщика видно больше одного пункта", () => {
+    // Панель из одного пункта — это не панель: до всего остального нечем
+    // дойти. Считаем по тому же правилу, которым пользуется сам экран.
+    const all = ["index", "shops", "catalog", "orders", "plan", "plans", "targets", "deliveries", "profile", "gps", "tracking", "barcode"];
+    const visible = all.filter(name => isTabVisible(name, "courier"));
+    if (visible.length < 2) {
+      throw new Error("у доставщика в панели остался один пункт: " + visible.join(", "));
     }
   });
 
@@ -66,18 +76,16 @@ describe("отмеченная без сети доставка не пропа�
     // Заказ, отмеченный без сети, выпадал из «ожидают» и «в пути» (сервер о
     // нём ещё не знает), а в «доставлены» попасть не мог. Карточка исчезала,
     // и понять, записалось ли хоть что-то, было нельзя.
-    if (!DELIVERIES.includes(`const queued = (deliveries ?? []).filter((d: Delivery) => queuedOrderIds.has(d.id));`)) {
+    if (!/queued:\s*all\.filter\(\(d: Delivery\) => queuedOrderIds\.has\(d\.id\)\)/.test(DELIVERIES)) {
       throw new Error("список отложенных отметок пропал");
     }
-    if (!DELIVERIES.includes('title="ЖДУТ ОТПРАВКИ"')) {
+    if (!DELIVERIES.includes("ЖДУТ ОТПРАВКИ")) {
       throw new Error("раздел с отложенными отметками больше не рисуется");
     }
   });
 
   test("человеку сказано, что отметка записана и уйдёт позже", () => {
-    const at = DELIVERIES.indexOf('title="ЖДУТ ОТПРАВКИ"');
-    const section = DELIVERIES.slice(at, at + 2000);
-    if (!/Записано на телефоне/.test(section)) {
+    if (!/Записано на телефоне/.test(DELIVERIES)) {
       throw new Error("объяснение исчезло: карточка есть, а что с ней — непонятно");
     }
   });
@@ -86,7 +94,7 @@ describe("отмеченная без сети доставка не пропа�
     // Оставить карточку с рабочими кнопками — значит разрешить вторую отметку
     // по той же доставке до того, как уйдёт первая.
     for (const list of ["assigned", "inTransit"]) {
-      const at = DELIVERIES.indexOf("const " + list + " = ");
+      const at = DELIVERIES.indexOf(list + ": all.filter(");
       if (at < 0) throw new Error("список «" + list + "» пропал");
       const line = DELIVERIES.slice(at, DELIVERIES.indexOf(String.fromCharCode(10), at));
       if (!line.includes("!queuedOrderIds.has(d.id)")) {

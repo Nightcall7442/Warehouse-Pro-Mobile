@@ -8,6 +8,8 @@ import { computePace, money } from "../lib/monthly-plan";
 import { useThemeColors } from "../store/theme";
 import { Typography, Spacing, Radii } from "../theme";
 import { ShimmerSkeleton } from "./Animated";
+import { ErrorState } from "./QueryState";
+import { useBrandingStore } from "../store/branding";
 
 /**
  * The agent's monthly quota, as their supervisor set it.
@@ -21,22 +23,22 @@ import { ShimmerSkeleton } from "./Animated";
 
 export function MonthlyPlanCard() {
   const colors = useThemeColors();
+  const { currencySymbol, symbolPosition } = useBrandingStore(s => s.branding);
 
-  /**
-   * Ошибку запроса нельзя выдавать за «нормы нет».
-   *
-   * Здесь стоял .catch(() => null), и любая неудача — нет сети, 500, истёкший
-   * токен — превращалась в null. Карточка рисовала «Норма на этот месяц не
-   * назначена» с подписью «Её ставит супервайзер»: утверждение о факте там,
-   * где приложение просто не смогло спросить. Агент шёл к супервайзеру,
-   * супервайзер показывал назначенную норму, и виноватым оказывалось
-   * приложение — но искали причину не там.
-   *
-   * Теперь отсутствие нормы (null) и неудача запроса (isError) — разные
-   * состояния и выглядят по-разному.
-   */
-  const { data: quota, isLoading, isError } = useQuery({
+  // Знак валюты был приклеен справа вручную, мимо formatMoney, который знает
+  // сторону знака: арендатор с долларом читал «12,4 млн $» вместо «$ 12,4 млн».
+  // Сам formatMoney сюда не годится — число уже сжато до «12,4 млн», а он
+  // печатает разряды целиком.
+  const withCurrency = (v: string) =>
+    symbolPosition === "before" ? `${currencySymbol} ${v}` : `${v} ${currencySymbol}`;
+
+  const { data: quota, isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["myQuota"],
+    // Когда норма не назначена, сервер отвечает пустотой (см. myQuota в
+    // sales-target-router: `if (!target) return null`), и она доезжает сюда
+    // как null. Здесь стоял перехват, отличавший её от сбоя по ТЕКСТУ ошибки
+    // разбора; теперь пустота не выдаётся за поломку в самом api.ts, и разница
+    // между «нормы нет» и «не загрузилось» держится на типе, а не на строке.
     queryFn: () => getMyQuota(),
     retry: false,
     staleTime: 5 * 60 * 1000,
@@ -59,21 +61,19 @@ export function MonthlyPlanCard() {
     );
   }
 
+  // Отказ — не то же самое, что «нормы нет». Раньше карточка на любую беду
+  // отвечала «Норма на этот месяц не назначена»: агент шёл выяснять к
+  // супервайзеру то, что чинится повторным запросом.
   if (isError) {
     return (
-      <View style={{ ...surface, padding: Spacing.lg, alignItems: "center", gap: 8 }}>
-        <View style={{
-          width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center",
-          backgroundColor: colors.bg.elevated,
-        }}>
-          <Feather name="wifi-off" size={18} color={colors.text.muted} />
-        </View>
-        <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.secondary }}>
-          Норму не удалось загрузить
-        </Text>
-        <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.muted, textAlign: "center" }}>
-          Это не значит, что её нет — проверьте связь
-        </Text>
+      <View style={{ ...surface, paddingVertical: Spacing.sm }}>
+        <ErrorState
+          what="норму месяца"
+          error={error}
+          description="Норма назначена или нет — сейчас неизвестно: ответ не пришёл."
+          onRetry={() => { void refetch(); }}
+          retrying={isFetching}
+        />
       </View>
     );
   }
@@ -142,7 +142,7 @@ export function MonthlyPlanCard() {
             {quota.revenue.pct}%
           </Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }}>
-            {money(quota.revenue.actual)} из {money(quota.revenue.target)} сум
+            {money(quota.revenue.actual)} из {withCurrency(money(quota.revenue.target))}
           </Text>
         </View>
 
@@ -182,11 +182,11 @@ export function MonthlyPlanCard() {
         <View style={{
           flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border.subtle,
         }}>
-          <Stat label="Осталось" value={`${money(pace.remaining)} сум`} colors={colors} />
+          <Stat label="Осталось" value={withCurrency(money(pace.remaining))} colors={colors} />
           <View style={{ width: 1, backgroundColor: colors.border.subtle }} />
           <Stat
             label={pace.daysLeft > 0 ? `В день (${pace.daysLeft} дн.)` : "Последний день"}
-            value={`${money(pace.perDay)} сум`}
+            value={withCurrency(money(pace.perDay))}
             colors={colors}
           />
         </View>

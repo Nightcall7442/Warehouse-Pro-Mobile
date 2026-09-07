@@ -8,11 +8,15 @@ import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "../../src/store/auth";
 import { updateProfile, changePassword, getAgentDashboard, getMyShops, uploadFile } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { useBrandingStore } from "../../src/store/branding";
+import { SecureImage } from "../../src/components/SecureImage";
 import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { MonthlyPlanCard } from "../../src/components/MonthlyPlanCard";
-import { Typography, Spacing, Radii } from "../../src/theme";
+import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT } from "../../src/theme";
 import { Card, Badge } from "../../src/components/ui";
+// То же число, что и на других вкладках: высота плавающей панели. Голое 100
+// в отступе не говорило, откуда оно, и переживало правку панели лишь наполовину.
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
 import Constants from "expo-constants";
 
@@ -40,6 +44,7 @@ export default function ProfileScreen() {
   const { isDark, toggleTheme } = useThemeStore();
   const { user, logout, updateUser } = useAuthStore();
   const colors = useThemeColors();
+  const branding = useBrandingStore(s => s.branding);
 
   const [newName, setNewName] = useState(user?.name ?? "");
   const [currentPwd, setCurrentPwd] = useState("");
@@ -105,8 +110,15 @@ export default function ProfileScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.xl }}
         showsVerticalScrollIndicator={false}
+        // Под полями стоят кнопки «Сохранить профиль» и «Изменить пароль».
+        // По умолчанию первое касание кнопки при открытой клавиатуре только
+        // прячет клавиатуру и до кнопки не доходит: человек дописал имя, жмёт
+        // «Сохранить» — ничего, жмёт второй раз — сохранилось. Выглядит как
+        // зависшее приложение, а на смене пароля ещё и заставляет набирать
+        // три поля заново, если он решит, что промахнулся.
+        keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.primary} />}
       >
         {/* Title */}
@@ -177,7 +189,8 @@ export default function ProfileScreen() {
               {[
                 { label: "ТЕКУЩИЙ ПАРОЛЬ", value: currentPwd, setter: setCurrentPwd },
                 { label: "НОВЫЙ ПАРОЛЬ", value: newPwd, setter: setNewPwd },
-                { label: "ПОДТВЕРДИТЕ НОВЫЙ", value: confirmPwd, setter: setConfirmPwd },
+                // Было «ПОДТВЕРДИТЕ НОВЫЙ» — обрубок: новый что?
+                { label: "ПОВТОРИТЕ НОВЫЙ ПАРОЛЬ", value: confirmPwd, setter: setConfirmPwd },
               ].map((f, i) => (
                 <View key={i}>
                   <Label colors={colors}>{f.label}</Label>
@@ -247,9 +260,20 @@ export default function ProfileScreen() {
           </PressableScale>
         </FadeInItem>
 
-        {/* Version */}
-        <View style={{ alignItems: "center", marginTop: Spacing.xl }}>
-          <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>Warehouse Pro v{Constants.expoConfig?.version ?? "1.0.0"}</Text>
+        {/* Знак и название организации.
+
+            Здесь стояло «Warehouse Pro» — имя системы. Организация, купившая
+            белую метку, платит за то, чтобы сотрудник видел своё название, а
+            не имя поставщика; версия сборки при этом остаётся, она нужна
+            поддержке. Плашка под логотипом светлая: он может быть тёмным, а
+            фон приложения в тёмной теме тоже тёмный. */}
+        <View style={{ alignItems: "center", marginTop: Spacing.xl, gap: 8 }}>
+          {branding.logoUrl ? (
+            <View style={{ width: 44, height: 44, borderRadius: Radii.md, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              <SecureImage uri={branding.logoUrl} style={{ width: 38, height: 38 }} resizeMode="contain" />
+            </View>
+          ) : null}
+          <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>{branding.companyName} v{Constants.expoConfig?.version ?? "1.0.0"}</Text>
         </View>
       </ScrollView>
     </View>

@@ -6,7 +6,9 @@ describe('Theme', () => {
   });
 
   it('LightColors should have primary background', () => {
-    expect(LightColors.bg.primary).toBe('#e8e6e1');
+    // Холст светлой темы: прохладный серо-голубой из референса. Прежний
+    // тёплый бежевый #e8e6e1 ушёл вместе со всей палитрой v7.
+    expect(LightColors.bg.primary).toBe('#e7eaf0');
   });
 
   it('Typography should define font sizes', () => {

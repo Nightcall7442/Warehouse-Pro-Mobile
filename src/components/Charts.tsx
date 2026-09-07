@@ -99,16 +99,18 @@ export function DonutChart({ segments, size = 140, strokeWidth = 20, centerLabel
   const circumference = 2 * Math.PI * radius;
   const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;
 
+  // Поворот дуги — доля всего, что лежит в кольце до неё.
+  //
+  // Раньше эта сумма копилась во внешней переменной прямо внутри map. Порядок
+  // и число вызовов колбэка map React не обещает — при повторной отрисовке
+  // компонента сумма могла продолжиться с прежнего места, и сегменты уезжали
+  // по кругу. Сегментов тут столько же, сколько статусов заказа, поэтому
+  // считать сумму заново на каждом — дешевле, чем заводить общий счётчик.
   const arcs = segments.map((seg, i) => {
-    // Сумма всех сегментов до текущего — начало его дуги.
-    const before = segments.slice(0, i).reduce((sum, s) => sum + s.value, 0);
     const pct = seg.value / total;
-    return {
-      ...seg,
-      pct,
-      offset: circumference * (1 - pct),
-      rotation: (before / total) * 360 - 90,
-    };
+    const offset = circumference * (1 - pct);
+    const before = segments.slice(0, i).reduce((sum, s) => sum + s.value, 0);
+    return { ...seg, pct, offset, rotation: (before / total) * 360 - 90 };
   });
 
   return (

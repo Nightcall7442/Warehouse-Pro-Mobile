@@ -72,7 +72,9 @@ export function DateNav({
               <Text style={{
                 fontFamily: d.isCurrent ? Typography.fontBold : Typography.fontMedium,
                 fontSize: d.isCurrent ? Typography.size.base : Typography.size.xs,
-                color: d.isCurrent ? "#fff" : colors.text.secondary,
+                // Кружок текущего дня залит цветом бренда — число на нём
+                // подбирается по яркости заливки, а не всегда белым.
+                color: d.isCurrent ? colors.brand.ink : colors.text.secondary,
               }}>
                 {d.dayNum}
               </Text>

@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { errorText } from "../../lib/error-text";
+import { useRefreshOnFocus } from "../../hooks/useRefreshOnFocus";
 import { View, Text, FlatList, Alert, RefreshControl } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,11 +18,13 @@ import {
 import { notify } from "../../store/toast";
 import { useThemeColors, useThemeStore } from "../../store/theme";
 import { useAuthStore } from "../../store/auth";
-import { Typography, Spacing, Radii } from "../../theme";
+import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT } from "../../theme";
 import { ScreenHeader, EmptyState, Card } from "../ui";
+import { ErrorState } from "../QueryState";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../Animated";
 import { PlanRow } from "./PlanRow";
 import { preparePhoto } from "../../lib/prepare-photo";
+import { sendVisitPing } from "../../lib/visit-ping";
 
 export function AgentPlansView() {
   const insets = useSafeAreaInsets();
@@ -31,24 +35,79 @@ export function AgentPlansView() {
   const { user } = useAuthStore();
   const isMerchandiser = user?.role === "merchandiser";
 
-  const {
-    data: plans,
-    isLoading,
-    refetch,
-  } = useQuery({
+  /*
+    Опрос идёт, только пока экран открыт.
+
+    Вкладки не размонтируются: один раз открыв «Планы», агент получал запрос
+    раз в минуту до конца дня — и с вкладки «Заказы», и с телефоном в кармане.
+    Это шестьдесят запросов в час к списку, которого никто не видит: на тарифе
+    с оплатой за мегабайты видно в счёте, на дешёвом аппарате — в заряде.
+    Приём тот же, что на вкладке «Слежение».
+  */
+  /*
+    Опрос раз в минуту идёт только на открытом экране — иначе он тикал и с
+    чужой вкладки, тратя мобильный интернет впустую.
+
+    Но одного этого мало: вкладки expo-router не размонтируются, и без
+    обновления ПРИ ВОЗВРАТЕ агент, полчаса пробывший в «Заказах», увидел бы
+    получасовой список и ждал бы до первого тика ещё минуту. Раньше это
+    прикрывал постоянный опрос.
+  */
+  const [screenFocused, setScreenFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      return () => setScreenFocused(false);
+    }, []),
+  );
+
+  const plansQuery = useQuery({
     queryKey: ["agentPlans"],
     queryFn: () => getPlans(),
-    refetchInterval: 60_000,
+    refetchInterval: screenFocused ? 60_000 : false,
   });
+  // Вернулись на экран — данные помечаются устаревшими сразу, не дожидаясь
+  // ближайшего тика опроса.
+  useRefreshOnFocus([["agentPlans"]]);
+  const { data: plans, isLoading, isError, error, refetch } = plansQuery;
+
+  // Свой признак «тянут вручную» вместо isFetching. Запрос повторяется сам раз
+  // в минуту, и на isFetching кружок обновления выскакивал бы без касания.
+  // isLoading тоже не годится: он истинен только при самой первой загрузке, и
+  // при потягивании кружок исчезал мгновенно — человек тянул ещё раз, потом
+  // решал, что обновление не работает, и перезапускал приложение.
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try { await refetch(); } finally { setRefreshing(false); }
+  };
 
   const updateMutation = useMutation({
     mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) =>
       updatePlanStatus(planId, status),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["agentPlans"] });
       notify.success("Статус обновлён");
+      /*
+        Отмеченный визит сам ставит точку на карту слежения.
+
+        Писали в agent_locations только фоновый сбор и вкладка «GPS», которую
+        агент жмёт руками. У агента с выключенным фоновым сбором визит
+        отмечался, а на карте у начальника не появлялось ничего — ни точки, ни
+        маршрута.
+
+        Только на «посещён»: пропуск точки — это не факт присутствия, и
+        отмечать им карту значило бы рисовать агента там, куда он не заходил.
+
+        Отправка не ждётся: визит уже отмечен, и точка не должна ни задерживать
+        его, ни отменять. Подробности — в lib/visit-ping.
+      */
+      if (variables.status === "visited") void sendVisitPing();
     },
-    onError: (e: Error) => notify.error(e.message ?? "Не удалось обновить статус"),
+    // Наружу уходил e.message — текст axios: «Network Error». Запасная
+    // русская фраза была мёртвой: у Error поле message всегда строка, и до
+    // ?? дело не доходило никогда.
+    onError: (e: Error) => notify.error(errorText(e)),
   });
 
   const photoMutation = useMutation({
@@ -57,8 +116,10 @@ export function AgentPlansView() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agentPlans"] });
       notify.success("Фото отправлено, визит отмечен");
+      // Точка уходит следом за отметкой и не задерживает её: см. sendVisitPing.
+      void sendVisitPing();
     },
-    onError: (e: Error) => notify.error(e.message ?? "Ошибка отправки фото"),
+    onError: (e: Error) => notify.error(errorText(e)),
   });
 
   // Route optimization
@@ -96,7 +157,11 @@ export function AgentPlansView() {
       try {
         // Снимок уменьшается перед отправкой: камера отдаёт полное разрешение.
         const { dataUrl } = await preparePhoto(result.assets[0].uri);
-        const url = await uploadFile(dataUrl, "shops");
+        // Папка "visits", а не "shops": снимок визита — это доказательство
+        // обхода, а не фотография точки, и лежать вперемешку с карточками
+        // магазинов ему незачем. Папка в uploadFile была объявлена и не
+        // использовалась.
+        const url = await uploadFile(dataUrl, "visits");
         photoMutation.mutate({ planId, photoUrl: url });
       } catch {
         notify.error("Ошибка загрузки фото");
@@ -231,25 +296,39 @@ export function AgentPlansView() {
               })
             : plans ?? []}
           keyExtractor={p => String(p.id)}
-          // У последнего магазина в списке кнопки «Готово» и «Пропустить» стоят в
-        // самом низу карточки и уходили под плавающий таб-бар: визит нельзя
-        // было отметить, не создав план после него. В соседнем
-        // SupervisorPlansView отступ с самого начала +100.
-        contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 100 }}
+          // Панель вкладок плавающая и стоит поверх списка: под неё уезжала
+          // последняя карточка дня, а это как раз тот визит, до которого агент
+          // добирается к вечеру. Запаса в 24 точки хватало только на отступ от
+          // края экрана, но не на саму панель.
+          contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.lg }}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
           refreshControl={
             <RefreshControl
-              refreshing={isLoading}
-              onRefresh={refetch}
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
               tintColor={colors.accent.primary}
             />
           }
           ListEmptyComponent={
-            <EmptyState
-              icon="calendar"
-              title="Планов на сегодня нет"
-              description="Супервайзер ещё не назначил маршрут"
-            />
+            // «Супервайзер ещё не назначил маршрут» — утверждение о работе, а
+            // не о запросе. При отказе список пуст ровно так же, как при
+            // пустом дне, и человек делал единственный разумный вывод: работы
+            // нет. Отказ теперь называет себя отказом и даёт чем повторить.
+            isError ? (
+              <ErrorState
+                what="планы"
+                error={error}
+                description="Это сбой связи, а не пустой день. Проверьте подключение и попробуйте снова."
+                onRetry={() => { void refetch(); }}
+                retrying={refreshing}
+              />
+            ) : (
+              <EmptyState
+                icon="calendar"
+                title="Планов на сегодня нет"
+                description="Супервайзер ещё не назначил маршрут"
+              />
+            )
           }
           renderItem={({ item: plan, index }) => (
             <FadeInItem delay={index * 30}>
@@ -260,7 +339,14 @@ export function AgentPlansView() {
                 onPress={() => plan.shopId && router.push({ pathname: "/shop/[id]", params: { id: String(plan.shopId) } })}
                 onVisit={() => handleVisitDone(plan.id, plan.shopName ?? "Магазин", plan.shopId)}
                 onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
-                loading={updateMutation.isPending || photoMutation.isPending}
+                // Пендинг — по строке, а не по всему списку. Отметка одного
+                // визита гасила кнопки во всех карточках сразу: агент на
+                // медленной связи видел, что список «замер» целиком, и ждал
+                // вместо того, чтобы отмечать следующий магазин.
+                loading={
+                  (updateMutation.isPending && updateMutation.variables?.planId === plan.id) ||
+                  (photoMutation.isPending && photoMutation.variables?.planId === plan.id)
+                }
               />
             </FadeInItem>
           )}

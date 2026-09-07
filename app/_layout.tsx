@@ -1,14 +1,23 @@
 import { useEffect, useCallback, useRef } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient, focusManager } from "@tanstack/react-query";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import NetInfo from "@react-native-community/netinfo";
+import { AppState, type AppStateStatus } from "react-native";
+/*
+  Manrope вместо DM Sans, JetBrains Mono вместо DM Mono.
+
+  У DM Sans и DM Mono в наборе только латиница. Приложение русское, поэтому
+  каждое слово подменялось системным шрифтом — молча, без единой ошибки, и
+  оттого незаметно. У обоих новых кириллица родная.
+*/
 import {
-  useFonts, DMSans_400Regular, DMSans_500Medium,
-  DMSans_600SemiBold, DMSans_700Bold, DMSans_800ExtraBold,
-} from "@expo-google-fonts/dm-sans";
+  useFonts, Manrope_400Regular, Manrope_500Medium,
+  Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold,
+} from "@expo-google-fonts/manrope";
+import { JetBrainsMono_400Regular } from "@expo-google-fonts/jetbrains-mono";
 import { useAuthStore } from "../src/store/auth";
 import { useOfflineStore } from "../src/store/offline";
 import { Typography } from "../src/theme";
@@ -26,6 +35,21 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 60_000, gcTime: 5 * 60_000 } },
+});
+
+/*
+  Возвращение приложения из фона — это и есть «фокус окна».
+
+  У react-query свойство refetchOnWindowFocus включено по умолчанию, но в
+  телефоне окна нет: без этой подписки оно не срабатывает никогда. Отсюда и
+  бралось «открыл приложение утром — вижу вчерашние заказы»: данные
+  обновлялись только при полной выгрузке из памяти.
+
+  Подписка ставится один раз на весь запуск, вне дерева: перевешивать её на
+  каждой отрисовке незачем.
+*/
+AppState.addEventListener("change", (status: AppStateStatus) => {
+  focusManager.setFocused(status === "active");
 });
 
 function AutoSync() {
@@ -68,25 +92,10 @@ function AutoSync() {
   // until the agent happened to open the Orders tab or the connection
   // flapped — long enough for them to assume the order hadn't gone through
   // and enter it a second time.
-  //
-  // Второе условие — кто именно вошёл. Записи в очереди помечены владельцем
-  // (ownerId), и отправлять чужие нельзя: сервер берёт автора из сессии, а не
-  // из запроса, поэтому заказы, выручка и комиссия ушли бы не тому человеку.
-  // Телефон в поле часто общий: агент сдаёт смену и передаёт его сменщику.
-  //
-  // Но проверка владельца сверяется с текущим пользователем, а он появляется
-  // только после hydrate() — тот идёт в сеть за профилем. Чтение очереди с
-  // диска занимает миллисекунды и завершается заведомо раньше, поэтому синх
-  // стартовал, пока user был ещё null: проверка пропускалась, и очередь
-  // прошлой смены уходила под токеном нового человека. То есть защита,
-  // написанная ровно от этого случая, не срабатывала ни разу на холодном
-  // старте — единственном, когда она и нужна.
   const loaded = useOfflineStore((s) => s.loaded);
-  const user = useAuthStore((s) => s.user);
-  const authLoading = useAuthStore((s) => s.isLoading);
   useEffect(() => {
-    if (loaded && !authLoading && user) runSync();
-  }, [loaded, authLoading, user, runSync]);
+    if (loaded) runSync();
+  }, [loaded, runSync]);
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
@@ -120,6 +129,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Бренд арендатора известен только по токену: до входа сервер не знает, чей
+  // это телефон. Поэтому запрос идёт здесь, а не при запуске приложения, —
+  // и одинаково после ввода пароля, после входа по отпечатку и после
+  // восстановления сессии.
+  useEffect(() => {
+    if (isAuthenticated) useBrandingStore.getState().refresh();
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (isLoading) return;
     const inAuthGroup = segments[0] === "(auth)";
@@ -140,7 +157,8 @@ export default function RootLayout() {
   const { load: loadBranding } = useBrandingStore();
 
   const [fontsLoaded] = useFonts({
-    DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, DMSans_800ExtraBold,
+    Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold,
+    JetBrainsMono_400Regular,
   });
 
   useEffect(() => {
@@ -169,7 +187,7 @@ export default function RootLayout() {
               screenOptions={{
                 headerStyle: { backgroundColor: colors.bg.secondary },
                 headerTintColor: colors.text.primary,
-                headerTitleStyle: { fontFamily: "DMSans_700Bold", fontSize: Typography.size.lg, color: colors.text.primary },
+                headerTitleStyle: { fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary },
                 contentStyle: { backgroundColor: colors.bg.primary },
                 headerShadowVisible: false,
                 headerBackTitle: "Назад",

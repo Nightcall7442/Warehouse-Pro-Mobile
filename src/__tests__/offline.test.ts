@@ -1,21 +1,13 @@
+// Подмена AsyncStorage — общая, в jest.setup.js; здесь она только импортируется,
+// чтобы проверить факт записи очереди в хранилище.
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// Mock AsyncStorage
-jest.mock("@react-native-async-storage/async-storage", () => ({
-  __esModule: true,
-  default: {
-    getItem: jest.fn(async () => null),
-    setItem: jest.fn(async () => {}),
-    removeItem: jest.fn(async () => {}),
-  },
-}));
 
 // Mock API
 jest.mock("../api", () => ({
   createOrder: jest.fn(),
 }));
 
-import { useOfflineStore, isRetryableError, uuidv4 } from "../store/offline";
+import { useOfflineStore, isRetryableError, uuidv4, deliveryActionTitle } from "../store/offline";
 import { createOrder } from "../api";
 
 const mockCreateOrder = createOrder as jest.MockedFunction<typeof createOrder>;
@@ -95,7 +87,9 @@ describe("offline store", () => {
       const state = useOfflineStore.getState();
       const failedOrder = state.orders.find(o => o.id === "o1");
       expect(failedOrder?.status).toBe("failed");
-      expect(failedOrder?.error).toBe("Network error");
+      // Строка идёт человеку на экран, поэтому по-русски: раньше здесь
+      // лежало сырое сообщение axios, и агент читал «Network error».
+      expect(failedOrder?.error).toBe("Нет связи с сервером. Проверьте интернет и попробуйте снова.");
       expect(failedOrder?.retryable).toBe(true);
     });
 
@@ -256,20 +250,24 @@ describe("isRetryableError", () => {
     expect(isRetryableError(gateway(404))).toBe(false);
   });
 
-  it("401 и 403 повторяет: это про доступ, а не про саму запись", () => {
-    // Здесь раньше стоял 403 рядом с 400 и 404 — как «сервер отказал».
-    // Но 401 и 403 говорят не о заказе, а о том, кем его прислали: токен
-    // истёк за ночь, подписку организации не продлили. Заказ при этом никто
-    // не рассматривал.
-    //
-    // Прежнее поведение хоронило смену целиком: retryable:false исключает
-    // запись из всех автоматических проходов, и после повторного входа в
-    // баннере оставались красные строки, которые агент мог только удалить.
-    //
-    // «Не ваш заказ» — тоже 403, и отличить его на клиенте нельзя; но такие
-    // записи до отправки не доходят, их отсеивает проверка владельца.
-    expect(isRetryableError(gateway(401))).toBe(true);
+  it("403 всё же повторяет — и это осознанный выбор", () => {
+    /*
+      Здесь проверка требовала обратного, и требовала не зря: 403 — отказ по
+      существу, повторять его бессмысленно.
+
+      Правило перевернули сознательно (см. isRetryableError в store/offline.ts).
+      Клиент не может отличить «этот заказ не ваш» от «у организации кончилась
+      подписка»: оба приходят как FORBIDDEN. Первый случай сюда не доходит —
+      чужие записи отсеивает проверка владельца. Второй в этом продукте
+      обычное дело, и после продления в офисе смена агента должна уехать сама,
+      а не ждать, пока он ткнёт «Повторить» на каждой из пятнадцати красных
+      строк.
+
+      Цена ошибки несимметрична: лишняя попытка — шум в сети, отказ от
+      попытки — потерянная работа за день.
+    */
     expect(isRetryableError(gateway(403))).toBe(true);
+    expect(isRetryableError(gateway(401))).toBe(true);
   });
 
   it("retries 408 and 429 despite them being 4xx", () => {
@@ -385,5 +383,37 @@ describe("uuidv4", () => {
   it("does not repeat itself", () => {
     const keys = Array.from({ length: 5000 }, uuidv4);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+// ── Как названа строка очереди ──────────────────────────────────────────────
+//
+// В списке неотправленных стояло «Доставлен #417» — номер строки в базе,
+// которого нет ни в накладной, ни в разговоре с оператором. Курьер с четырьмя
+// красными строками не мог сказать, какая точка не ушла.
+describe("deliveryActionTitle", () => {
+  it("называет заказ и магазин так, как они написаны на бумаге", () => {
+    const title = deliveryActionTitle({
+      id: "a1",
+      action: { type: "markDelivered", orderId: 417 },
+      orderNumber: "ORD-1042",
+      shopName: "Магазин Барака",
+      createdAt: "",
+      synced: false,
+    });
+    expect(title).toBe("Доставлен · ORD-1042 · Магазин Барака");
+    expect(title).not.toContain("417");
+  });
+
+  it("старая запись с диска не ломает экран, а показывает что есть", () => {
+    // Записи, созданные до этой правки, лежат у людей в телефонах без новых
+    // полей. Выбросить такую запись значило бы потерять отметку о доставке.
+    const title = deliveryActionTitle({
+      id: "a2",
+      action: { type: "completeDelivery", input: { orderId: 417, result: "paid" } },
+      createdAt: "",
+      synced: false,
+    });
+    expect(title).toBe("Доставка завершена · #417");
   });
 });

@@ -8,9 +8,20 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { format, parseISO } from "date-fns";
 import { ru } from "date-fns/locale";
+import { formatMoney } from "../../store/branding";
+import { ORDER_STATUSES } from "../../lib/order-status";
 
 export type IconName = keyof typeof Feather.glyphMap;
 
+/**
+ * Оформление статуса на экране заказа: градиент, значок, вид плашки, шаг.
+ *
+ * Слово берётся из общего справочника, а не пишется здесь. Таблиц названий было
+ * две, и они разошлись: тот же заказ на главной звался «В работе», а здесь — «В
+ * обработке», и агент думал, что статус сменился, пока он листал. Оформление
+ * остаётся местным: главной нужен один плоский цвет, а не градиент из двух, и
+ * тянуть туда весь этот модуль ради слова незачем.
+ */
 export const STATUS_CONFIG: Record<
   string,
   {
@@ -21,29 +32,40 @@ export const STATUS_CONFIG: Record<
     step: number;
   }
 > = {
-  new:                  { label: "Новый",              gradient: OrderStatusGradients.new,                 icon: "file-text",    badgeVariant: "info",    step: 0 },
-  processing:           { label: "В обработке",        gradient: OrderStatusGradients.processing,          icon: "loader",       badgeVariant: "warning", step: 1 },
-  shipped:              { label: "Отгружён",           gradient: OrderStatusGradients.shipped,             icon: "truck",        badgeVariant: "info",    step: 2 },
-  pending:              { label: "В ожидании",         gradient: OrderStatusGradients.pending,             icon: "clock",        badgeVariant: "warning", step: 2 },
-  delivered:            { label: "Доставлен",          gradient: OrderStatusGradients.delivered,           icon: "check-circle", badgeVariant: "success", step: 3 },
-  cancelled:            { label: "Отменён",            gradient: OrderStatusGradients.cancelled,           icon: "x-circle",     badgeVariant: "danger",  step: -1 },
-  returned:             { label: "Возврат",            gradient: OrderStatusGradients.returned,            icon: "rotate-ccw",   badgeVariant: "danger",  step: -1 },
-  partially_returned:   { label: "Возврат частично",  gradient: OrderStatusGradients.partially_returned,  icon: "rotate-ccw",   badgeVariant: "warning", step: 2 },
-  partial_return_kept:  { label: "Возврат (магазин)",  gradient: OrderStatusGradients.partial_return_kept, icon: "package",      badgeVariant: "warning", step: 2 },
+  new:                  { label: ORDER_STATUSES.new.label,                 gradient: OrderStatusGradients.new,                 icon: "file-text",    badgeVariant: "info",    step: 0 },
+  processing:           { label: ORDER_STATUSES.processing.label,          gradient: OrderStatusGradients.processing,          icon: "loader",       badgeVariant: "warning", step: 1 },
+  shipped:              { label: ORDER_STATUSES.shipped.label,             gradient: OrderStatusGradients.shipped,             icon: "truck",        badgeVariant: "info",    step: 2 },
+  pending:              { label: ORDER_STATUSES.pending.label,             gradient: OrderStatusGradients.pending,             icon: "clock",        badgeVariant: "warning", step: 2 },
+  delivered:            { label: ORDER_STATUSES.delivered.label,           gradient: OrderStatusGradients.delivered,           icon: "check-circle", badgeVariant: "success", step: 3 },
+  cancelled:            { label: ORDER_STATUSES.cancelled.label,           gradient: OrderStatusGradients.cancelled,           icon: "x-circle",     badgeVariant: "danger",  step: -1 },
+  returned:             { label: ORDER_STATUSES.returned.label,            gradient: OrderStatusGradients.returned,            icon: "rotate-ccw",   badgeVariant: "danger",  step: -1 },
+  partially_returned:   { label: ORDER_STATUSES.partially_returned.label,  gradient: OrderStatusGradients.partially_returned,  icon: "rotate-ccw",   badgeVariant: "warning", step: 2 },
+  partial_return_kept:  { label: ORDER_STATUSES.partial_return_kept.label, gradient: OrderStatusGradients.partial_return_kept, icon: "package",      badgeVariant: "warning", step: 2 },
 };
 
-export const PIPELINE_STEPS = ["Новый", "В обработке", "Отгружён", "Доставлен"];
+// Шаги диаграммы — те же слова, что и у статусов: «Отгружён» через ё здесь и
+// «Отгружен» на главной читались как два разных состояния.
+export const PIPELINE_STEPS = [
+  ORDER_STATUSES.new.label,
+  ORDER_STATUSES.processing.label,
+  ORDER_STATUSES.shipped.label,
+  ORDER_STATUSES.delivered.label,
+];
 
 export function fmt(dateStr: string) {
   try { return format(parseISO(dateStr), "d MMMM yyyy, HH:mm", { locale: ru }); }
   catch { return dateStr; }
 }
 
-export function money(val: string | number | undefined | null) {
-  const num = typeof val === "number" ? val : Number(String(val ?? "").replace(/[^\d.,-]/g, "").replace(",", "."));
-  if (isNaN(num) || !isFinite(num)) return "0 сум";
-  return num.toLocaleString("ru") + " сум";
-}
+/**
+ * Сумма со знаком валюты организации.
+ *
+ * Знак был вписан сюда строкой («сум») — организация, торгующая в другой
+ * валюте, видела свои цены подписанными чужими деньгами. Расчёт переехал в
+ * хранилище бренда, где знак и его сторона приходят из настроек арендатора;
+ * здесь остаётся имя, которым его зовут экраны заказов.
+ */
+export const money = formatMoney;
 
 export function makeStyles(colors: ThemeColors, topInset: number = 56) {
   return {

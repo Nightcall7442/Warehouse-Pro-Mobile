@@ -5,10 +5,13 @@ import React from "react";
 import { View, Text, TouchableOpacity, TouchableOpacityProps, ActivityIndicator, TextInput, ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
-import { Typography, Spacing, Radii, Shadows, Gradients, DarkShadowColor } from "../theme";
+import { Typography, Spacing, Radii, Shadows, Gradients, DarkShadowColor, soft } from "../theme";
+import { readableInk } from "../lib/contrast";
+import { ShimmerSkeleton } from "./Animated";
 import { useThemeColors, useThemeStore } from "../store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import { formatMoney } from "../store/branding";
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 // Neumorphic card: bg.card bg, dual shadow, top highlight line.
@@ -24,35 +27,25 @@ interface CardProps {
 export function Card({ children, style, onPress, variant = "default", haptic = true }: CardProps) {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const shadowColor = isDark ? DarkShadowColor : Shadows.card.shadowColor;
 
   const cardStyle: ViewStyle = {
     backgroundColor: variant === "accent" ? colors.brand.primaryDim : colors.bg.card,
     borderRadius: Radii.xxl,
     padding: Spacing["2xl"],
-    borderWidth: 0.5,
-    borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.7)",
-    // Neumorphic dual shadow: dark side (bottom-right) + light hint (top-left)
-    shadowColor,
-    shadowOffset: { width: isDark ? 4 : 6, height: isDark ? 4 : 6 },
-    shadowOpacity: isDark ? 0.45 : 0.32,
-    shadowRadius: isDark ? 10 : 14,
-    elevation: Shadows.card.elevation,
-    ...(variant === "flat" ? { shadowOpacity: 0, elevation: 0, borderColor: "transparent" } : null),
+    // Пара теней: светлая сверху-слева, серая снизу-справа. Рамки нет — в этом
+    // языке оформления карточка отделяется от холста объёмом, а не линией.
+    ...(variant === "flat" ? null : soft(isDark).raised),
   };
 
+  /*
+    overflow больше не скрывается.
+
+    Он стоял ради полоски-блика, которую надо было обрезать по скруглению. Тени
+    рисуются ЗА границей элемента, и обрезка съедала бы их целиком — карточка
+    снова стала бы плоской.
+  */
   const content = (
-    <View style={[cardStyle, { overflow: "hidden" }, style]}>
-      {/* Neumorphic top highlight line (gradient) */}
-      {variant !== "flat" && (
-        <LinearGradient
-          colors={["transparent", isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.45)", "transparent"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1 }}
-          pointerEvents="none"
-        />
-      )}
+    <View style={[cardStyle, style]}>
       {children}
     </View>
   );
@@ -87,6 +80,13 @@ const SIZE_PAD: Record<string, { v: number; h: number }> = {
   lg: { v: 16, h: 22 },
 };
 
+// Кнопка размера sm выходит около 34 точек в высоту — ниже 44, с которых
+// палец попадает надёжно. Поднимать отступ нельзя: он изменит высоту всех
+// кнопок sm сразу, а их рисуют по две в ряд на карточке доставки. Запас
+// добавлен только сверху и снизу: боковой налез бы на соседнюю кнопку, и
+// промах вместо «ничего не произошло» стал бы нажатием не того.
+const SM_HIT_SLOP = { top: 6, bottom: 6, left: 0, right: 0 };
+
 export function Button({
   children, variant = "primary", size = "md", loading, icon, fullWidth,
   style, disabled, onPress: _onPress, ...props
@@ -102,15 +102,33 @@ export function Button({
     _onPress?.(e);
   };
 
+  // Основная кнопка залита цветом бренда, а его выбирает арендатор. Белым
+  // здесь было прописано намертво: на тёмно-синем читается, на жёлтом или
+  // салатовом надпись исчезает. brand.ink считается по яркости заливки.
+  //
+  // «Опасно» и «Готово» страдали тем же, хотя цвета тут наши. У «опасно»
+  // заливка — status.dangerDim, ПРОЗРАЧНЫЙ красный в 10%: в светлой теме сквозь
+  // него просвечивает почти белая карточка, и белая надпись пропадала. Считать
+  // чернила по самой строке "rgba(212,80,80,0.10)" нельзя — readableInk знает
+  // только сплошной #rrggbb и на всё остальное отвечает белым, то есть ровно
+  // тем, что мы чиним. Поэтому берётся фон, который сквозь тинт и виден, —
+  // карточка.
+  const dangerInk = readableInk(colors.bg.card);
+  // У «Готово» заливка сплошная, но яркая-зелёная (#00e68a / #34c473) — белым по
+  // ней контраст около 2:1. Чернила считаются по первому краю градиента: именно
+  // он лежит под началом надписи.
+  const successInk = readableInk(Gradients.success[0]);
   const textColor =
-    variant === "primary" || variant === "danger" || variant === "success" ? "#fff"
+    variant === "primary" ? colors.brand.ink
+    : variant === "danger" ? dangerInk
+    : variant === "success" ? successInk
     : variant === "ghost" ? colors.brand.primary
     : colors.text.primary;
 
   const inner = (
     <>
       {loading ? (
-        <ActivityIndicator testID="button-loading" size="small" color={variant === "primary" || variant === "danger" || variant === "success" ? "#fff" : colors.accent.primary} />
+        <ActivityIndicator size="small" color={variant === "ghost" || variant === "secondary" ? colors.accent.primary : textColor} />
       ) : (
         <>
           {icon && <Feather name={icon} size={size === "sm" ? 15 : 17} color={textColor} style={{ marginRight: 7 }} />}
@@ -134,7 +152,7 @@ export function Button({
 
   if (variant === "primary" || variant === "success") {
     return (
-      <TouchableOpacity activeOpacity={0.85} disabled={isDisabled} onPress={handlePress} style={[fullWidth && { width: "100%" }, isDisabled && { opacity: 0.45 }, style as ViewStyle]} {...props}>
+      <TouchableOpacity activeOpacity={0.85} disabled={isDisabled} onPress={handlePress} hitSlop={size === "sm" ? SM_HIT_SLOP : undefined} style={[fullWidth && { width: "100%" }, isDisabled && { opacity: 0.45 }, style as ViewStyle]} {...props}>
         <LinearGradient colors={variant === "success" ? Gradients.success : Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[base, { paddingVertical: pad.v, paddingHorizontal: pad.h }]}>
           {inner}
@@ -152,6 +170,7 @@ export function Button({
   return (
     <TouchableOpacity
       activeOpacity={0.75} disabled={isDisabled} onPress={handlePress}
+      hitSlop={size === "sm" ? SM_HIT_SLOP : undefined}
       style={[base, variantStyle, { paddingVertical: pad.v, paddingHorizontal: pad.h, shadowColor, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity, shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation }, fullWidth && { width: "100%" }, isDisabled && { opacity: 0.45 }, style as ViewStyle]}
       {...props}
     >
@@ -236,7 +255,15 @@ export function SearchInput({ value, onChangeText, placeholder = "Поиск…"
         autoCapitalize="none"
       />
       {!!value && (
-        <TouchableOpacity onPress={() => onChangeText("")}>
+        // Голая иконка в 15 точек — цель размером с саму иконку. Агент на ходу
+        // промахивался мимо крестика и попадал в поле, а поле открывает
+        // клавиатуру: вместо очистки запроса — лишний экран. Запас в 14 точек
+        // взят у «глаза» пароля на входе, там та же беда уже вылечена.
+        <TouchableOpacity
+          onPress={() => onChangeText("")}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          accessibilityLabel="Очистить поиск"
+        >
           <Feather name="x" size={15} color={colors.text.muted} />
         </TouchableOpacity>
       )}
@@ -275,15 +302,14 @@ export function ScreenHeader({ title, subtitle, right, style }: {
   );
 }
 
-// ── Skeleton (shimmer) ───────────────────────────────────────────────────────
-export function Skeleton({ width, height, style, radius }: { width?: number | string; height: number; style?: ViewStyle; radius?: number }) {
-  return (
-    <View style={[
-      { height, borderRadius: radius ?? Radii.xl, backgroundColor: "rgba(0,0,0,0.04)", overflow: "hidden" },
-      width ? { width: width as number } : { width: "100%" },
-      style,
-    ]} />
-  );
+// ── Skeleton ─────────────────────────────────────────────────────────────────
+// Заливка была прописана намертво — rgba(0,0,0,0.04), чёрное по чёрному: в
+// тёмной теме экран выбора магазина во время загрузки выглядел просто чёрным
+// полем, и агент не понимал, идёт загрузка или список пуст. ShimmerSkeleton
+// тему уже знает, поэтому здесь остался только вызов: у Skeleton есть свои
+// вызывающие (app/order/new.tsx), их подпись не трогаем.
+export function Skeleton(props: { width?: number | string; height: number; style?: ViewStyle; radius?: number }) {
+  return <ShimmerSkeleton {...props} />;
 }
 
 // ── Empty State ──────────────────────────────────────────────────────────────
@@ -321,6 +347,7 @@ export function PlanCard({ plan, showCity, dimmed, loading, onVisit, onSkip }: {
   const colors = useThemeColors();
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
   const statusColor = plan.status === "visited" ? colors.accent.success : plan.status === "skipped" ? colors.accent.warning : colors.accent.info;
+  const doneInk = readableInk(colors.accent.success);
 
   return (
     <View style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, padding: 14, marginBottom: 10, ...Shadows.panel, opacity: dimmed ? 0.6 : 1 }}>
@@ -330,7 +357,7 @@ export function PlanCard({ plan, showCity, dimmed, loading, onVisit, onSkip }: {
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.secondary, marginTop: 2 }} numberOfLines={1}>
             {plan.shopAddress ?? "Адрес не указан"}{showCity && plan.shopCity ? ` · ${plan.shopCity}` : ""}
           </Text>
-          {hasDebt && <Text style={{ fontFamily: Typography.fontMono, fontSize: 12, color: colors.accent.danger, marginTop: 4 }}>Долг: {Number(plan.shopDebt).toLocaleString("ru")} сум</Text>}
+          {hasDebt && <Text style={{ fontFamily: Typography.fontMono, fontSize: 12, color: colors.accent.danger, marginTop: 4 }}>Долг: {formatMoney(plan.shopDebt)}</Text>}
         </View>
         <View style={{ backgroundColor: statusColor + "18", paddingHorizontal: 9, paddingVertical: 4, borderRadius: Radii.full }}>
           <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: statusColor }}>{STATUS_LABEL[plan.status as PlanStatus] ?? plan.status}</Text>
@@ -341,8 +368,11 @@ export function PlanCard({ plan, showCity, dimmed, loading, onVisit, onSkip }: {
           {onVisit && (
             <TouchableOpacity onPress={onVisit} disabled={!!loading}
               style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.accent.success, borderRadius: Radii.md, paddingVertical: 9, opacity: loading ? 0.6 : 1 }}>
-              {loading ? <ActivityIndicator size={13} color="#fff" /> : <Feather name="check-circle" size={13} color="#fff" />}
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, color: "#fff" }}>Готово</Text>
+              {/* Та же беда, что у кнопки «Готово» в Button: заливка — яркий
+                  зелёный, а надпись была прописана белым. Контраст около 2:1,
+                  на солнце подпись не читается вовсе. */}
+              {loading ? <ActivityIndicator size={13} color={doneInk} /> : <Feather name="check-circle" size={13} color={doneInk} />}
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, color: doneInk }}>Готово</Text>
             </TouchableOpacity>
           )}
           {onSkip && (

@@ -100,6 +100,16 @@ jest.mock("../components/SecureImage", () => ({ SecureImage: () => null }));
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ planId: "5", shopId: "7", shopName: "Магазин у дома" }),
   router: { back: jest.fn(), push: jest.fn() },
+  useRouter: () => ({ back: jest.fn(), push: jest.fn(), replace: jest.fn() }),
+  // Экраны подписываются на фокус вкладки: перечитывают данные и
+  // возвращаются к началу списка. Без этой заглушки тест падал бы на
+  // отсутствующей функции, а не на поведении экрана.
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    // Настоящий вызывается один раз на фокус. Заглушка, звавшая обработчик в
+    // теле компонента, раскручивала цикл: отрисовка → запрос → отрисовка.
+    const { useEffect } = require("react");
+    useEffect(() => cb(), []);
+  },
 }));
 
 jest.mock("expo-image-picker", () => ({
@@ -339,7 +349,7 @@ describe("catalog: поиск и офлайн-кэш", () => {
     render(withQueryClient(React.createElement(CatalogScreen)));
     await waitFor(() => expect(api.getProducts).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockStore["cached_products"]).toBeTruthy());
-    return screen.getByPlaceholderText("Поиск товаров...");
+    return screen.getByPlaceholderText("Поиск товаров…");
   }
 
   async function type(input: HTMLElement, values: string[]) {

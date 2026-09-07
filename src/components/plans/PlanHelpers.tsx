@@ -1,13 +1,23 @@
 import { type ReactNode } from "react";
 import { View, Text, TouchableOpacity, Modal, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { format } from "date-fns";
 import type { Plan } from "../../api";
-import { Typography, Spacing, Radii, Shadows, ThemeColors } from "../../theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Typography, Spacing, Radii, ThemeColors, soft } from "../../theme";
 import { PressableScale } from "../Animated";
 
+/**
+ * День для запроса — по местному календарю, а не по Гринвичу.
+ *
+ * toISOString переводит время в UTC, поэтому в Ташкенте (+5) с полуночи до
+ * пяти утра эта строка отставала на сутки. Над списком стояло «7 сентября»
+ * (там местные toLocaleDateString и getDate), а планы приезжали за 6-е — и
+ * супервайзер, раздающий маршруты рано утром, назначал визиты на вчера. Агент
+ * их у себя не видел вовсе.
+ */
 export function fmtDate(d: Date): string {
-  return d.toISOString().split("T")[0];
+  return format(d, "yyyy-MM-dd");
 }
 
 export function getStatusMeta(status: Plan["status"], colors: ThemeColors) {
@@ -50,6 +60,7 @@ export function BottomSheet({
   colors: ThemeColors;
   children: ReactNode;
 }) {
+  // Шторка прижата к нижнему краю: системный отступ ей нужен свой.
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -61,17 +72,14 @@ export function BottomSheet({
             left: 0,
             right: 0,
             maxHeight: "86%",
+            // Шторка прижата к нижнему краю экрана, и без этого отступа её
+            // нижняя часть — а это кнопки «Создать» и «Отмена» — уходит под
+            // полосу жестов Android.
+            paddingBottom: insets.bottom,
             backgroundColor: colors.bg.secondary,
             borderTopLeftRadius: Radii.xxl,
             borderTopRightRadius: Radii.xxl,
             overflow: "hidden",
-            // Шторка прижата к самому низу экрана, а внизу Android рисует свою
-            // панель — полосу жестов или три кнопки. Без этого отступа нижняя
-            // часть содержимого (а это как раз кнопки «Создать» и «Отмена»)
-            // уходит под систему: их видно, но нажатие достаётся не
-            // приложению. Отступ поставлен здесь, в самой шторке, а не в
-            // каждом окне: тогда его нельзя забыть в новом.
-            paddingBottom: insets.bottom,
           }}
           onPress={e => e.stopPropagation()}
         >
@@ -142,7 +150,6 @@ export function SelectRow({
   isDark: boolean;
   onPress: () => void;
 }) {
-  const sc = isDark ? "#000" : Shadows.sm.shadowColor;
   return (
     <PressableScale onPress={onPress} haptic="selection" style={{ marginBottom: Spacing.sm }}>
       <View
@@ -152,14 +159,8 @@ export function SelectRow({
           gap: Spacing.md,
           backgroundColor: colors.bg.card,
           borderRadius: Radii.xl,
-          borderWidth: 1,
-          borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
           padding: Spacing.lg,
-          shadowColor: sc,
-          shadowOffset: Shadows.sm.shadowOffset,
-          shadowOpacity: Shadows.sm.shadowOpacity,
-          shadowRadius: Shadows.sm.shadowRadius,
-          elevation: Shadows.sm.elevation,
+          ...soft(isDark).raised,
         }}
       >
         <View

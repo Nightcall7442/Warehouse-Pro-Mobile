@@ -1,5 +1,6 @@
 // Warehouse Pro — Theme contrast tests
 import { DarkColors, LightColors } from "../theme";
+import { readableInk } from "../lib/contrast";
 
 describe("Theme Contrast", () => {
   // Helper to calculate relative luminance
@@ -47,5 +48,33 @@ describe("Theme Contrast", () => {
   it("light mode secondary text is readable", () => {
     const ratio = contrastRatio(LightColors.text.secondary, LightColors.bg.primary);
     expect(ratio).toBeGreaterThanOrEqual(3.0);
+  });
+
+  // Надписи на цветных кнопках.
+  //
+  // Раньше они были прописаны белым литералом. У «Опасно» заливка —
+  // status.dangerDim, прозрачный красный в 10%: в светлой теме сквозь него видна
+  // почти белая карточка, и надпись давала контраст около 1.1:1 — то есть
+  // пропадала. У «Готово» заливка яркая-зелёная, там выходило около 2:1.
+  //
+  // Проверяется не цвет, а порог: если кто-то снова впишет "#fff", тест упадёт.
+  describe("надписи на цветных кнопках", () => {
+    it("«Опасно»: чернила читаются на карточке, сквозь которую светит тинт", () => {
+      for (const palette of [DarkColors, LightColors]) {
+        expect(contrastRatio(readableInk(palette.bg.card), palette.bg.card)).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+
+    it("«Готово»: чернила читаются на зелёной заливке", () => {
+      for (const palette of [DarkColors, LightColors]) {
+        expect(contrastRatio(readableInk(palette.accent.success), palette.accent.success)).toBeGreaterThanOrEqual(3.0);
+      }
+    });
+
+    it("белый на этих заливках как раз и не проходит — иначе проверка ничего не стоит", () => {
+      expect(contrastRatio("#ffffff", LightColors.bg.card)).toBeLessThan(4.5);
+      expect(contrastRatio("#ffffff", LightColors.accent.success)).toBeLessThan(3.0);
+      expect(contrastRatio("#ffffff", DarkColors.accent.success)).toBeLessThan(3.0);
+    });
   });
 });

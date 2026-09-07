@@ -96,8 +96,11 @@ export function CreatePlanModal({
 
   return (
     <BottomSheet visible={visible} onClose={reset} title="Новый план визита" colors={colors}>
+      {/* Под полем примечания стоит «Создать план»: без этого первое
+          касание кнопки уходило на закрытие клавиатуры. */}
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingBottom: Spacing.lg }}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <FieldLabel colors={colors}>Агент *</FieldLabel>

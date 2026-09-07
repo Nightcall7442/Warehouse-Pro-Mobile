@@ -57,7 +57,10 @@
         }
       ],
       "expo-image-picker",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-font",
+      "expo-splash-screen",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

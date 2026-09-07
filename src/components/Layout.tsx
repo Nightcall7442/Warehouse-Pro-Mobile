@@ -5,11 +5,10 @@ import { View, Text, TouchableOpacity, ViewStyle, ScrollView } from "react-nativ
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useThemeColors, useThemeStore } from "../store/theme";
-import { Typography, Spacing, Radii, Shadows } from "../theme";
+import { Typography, Spacing, Radii, Shadows, BOTTOM_TAB_HEIGHT, soft } from "../theme";
 import { DarkShadowColor } from "../theme";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const BOTTOM_TAB_HEIGHT = 80;
 
 // ── PageContainer ────────────────────────────────────────────────────────────
 // Wraps every screen: sets background, safe-area padding, and standard bottom
@@ -272,7 +271,6 @@ interface CardProps {
 export function Card({ children, style, onPress, variant = "default" }: CardProps) {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  const sc = isDark ? DarkShadowColor : Shadows.sm.shadowColor;
 
   const cardStyle: ViewStyle = {
     backgroundColor:
@@ -281,29 +279,11 @@ export function Card({ children, style, onPress, variant = "default" }: CardProp
       colors.bg.card,
     borderRadius: Radii.xxl,
     padding: Spacing.base,
-    borderWidth: 1,
-    borderColor:
-      variant === "inset" ? "transparent" :
-      isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
-    ...(variant === "default" || variant === "accent"
-      ? {
-          shadowColor: sc,
-          shadowOffset: Shadows.sm.shadowOffset,
-          shadowOpacity: Shadows.sm.shadowOpacity,
-          shadowRadius: Shadows.sm.shadowRadius,
-          elevation: Shadows.sm.elevation,
-        }
-      : {}),
+    // «Вдавленный» вариант получает вдавленную грань, а не просто другой цвет:
+    // в этом языке оформления углубление показывают тенью внутрь.
+    ...(variant === "inset" ? soft(isDark).inset : {}),
+    ...(variant === "default" || variant === "accent" ? soft(isDark).raised : {}),
     ...(variant === "flat" ? { borderWidth: 0 } : {}),
-    ...(variant === "inset"
-      ? {
-          shadowColor: sc,
-          shadowOffset: { width: -2, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: -1,
-        }
-      : {}),
   };
 
   const content = (

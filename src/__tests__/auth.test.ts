@@ -1,15 +1,7 @@
 // Warehouse Pro — Auth store tests
 
 // Модуль авторизации чистит кэши предыдущего пользователя при выходе,
-// поэтому ему нужно хранилище. В тестовой среде нативного модуля нет.
-jest.mock("@react-native-async-storage/async-storage", () => ({
-  __esModule: true,
-  default: {
-    removeItem: jest.fn(async () => {}),
-    getAllKeys: jest.fn(async () => []),
-    multiRemove: jest.fn(async () => {}),
-  },
-}));
+// поэтому ему нужно хранилище. Подмена AsyncStorage — общая, в jest.setup.js.
 
 jest.mock("../storage", () => ({
   SecureStore: {

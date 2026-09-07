@@ -1,13 +1,15 @@
 // Warehouse Pro — Tabs Layout v2 (cold palette, no DarkShadowColor)
 import { useMemo } from "react";
 import { Tabs } from "expo-router";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import type { BottomTabBarProps } from "expo-router/tabs";
 import { View, Text, TouchableOpacity } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii } from "../../src/theme";
+import { Typography, Spacing, Radii, soft, raisedFaces } from "../../src/theme";
 import { useAuthStore } from "../../src/store/auth";
+import { isTabVisible } from "../../src/lib/tabs";
 
 type IconName = keyof typeof Feather.glyphMap;
 
@@ -43,48 +45,47 @@ function CustomTabBar(props: BottomTabBarProps) {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
-  const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
-  const isCourier = user?.role === "courier";
-  const isMerchandiser = user?.role === "merchandiser";
 
-  // Agent: Главная, Магазины, Каталог, Заказы, Профиль
-  // Supervisor: Главная, Магазины, Планы, Нормы
-  const ALWAYS_HIDDEN = ["gps", "barcode", "tracking", "plan"];
+  // Агент: Главная, Магазины, Каталог, Заказы, Профиль
+  // Надзор:  Главная, Магазины, Планы, Нормы, Карта
+  //
+  // Правило вынесено в src/lib/tabs.ts и проверяется тестом: его ошибка не
+  // выглядит поломкой — экран остаётся в приложении, просто до него нечем
+  // дойти. Так «Слежение» с картой агентов и пропало у супервайзеров.
+  const visibleRoutes = state.routes.filter((route: { name: string }) => isTabVisible(route.name, user?.role));
 
-  const visibleRoutes = state.routes.filter((route: { name: string }) => {
-    if (ALWAYS_HIDDEN.includes(route.name)) return false;
-    // Agent-only tabs
-    if (route.name === "catalog" || route.name === "orders") {
-      return !isSupervisor && !isCourier && !isMerchandiser;
-    }
-    // Профиль — ещё и доставщику: без него в панели остаётся один пункт.
-    if (route.name === "profile") {
-      return (!isSupervisor && !isMerchandiser) || isCourier;
-    }
-    // Доставки — работа доставщика, и до сих пор её не было в панели вовсе.
-    //
-    // «deliveries» лежал в списке всегда скрытых, поэтому у доставщика
-    // оставалась ровно одна вкладка — «Главная». На сам экран доставок он
-    // попадал с главной, но панель внизу этого экрана не показывала: человек
-    // стоял на странице, которой в панели нет.
-    if (route.name === "deliveries") return isCourier;
-    // Supervisor-only tabs
-    if (route.name === "plans" || route.name === "targets") {
-      return isSupervisor;
-    }
-    // Shops — visible for agent, supervisor, merchandiser
-    if (route.name === "shops") return !isCourier;
-    return true;
-  });
+  /*
+    На сканере панели быть не должно.
+
+    Она рисуется один раз на весь навигатор и стоит поверх содержимого,
+    занимая от нижнего края около 70 точек. Нижняя плашка сканера отбита от
+    края на 32 — то есть кнопка «Заказать этот товар» лежала под панелью
+    целиком. Агент наводил камеру, товар находился, а нажатие уходило в
+    «Каталог» или «Заказы»: экран менялся, заказ не создавался.
+
+    Прячем только здесь. У остальных скрытых экранов своей кнопки возврата
+    нет (у «Доставок», например, только заголовок), и убрав панель там, мы
+    оставили бы курьера вообще без видимой навигации. У сканера свой
+    «назад» есть.
+  */
+  if (state.routes[state.index]?.name === "barcode") return null;
 
   return (
     <View style={{ position: "absolute", left: Spacing.base, right: Spacing.base, bottom: insets.bottom > 0 ? insets.bottom + 8 : 20, alignItems: "center" }}>
+      {/*
+        Плашка цвета холста: в мягком неоморфизме она не светлее фона и не
+        полупрозрачна — от фона её отделяет только пара теней. Прозрачность
+        здесь была из другого языка оформления и вместе с рамкой давала
+        «стекло», которого в референсе нет.
+
+        overflow не скрывается: тень рисуется ЗА границей плашки, и обрезка
+        съела бы весь объём.
+      */}
       <View style={{
-        flexDirection: "row", width: "100%", borderRadius: Radii.xxl, overflow: "hidden",
-        borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.5)",
+        flexDirection: "row", width: "100%", borderRadius: Radii["2xl"],
         paddingHorizontal: Spacing.xs, paddingVertical: Spacing.xs,
-        backgroundColor: isDark ? "rgba(34,31,28,0.95)" : "rgba(239,237,234,0.95)",
-        shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: isDark ? 0.4 : 0.38, shadowRadius: 24, elevation: 16,
+        backgroundColor: colors.bg.primary,
+        ...soft(isDark).raisedLg,
       }}>
         {visibleRoutes.map((route: { name: string; key: string }) => {
           const { options } = descriptors[route.key];
@@ -113,11 +114,24 @@ function CustomTabBar(props: BottomTabBarProps) {
                 justifyContent: "center",
                 paddingVertical: 8,
                 borderRadius: Radii.lg,
-                backgroundColor: isFocused
-                  ? (isDark ? "rgba(0,212,255,0.12)" : "rgba(91,109,138,0.10)")
-                  : "transparent",
+                overflow: "hidden",
+                // Активная вкладка приподнята, а не залита цветом: объём
+                // читается и там, где цветное пятно теряется — на солнце и у
+                // тех, кто различает оттенки хуже.
+                ...(isFocused ? soft(isDark).raisedSm : null),
               }}
             >
+              {/* Грань выдавленной поверхности: светлее сверху-слева, темнее
+                  снизу-справа. Без неё вкладка выглядит наклейкой. */}
+              {isFocused && (
+                <LinearGradient
+                  colors={raisedFaces(isDark)}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+                  pointerEvents="none"
+                />
+              )}
               <Feather
                 name={iconName}
                 size={18}
@@ -196,7 +210,7 @@ export default function TabsLayout() {
         options={{ title: "Профиль", headerShown: false }}
       />
       <Tabs.Screen name="gps" options={{ tabBarButton: () => null }} />
-      <Tabs.Screen name="tracking" options={{ tabBarButton: () => null }} />
+      <Tabs.Screen name="tracking" options={{ title: "Карта", headerShown: false }} />
       <Tabs.Screen name="barcode" options={{ tabBarButton: () => null }} />
     </Tabs>
   );

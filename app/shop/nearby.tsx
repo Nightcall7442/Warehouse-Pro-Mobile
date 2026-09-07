@@ -12,6 +12,7 @@ import { getMyShops, type Shop } from "../../src/api";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useLocation, getDistanceKm, getEstimatedTime } from "../../src/hooks/useLocation";
+import { formatMoney } from "../../src/store/branding";
 
 function DistanceBadge({ distance }: { distance: number }) {
   const colors = useThemeColors();
@@ -47,7 +48,7 @@ function ShopCard({ shop, distance, estimatedTime, onSelect, colors, index }: {
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: colors.border.subtle, paddingTop: 12 }}>
             <View style={{ flex: 1 }}>
               {shop.debt && Number(shop.debt) > 0 && (
-                <Badge variant="danger" icon="alert-circle">Долг: {Number(shop.debt).toLocaleString("ru")} сум</Badge>
+                <Badge variant="danger" icon="alert-circle">Долг: {formatMoney(shop.debt)}</Badge>
               )}
             </View>
             <Button variant="primary" size="sm" icon="shopping-cart">Заказать</Button>

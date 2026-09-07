@@ -1,9 +1,40 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// Warehouse Pro — Design System v6
-// Neumorphic Soft UI — matches web redesign.
-// Light: warm beige canvas, raised cream cards. Dark: charcoal canvas, cyan accent.
-// Font: DM Sans
+// Warehouse Pro — язык оформления v7
+//
+// Мягкий неоморфизм: элемент цвета холста, объём даёт тень — светлый блик
+// сверху-слева и серая тень снизу-справа. Коралл — единственный акцент:
+// активная вкладка, следующая точка маршрута, кнопки действия, кольцо
+// прогресса. Шрифт Manrope.
+//
+// ── Что поменялось в v7 ───────────────────────────────────────────────────────
+//
+// Только ЗНАЧЕНИЯ токенов. Ни одно имя не убрано и не добавлено: экраны,
+// разметка и поведение остались как были — им незачем знать, что палитра
+// другая. Холст из тёплого бежевого стал прохладным серо-голубым, акцент из
+// сине-серого — коралловым.
+//
+// ── Про два коралла ───────────────────────────────────────────────────────────
+//
+// Их именно два, и это не небрежность. Яркий #f26d6d хорош заливкой и никуда
+// не годится надписью: на холсте #e7eaf0 у него контраст 2.4:1. Для надписей
+// и мелких знаков стоит затемнённый #d64a45 — 3.6:1, то есть годен для
+// крупного текста и элементов управления. Заливка живёт в brand и gradient,
+// надпись — в accent.
 // ──────────────────────────────────────────────────────────────────────────────
+
+import { isHexColor, readableInk, shade } from "./lib/contrast";
+
+/**
+ * Пара цветов для LinearGradient.
+ *
+ * Раньше каждый градиент объявлялся через `as const`, и его тип был не «две
+ * строки», а именно «#0099cc и #00b4e6». Пока палитра одна на всех, это
+ * незаметно; но цвет арендатора собирает палитру заново, и подставить в такое
+ * поле вычисленный цвет нельзя — тип не совпадает. Общий тип снимает запрет и
+ * при этом остаётся тем, что ждёт LinearGradient.
+ */
+type Gradient = readonly [string, string, ...string[]];
+const g = (from: string, to: string): Gradient => [from, to];
 
 export const DarkColors = {
   bg: {
@@ -22,7 +53,7 @@ export const DarkColors = {
     default: "#322e28",
     subtle: "#2a2622",
     strong: "#423d35",
-    focus: "#00d4ff",
+    focus: "#f26d6d",
     glass: "rgba(255,255,255,0.08)",
   },
   text: {
@@ -33,21 +64,37 @@ export const DarkColors = {
     inverse: "#1c1a17",
     onGlass: "rgba(237,233,227,0.92)",
   },
+  /*
+    Акцент тёмной темы — тот же коралл, только светлее.
+
+    Марка не должна меняться от переключателя темы: голубой в тёмной и
+    коралловый в светлой — это два разных приложения на одном телефоне.
+
+    Взят глубокий #e0554f, а не светлый #ff8b87: этот токен служит и заливкой
+    кнопки, поверх которой идёт БЕЛАЯ надпись. На светлом коралле она даёт
+    2.3:1 — то есть пропадает; на этом 3.8:1. Надписью на тёмном холсте он
+    тоже читается — 4.3:1.
+  */
   accent: {
-    primary: "#0099cc",
+    primary: "#e0554f",
     secondary: "#a78bfa",
     success: "#00e68a",
-    danger: "#ff4d6a",
+    danger: "#ff6b6b",
     warning: "#ffb020",
     info: "#00b4ff",
   },
   brand: {
-    primary: "#0099cc",
-    primaryLight: "#00b4e6",
+    primary: "#f26d6d",
+    primaryLight: "#ff8b87",
     secondary: "#a78bfa",
-    primaryDim: "rgba(0,153,204,0.12)",
-    glow: "rgba(0,153,204,0.35)",
-    glowSoft: "rgba(0,153,204,0.14)",
+    primaryDim: "rgba(242,109,109,0.16)",
+    glow: "rgba(242,109,109,0.35)",
+    glowSoft: "rgba(242,109,109,0.14)",
+    // Чернила поверх заливки brand.primary. Для нашего цвета это белый —
+    // как и было прописано по экранам. Цвет арендатора считает своё
+    // значение по яркости (withBrandColor), потому что белым по светлому
+    // фону надпись пропадает.
+    ink: "#ffffff",
   },
   status: {
     success: "#00e68a",
@@ -60,98 +107,190 @@ export const DarkColors = {
     info: "#00b4ff",
     infoDim: "rgba(0,180,255,0.18)",
   },
+  // Вкладка активна тем же кораллом, что и всё остальное: голубая вкладка
+  // рядом с коралловой кнопкой читалась бы как два разных приложения.
   tab: {
-    active: "#00d4ff",
+    active: "#ff8b87",
     inactive: "#756f64",
     bg: "rgba(34,31,28,0.92)",
     border: "rgba(255,255,255,0.06)",
   },
   gradient: {
-    primary: ["#0099cc", "#00b4e6"] as const,
-    primarySoft: ["rgba(0,153,204,0.16)", "rgba(167,139,250,0.06)"] as const,
-    success: ["#00e68a", "#3cd0b0"] as const,
-    warm: ["#ffb020", "#f09858"] as const,
-    danger: ["#ff4d6a", "#e878a8"] as const,
-    ocean: ["#0088cc", "#0099cc"] as const,
-    sunset: ["#f09858", "#e878a8"] as const,
-    profileHeader: ["#0099cc", "#00b4e6"] as const,
+    primary: g("#ff8b87", "#e0554f"),
+    primarySoft: g("rgba(242,109,109,0.16)", "rgba(167,139,250,0.06)"),
+    success: g("#00e68a", "#3cd0b0"),
+    warm: g("#ffb020", "#f09858"),
+    danger: g("#ff4d6a", "#e878a8"),
+    ocean: g("#5cb6ea", "#4aa8e0"),
+    sunset: g("#f09858", "#e878a8"),
+    profileHeader: g("#ff8b87", "#e0554f"),
   },
 };
 
 export const LightColors = {
+  /*
+    Холст и грани.
+
+    В неоморфизме карточка НЕ светлее фона — она того же цвета, а объём даёт
+    тень. Поэтому card равен primary. Приподнятые поверхности (kpi, активная
+    вкладка) собираются градиентом elevated → sunken, это те самые «блик
+    сверху-слева, тень снизу-справа» из референса.
+  */
   bg: {
-    primary: "#e8e6e1",
-    secondary: "#efedea",
-    card: "#efedea",
-    elevated: "#f2f0ec",
-    input: "#efedea",
-    overlay: "rgba(232,230,225,0.9)",
-    glass: "rgba(239,237,234,0.8)",
-    glassCard: "rgba(239,237,234,0.85)",
+    primary: "#e7eaf0",
+    secondary: "#eef1f5",
+    card: "#e7eaf0",
+    elevated: "#f4f6f9",
+    input: "#e7eaf0",
+    overlay: "rgba(231,234,240,0.9)",
+    glass: "rgba(238,241,245,0.8)",
+    glassCard: "rgba(238,241,245,0.85)",
     overlayDark: "rgba(0,0,0,0.4)",
-    glassButton: "rgba(255,255,255,0.5)",
+    glassButton: "rgba(255,255,255,0.55)",
   },
   border: {
-    default: "#d8d5cd",
-    subtle: "#e0ddd7",
-    strong: "#c4c0b8",
-    focus: "#5b6d8a",
+    default: "#d5dae3",
+    subtle: "#dde0e7",
+    strong: "#c3c8d2",
+    focus: "#f26d6d",
     glass: "rgba(0,0,0,0.05)",
   },
+  /*
+    Чернила.
+
+    primary — прямо из референса. А вот secondary и tertiary там заданы
+    светлее, чем читается: #6b7280 даёт на этом холсте 4.0:1, #9aa1ad — 2.2:1,
+    то есть подписи под числами на телефоне в руках, на солнце, разобрать было
+    бы нельзя. Тон сохранён — тот же прохладный серо-голубой, — но затемнён до
+    5.0:1 и 4.6:1.
+  */
   text: {
-    primary: "#2b2a28",
-    secondary: "#5e5b54",
-    tertiary: "#757168",
-    muted: "#757168",
+    primary: "#3b414c",
+    secondary: "#5c636f",
+    tertiary: "#626976",
+    muted: "#626976",
     inverse: "#ffffff",
-    onGlass: "rgba(43,42,40,0.92)",
+    onGlass: "rgba(59,65,76,0.92)",
   },
+  /*
+    Коралл здесь — для надписей и мелких знаков: 3.6:1, то есть крупный текст
+    и элементы управления. Заливка живёт в brand ниже.
+
+    А вот состояния остаются ЗАЛИВКАМИ и яркими, как были. Затемнить их
+    заманчиво, но на них ложатся надписи через readableInk, и стоит белому
+    начать читаться на зелёной кнопке — помощник перестаёт быть нужен и его
+    однажды тихо выкинут. Проверка в theme-contrast сторожит ровно это.
+  */
   accent: {
-    primary: "#5b6d8a",
-    secondary: "#94a3b8",
-    success: "#34c473",
-    danger: "#d45050",
-    warning: "#d4973a",
-    info: "#5a8fad",
+    primary: "#d64a45",
+    secondary: "#8e7cf0",
+    success: "#37c98b",
+    danger: "#f26d6d",
+    warning: "#f0a53a",
+    info: "#4aa8e0",
   },
+  // Коралл для заливки: кнопки, градиенты, кольца.
   brand: {
-    primary: "#5b6d8a",
-    primaryLight: "#4a5c78",
-    secondary: "#94a3b8",
-    primaryDim: "rgba(91,109,138,0.10)",
-    glow: "rgba(91,109,138,0.20)",
-    glowSoft: "rgba(91,109,138,0.08)",
+    primary: "#f26d6d",
+    primaryLight: "#ff8b87",
+    secondary: "#8e7cf0",
+    primaryDim: "rgba(242,109,109,0.14)",
+    glow: "rgba(242,109,109,0.30)",
+    glowSoft: "rgba(242,109,109,0.10)",
+    ink: "#ffffff",
   },
+  /*
+    Состояния: заливка яркая, надпись затемнённая.
+
+    Тот же приём, что у коралла, и по той же причине: #37c98b хорош кружком и
+    не читается словом.
+  */
   status: {
-    success: "#34c473",
-    successDim: "rgba(52,196,115,0.10)",
-    successGlow: "rgba(52,196,115,0.20)",
-    warning: "#d4973a",
-    warningDim: "rgba(212,151,58,0.10)",
-    danger: "#d45050",
-    dangerDim: "rgba(212,80,80,0.10)",
-    info: "#5a8fad",
-    infoDim: "rgba(90,143,173,0.10)",
+    success: "#37c98b",
+    successDim: "rgba(55,201,139,0.16)",
+    successGlow: "rgba(55,201,139,0.24)",
+    warning: "#f0a53a",
+    warningDim: "rgba(240,165,58,0.16)",
+    danger: "#f26d6d",
+    dangerDim: "rgba(242,109,109,0.14)",
+    info: "#4aa8e0",
+    infoDim: "rgba(74,168,224,0.15)",
   },
   tab: {
-    active: "#5b6d8a",
-    inactive: "#8a8478",
-    bg: "rgba(239,237,234,0.95)",
+    active: "#d64a45",
+    inactive: "#626976",
+    bg: "rgba(231,234,240,0.95)",
     border: "rgba(0,0,0,0.05)",
   },
   gradient: {
-    primary: ["#5b6d8a", "#4a5c78"] as const,
-    success: ["#34c473", "#28a862"] as const,
-    warm: ["#d4973a", "#c08530"] as const,
-    danger: ["#d45050", "#c04545"] as const,
-    ocean: ["#5a8fad", "#5b6d8a"] as const,
-    sunset: ["#d4973a", "#d45050"] as const,
-    primarySoft: ["rgba(91,109,138,0.10)", "rgba(148,163,184,0.05)"] as const,
-    profileHeader: ["#5b6d8a", "#4a5c78"] as const,
+    primary: g("#ff8b87", "#e0554f"),
+    success: g("#43d896", "#37c98b"),
+    warm: g("#f5b95c", "#f0a53a"),
+    danger: g("#ff8b87", "#e0554f"),
+    ocean: g("#5cb6ea", "#4aa8e0"),
+    sunset: g("#f0a53a", "#f26d6d"),
+    primarySoft: g("rgba(242,109,109,0.14)", "rgba(142,124,240,0.06)"),
+    profileHeader: g("#ff8b87", "#e0554f"),
   },
 };
 
 export type ThemeColors = typeof DarkColors | typeof LightColors;
+
+/**
+ * Палитра с основным цветом арендатора.
+ *
+ * Цвет из брендинга раньше никуда не попадал: белая метка задавала его в
+ * настройках, а приложение продолжало красить кнопки и вкладки своим голубым.
+ * Здесь он заменяет ровно те места, где цвет означает «наш бренд» — заливки,
+ * акцент, активную вкладку, рамку фокуса, — и не трогает статусы (успех,
+ * ошибка, предупреждение): их цвет означает состояние, а не принадлежность,
+ * и перекрасить его в фирменный значит отнять смысл.
+ */
+function withBrandColor(base: ThemeColors, primary: string): ThemeColors {
+  const second = shade(primary);
+  return {
+    ...base,
+    accent: { ...base.accent, primary },
+    border: { ...base.border, focus: primary },
+    brand: {
+      ...base.brand,
+      primary,
+      primaryLight: second,
+      // Прозрачность добавляется восемью знаками (#rrggbbaa) — так же, как
+      // это уже делают экраны (colors.status.danger + "30").
+      primaryDim: primary + "1f",
+      glow: primary + "59",
+      glowSoft: primary + "24",
+      ink: readableInk(primary),
+    },
+    tab: { ...base.tab, active: primary },
+    gradient: {
+      ...base.gradient,
+      primary: g(primary, second),
+      profileHeader: g(primary, second),
+    },
+  };
+}
+
+/**
+ * Цвет арендатора живёт здесь, а не в аргументе updateColors.
+ *
+ * Переключатель темы зовёт updateColors(isDark) из нескольких мест, и, будь
+ * цвет аргументом, при первом же переключении темы он потерялся бы —
+ * приложение вернулось бы к голубому до следующего запроса брендинга.
+ */
+let brandPrimary: string | null = null;
+
+/** Задать (или снять — при выходе) основной цвет арендатора. */
+export function setBrandPrimary(hex: string | null): void {
+  brandPrimary = isHexColor(hex) ? hex : null;
+}
+
+/** Палитра темы с учётом цвета арендатора, если он задан. */
+export function paletteFor(isDark: boolean): ThemeColors {
+  const base = isDark ? DarkColors : LightColors;
+  return brandPrimary ? withBrandColor(base, brandPrimary) : base;
+}
 
 // Colors will be updated by theme store - initially dark
 // NOTE: Components should use useThemeColors() hook instead of importing Colors directly
@@ -160,20 +299,29 @@ export let Colors: ThemeColors = DarkColors;
 
 // Function to update Colors when theme changes
 export function updateColors(isDark: boolean) {
-  Colors = isDark ? DarkColors : LightColors;
-  Gradients = buildGradients(isDark);
+  Colors = paletteFor(isDark);
+  Gradients = buildGradients(Colors);
 }
 
 // ── Typography ────────────────────────────────────────────────────────────────
 export const Typography = {
-  fontDisplay: "DMSans_800ExtraBold",
-  fontBody: "DMSans_400Regular",
-  fontRegular: "DMSans_400Regular",
-  fontMedium: "DMSans_500Medium",
-  fontSemibold: "DMSans_600SemiBold",
-  fontBold: "DMSans_700Bold",
-  fontExtraBold: "DMSans_800ExtraBold",
-  fontMono: "Courier New",
+  fontDisplay: "Manrope_800ExtraBold",
+  fontBody: "Manrope_400Regular",
+  fontRegular: "Manrope_400Regular",
+  fontMedium: "Manrope_500Medium",
+  fontSemibold: "Manrope_600SemiBold",
+  fontBold: "Manrope_700Bold",
+  fontExtraBold: "Manrope_800ExtraBold",
+  /*
+    Ставится там, где цифры выравниваются по колонкам: артикулы, счётчики
+    визитов, суммы, координаты. Взят только обычный: полужирного начертания
+    нет ни в одном месте вызова, а лишний файл шрифта — лишний вес сборки.
+
+    JetBrains Mono, а не DM Mono: на чипах состояния рядом с цифрами стоят
+    русские слова («Посещён», «Следующий»), а у DM Mono кириллицы нет — строка
+    набиралась бы двумя разными шрифтами сразу.
+  */
+  fontMono: "JetBrainsMono_400Regular",
   size: {
     xs: 11,
     sm: 13,
@@ -238,59 +386,62 @@ export const Radii = {
 // Neumorphic shadow system — matches web index.css.
 // RN can't do true dual-tone (light+dark sides), so we use the dominant
 // dark-side shadow. The top highlight line in ui.tsx Card compensates.
-// Light: warm muted tone (#a0988c). Dark: pure black.
+// Светлая тема: прохладный серо-голубой #c3c8d2 — тот же тон, что у холста,
+// только темнее. Прежний тёплый бежевый на новом холсте отдавал грязью: тень
+// в неоморфизме обязана быть цветом фона, иначе объём читается как пятно.
+// Тёмная: чистый чёрный.
 export const Shadows = {
   xs: {
-    shadowColor: "#a0988c",
+    shadowColor: "#c3c8d2",
     shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 0.22,
     shadowRadius: 4,
     elevation: 1,
   },
   sm: {
-    shadowColor: "#a0988c",
+    shadowColor: "#c3c8d2",
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 0.28,
     shadowRadius: 8,
     elevation: 2,
   },
   md: {
-    shadowColor: "#a0988c",
+    shadowColor: "#c3c8d2",
     shadowOffset: { width: 6, height: 6 },
     shadowOpacity: 0.32,
     shadowRadius: 16,
     elevation: 4,
   },
   lg: {
-    shadowColor: "#a0988c",
+    shadowColor: "#c3c8d2",
     shadowOffset: { width: 8, height: 8 },
     shadowOpacity: 0.38,
     shadowRadius: 24,
     elevation: 8,
   },
   xl: {
-    shadowColor: "#a0988c",
+    shadowColor: "#c3c8d2",
     shadowOffset: { width: 10, height: 10 },
     shadowOpacity: 0.4,
     shadowRadius: 32,
     elevation: 12,
   },
   card: {
-    shadowColor: "#a0988c",
+    shadowColor: "#c3c8d2",
     shadowOffset: { width: 7, height: 7 },
     shadowOpacity: 0.35,
     shadowRadius: 14,
     elevation: 4,
   },
   panel: {
-    shadowColor: "#a0988c",
+    shadowColor: "#c3c8d2",
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 0.28,
     shadowRadius: 8,
     elevation: 2,
   },
   panelRaised: {
-    shadowColor: "#a0988c",
+    shadowColor: "#c3c8d2",
     shadowOffset: { width: 6, height: 6 },
     shadowOpacity: 0.32,
     shadowRadius: 16,
@@ -318,7 +469,7 @@ export const Shadows = {
     elevation: 6,
   },
   inner: {
-    shadowColor: "#a0988c",
+    shadowColor: "#c3c8d2",
     shadowOffset: { width: -3, height: -3 },
     shadowOpacity: 0.28,
     shadowRadius: 6,
@@ -330,6 +481,89 @@ export const Shadows = {
 // switch from the warm neumorphic tone (light) to plain black (dark), since
 // a light-toned shadow reads muddy on a charcoal canvas.
 export const DarkShadowColor = "#000000";
+
+// ── Мягкий объём ──────────────────────────────────────────────────────────────
+//
+// Пара теней на элемент: светлая сверху-слева, тёмная снизу-справа. Элемент при
+// этом цвета холста — объём даёт только тень. Это и есть язык референса.
+//
+// «Вдавленное» (inset) — не украшение, а состояние: нажатая карточка, жёлоб
+// сегмент-контрола, лунка под значком. Палец видит, что нажатие принято, без
+// смены цвета.
+//
+// Значения — из референса: 4/9 у мелкого, 6/13 у карточки, 7/16 у крупного,
+// 2/5 и 3/7 у вдавленного.
+
+/** Светлая тема: тень цвета холста, но темнее; блик — чистый белый. */
+const LIGHT_DARK_FACE = "#c3c8d2";
+const LIGHT_LIGHT_FACE = "#ffffff";
+
+/*
+  Тёмная тема: белым бликом здесь пользоваться нельзя — на угольном холсте он
+  читается как засветка, а не как грань. Берётся едва заметный, и тень при этом
+  глубже: на тёмном фоне тень работает сильнее блика, а не наравне.
+*/
+const DARK_DARK_FACE = "rgba(0,0,0,0.55)";
+const DARK_LIGHT_FACE = "rgba(255,255,255,0.05)";
+
+type Shadow = { offsetX: number; offsetY: number; blurRadius: number; color: string; inset?: boolean };
+
+function pair(d: number, blur: number, dark: string, light: string): { boxShadow: Shadow[] } {
+  return {
+    boxShadow: [
+      { offsetX: d,  offsetY: d,  blurRadius: blur, color: dark },
+      { offsetX: -d, offsetY: -d, blurRadius: blur, color: light },
+    ],
+  };
+}
+
+function sunken(d: number, blur: number, dark: string, light: string): { boxShadow: Shadow[] } {
+  return {
+    boxShadow: [
+      { offsetX: d,  offsetY: d,  blurRadius: blur, color: dark,  inset: true },
+      { offsetX: -d, offsetY: -d, blurRadius: blur, color: light, inset: true },
+    ],
+  };
+}
+
+function softSet(dark: string, light: string) {
+  return {
+    /** Мелкое: значок, чип, кнопка-иконка. */
+    raisedSm: pair(4, 9, dark, light),
+    /** Карточка списка, строка маршрута, плашка. */
+    raised:   pair(6, 13, dark, light),
+    /** Крупное: KPI, шапка профиля, панель вкладок. */
+    raisedLg: pair(7, 16, dark, light),
+    /** Лунка под значком, номер точки. */
+    insetSm:  sunken(2, 5, dark, light),
+    /** Жёлоб сегмент-контрола, нажатая карточка. */
+    inset:    sunken(3, 7, dark, light),
+  };
+}
+
+const SOFT = {
+  light: softSet(LIGHT_DARK_FACE, LIGHT_LIGHT_FACE),
+  dark:  softSet(DARK_DARK_FACE, DARK_LIGHT_FACE),
+};
+
+/**
+ * Набор теней под тему.
+ *
+ * Возвращает один и тот же объект на тему, а не собирает новый: стили попадают
+ * в списки зависимостей и в сравнение пропсов, и новый объект на каждую
+ * отрисовку сводил бы memo на нет.
+ */
+export const soft = (isDark: boolean) => (isDark ? SOFT.dark : SOFT.light);
+
+/**
+ * Грани приподнятой поверхности — для градиента.
+ *
+ * В референсе «выдавленный» элемент не плоский: сверху-слева он светлее
+ * холста, снизу-справа темнее. Это второй слой объёма после теней, и без него
+ * KPI-карточка выглядит наклейкой.
+ */
+export const raisedFaces = (isDark: boolean): readonly [string, string] =>
+  isDark ? ["#262320", "#1a1815"] : ["#f4f6f9", "#dde0e7"];
 
 // ── Order Status Gradients ──────────────────────────────────────────────────
 // Categorical palette for order-pipeline statuses (needs more distinct hues than
@@ -394,26 +628,69 @@ export const Timing = {
 // Static "always dark" surfaces (splash/header backgrounds) that don't flip
 // with the theme toggle.
 const StaticGradients = {
-  dark: ["#221f1c", "#1c1a17"] as const,
-  card: ["#262320", "#221f1c"] as const,
-  sheen: ["rgba(255,255,255,0.06)", "rgba(255,255,255,0)"] as const,
+  dark: g("#221f1c", "#1c1a17"),
+  card: g("#262320", "#221f1c"),
+  sheen: g("rgba(255,255,255,0.06)", "rgba(255,255,255,0)"),
 };
 
-const buildGradients = (isDark: boolean) => ({
+// Берёт готовую палитру, а не флаг темы: иначе цвет арендатора остался бы
+// только в Colors, а Gradients — те же кнопки и шапки — красились бы старым.
+const buildGradients = (palette: ThemeColors) => ({
   ...StaticGradients,
-  ...(isDark ? DarkColors.gradient : LightColors.gradient),
-  warning: (isDark ? DarkColors.gradient.warm : LightColors.gradient.warm),
+  ...palette.gradient,
+  warning: palette.gradient.warm,
 });
 
 // Mutable, kept in sync with Colors by updateColors() so screens that import
 // `Gradients` directly (without the theme hook) still pick up the cyan
 // (dark) / blue (light) brand gradient after a theme toggle re-render.
-export let Gradients: ReturnType<typeof buildGradients> = buildGradients(true);
+export let Gradients: ReturnType<typeof buildGradients> = buildGradients(DarkColors);
 
 // ── Safe bottom padding for Android navigation bar ────────────────────────────
 // On Android, insets.bottom can be 0 with 3-button nav, but the nav bar still
 // takes ~48px. This helper ensures buttons are always above the nav bar.
 import { Platform } from "react-native";
+/**
+ * Отступ снизу для содержимого ВНУТРИ модального окна.
+ *
+ * ── Почему отдельно от safeBottomPadding ────────────────────────────────────
+ *
+ * Modal в React Native — отдельное окно системы, и контекст безопасной зоны
+ * рассказывает про окно приложения, а не про него. На Android оттуда часто
+ * приходит ноль, и запас в 24 точки, которого хватает обычному экрану,
+ * оказывается меньше панели навигации: у телефонов с тремя кнопками она 48.
+ *
+ * Владелец дважды присылал снимок одного и того же: лист товара открыт, а
+ * кнопка «Добавить в заказ» наполовину лежит на системной панели и не
+ * нажимается. Поэтому здесь запас считается от высоты этой панели, а не от
+ * полоски жестов.
+ *
+ * Цена ошибки несимметрична: лишний отступ — это пустая полоса внизу листа,
+ * которую никто не заметит, а недостающий — кнопка, до которой нельзя
+ * дотянуться. Берём с запасом.
+ */
+export function modalBottomPadding(insetsBottom: number, extra = 0): number {
+  const ANDROID_NAV_BAR = 48;
+  if (Platform.OS === "android") return Math.max(insetsBottom, ANDROID_NAV_BAR) + extra;
+  return insetsBottom + extra;
+}
+
+/**
+ * Высота плавающей панели вкладок.
+ *
+ * Панель стоит position:"absolute" ПОВЕРХ содержимого — экран о ней не знает
+ * и обязан отбить низ сам, иначе последняя строка списка лежит под ней и не
+ * нажимается.
+ *
+ * Число жило внутри Layout.tsx, и каждый следующий экран заводил своё: тот же
+ * 80 отдельно лежал в orders.tsx и tracking.tsx. Три копии переживают первую
+ * же правку панели ровно наполовину — два экрана поправят, третий забудут.
+ *
+ * Место здесь, а не в Layout: theme.ts — файл размеров, а не компонентов, и
+ * экранам естественно брать отступ оттуда же, откуда они берут Spacing.
+ */
+export const BOTTOM_TAB_HEIGHT = 80;
+
 export function safeBottomPadding(insetsBottom: number, extra = 16): number {
   if (Platform.OS === "android") {
     return Math.max(insetsBottom, 24) + extra;

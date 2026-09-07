@@ -10,10 +10,8 @@ import {
 import { Card, IconCircle } from "../ui";
 import { FadeInItem } from "../Animated";
 import { money, makeStyles } from "./OrderStyles";
-
-const UNIT_LABELS: Record<string, string> = {
-  kg: "кг", l: "л", pcs: "шт", box: "блок", pack: "упак", m: "м", block: "блок",
-};
+import { unitShort } from "../../lib/units";
+import type { OrderDetail } from "../../api";
 
 /** Single product line in the order */
 function ItemRow({ name, code, qty, price, discount, total, colors, unit, deliveredQty, returnReason }: {
@@ -21,7 +19,10 @@ function ItemRow({ name, code, qty, price, discount, total, colors, unit, delive
   unit?: string; deliveredQty?: number | null; returnReason?: string | null;
 }) {
   const styles = makeStyles(colors);
-  const unitLabel = UNIT_LABELS[unit ?? "pcs"] ?? "шт";
+  // Единица — из общего справочника. Своя таблица была здесь третьей копией и
+  // расходилась с остальными: ящик (box) и блок (block) назывались одним словом
+  // «блок», и агент, сверяя позицию с накладной, различить их не мог.
+  const unitName = unitShort(unit);
   const hasPartial = deliveredQty != null && deliveredQty < qty;
   return (
     <View style={styles.itemRow}>
@@ -31,12 +32,12 @@ function ItemRow({ name, code, qty, price, discount, total, colors, unit, delive
         <View style={styles.itemMeta}>
           {hasPartial ? (
             <View>
-              <Text style={[styles.itemQty, { textDecorationLine: "line-through", color: colors.text.muted }]}>{qty} {unitLabel}</Text>
-              <Text style={[styles.itemQty, { color: colors.status.warning, fontFamily: Typography.fontBold }]}>Отдано: {deliveredQty} {unitLabel}</Text>
+              <Text style={[styles.itemQty, { textDecorationLine: "line-through", color: colors.text.muted }]}>{qty} {unitName}</Text>
+              <Text style={[styles.itemQty, { color: colors.status.warning, fontFamily: Typography.fontBold }]}>Отдано: {deliveredQty} {unitName}</Text>
               {returnReason && <Text style={[styles.itemCode, { color: colors.status.danger, marginTop: 2 }]}>{returnReason}</Text>}
             </View>
           ) : (
-            <Text style={styles.itemQty}>{qty} {unitLabel}</Text>
+            <Text style={styles.itemQty}>{qty} {unitName}</Text>
           )}
           {!!discount && discount > 0 && (
             <View style={styles.discountChip}>
@@ -48,14 +49,14 @@ function ItemRow({ name, code, qty, price, discount, total, colors, unit, delive
       </View>
       <View style={styles.itemRight}>
         <Text style={styles.itemTotal}>{money(total)}</Text>
-        <Text style={styles.itemPrice}>{money(price)} / {unitLabel}</Text>
+        <Text style={styles.itemPrice}>{money(price)} / {unitName}</Text>
       </View>
     </View>
   );
 }
 
 /** Items list card */
-export function OrderItemsList({ order, colors }: { order: any; colors: ThemeColors }) {
+export function OrderItemsList({ order, colors }: { order: OrderDetail; colors: ThemeColors }) {
   return (
     <FadeInItem delay={40}>
       {order.items && order.items.length > 0 ? (
@@ -65,7 +66,7 @@ export function OrderItemsList({ order, colors }: { order: any; colors: ThemeCol
             <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Товары ({order.items.length})</Text>
           </View>
           <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />
-          {order.items.map((item: any, idx: number) => (
+          {order.items.map((item, idx) => (
             <View key={item.id ?? idx}>
               <ItemRow
                 name={item.productName}
@@ -95,7 +96,7 @@ export function OrderItemsList({ order, colors }: { order: any; colors: ThemeCol
 
 /** Financial summary card */
 export function OrderFinancialSummary({ order, subtotal, discount, colors }: {
-  order: any; subtotal: number; discount: number; colors: ThemeColors;
+  order: OrderDetail; subtotal: number; discount: number; colors: ThemeColors;
 }) {
   return (
     <FadeInItem delay={80}>
@@ -122,7 +123,9 @@ export function OrderFinancialSummary({ order, subtotal, discount, colors }: {
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, paddingTop: 10 }}>
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.text.primary }}>Итого</Text>
           <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingHorizontal: 14, paddingVertical: 7 }}>
-            <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: "#fff" }}>{money(order.total)}</Text>
+            {/* Плашка итога залита фирменным цветом — цифра подбирается по
+                его яркости, иначе у светлого бренда сумма пропадает. */}
+            <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.brand.ink }}>{money(order.total)}</Text>
           </View>
         </View>
       </Card>

@@ -5,6 +5,7 @@ import { Platform } from "react-native";
 import { router } from "expo-router";
 import { registerPushToken, removePushToken } from "../api";
 import { useAuthStore } from "../store/auth";
+import { useBrandingStore } from "../store/branding";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -71,7 +72,11 @@ export function usePushNotifications() {
         // Android needs a notification channel
         if (Platform.OS === "android") {
           await Notifications.setNotificationChannelAsync("default", {
-            name: "Warehouse Pro",
+            // Имя канала сотрудник видит в настройках уведомлений Android —
+            // ещё одно место, где организации со своей маркой показывали имя
+            // поставщика. Канал заводится заново при каждом запуске, поэтому
+            // имя подтягивается из бренда, сохранённого на устройстве.
+            name: useBrandingStore.getState().branding.companyName,
             importance: Notifications.AndroidImportance.HIGH,
             vibrationPattern: [0, 250, 250, 250],
             lightColor: "#3b6fe0",
@@ -87,11 +92,24 @@ export function usePushNotifications() {
     // Listen for notification taps (foreground + background)
     const responseSubscription = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
 
-    // Handle notification that opened the app from killed state
+    /*
+      Уведомление уводит с главной только если приложение открыли ИМ.
+
+      getLastNotificationResponseAsync отдаёт последнее нажатое уведомление
+      вообще — оно живёт в системе и после перезапуска. Из-за этого каждый
+      обычный запуск приложения перебрасывал человека на экран заказа,
+      которое он открывал позавчера: агент жмёт значок на рабочем столе и
+      оказывается неизвестно где.
+
+      Свежесть считаем по времени нажатия: если с него прошло больше
+      полминуты, приложение открыли не им.
+    */
+    const OPENED_BY_TAP_WITHIN_MS = 30_000;
     Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response) {
-        handleNotificationResponse(response);
-      }
+      if (!response) return;
+      const tappedAt = response.notification?.date;
+      const fresh = typeof tappedAt === "number" ? Date.now() - tappedAt < OPENED_BY_TAP_WITHIN_MS : false;
+      if (fresh) handleNotificationResponse(response);
     });
 
     return () => {

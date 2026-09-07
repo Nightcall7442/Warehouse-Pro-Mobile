@@ -1,18 +1,5 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
-
-// Хранилище и сетевой слой — нативные модули; в тестовой среде их нет.
-// Подменяются так же, как в соседних тестах этого проекта.
-jest.mock("@react-native-async-storage/async-storage", () => ({
-  __esModule: true,
-  default: {
-    getItem: jest.fn(async () => null),
-    setItem: jest.fn(async () => {}),
-    removeItem: jest.fn(async () => {}),
-    getAllKeys: jest.fn(async () => []),
-    multiRemove: jest.fn(async () => {}),
-  },
-}));
-
+// Хранилище — нативный модуль, в тестовой среде его нет; подмена общая,
+// в jest.setup.js. Здесь подменяется только сетевой слой.
 jest.mock("../api", () => ({
   createOrder: jest.fn(),
   markOutForDelivery: jest.fn(),
@@ -67,8 +54,9 @@ describe("разбор ошибки: что считать сбоем доста
     // очередь и всплывал бы снова и снова, а курьер считал бы его принятым.
     expect(isRetryableError({ serverRejected: true, trpcMessage: "Недостаточно товара" })).toBe(false);
     expect(isRetryableError({ response: { status: 400 } })).toBe(false);
-    // 401 и 403 намеренно НЕ здесь: они говорят про доступ, а не про заказ,
-    // и повторяются — см. отдельный случай в offline.test.ts.
+    // 403 сюда больше не входит: клиент не отличает «заказ не ваш» от
+    // «у организации кончилась подписка», а чужие записи отсеивает проверка
+    // владельца выше. Подробности — в isRetryableError.
     expect(isRetryableError({ response: { status: 404 } })).toBe(false);
   });
 

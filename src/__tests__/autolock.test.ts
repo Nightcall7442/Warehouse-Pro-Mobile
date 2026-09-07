@@ -11,6 +11,7 @@
 let mockAppStateHandler: ((s: string) => void | Promise<void>) | null = null;
 
 jest.mock("react-native", () => ({
+  ...jest.requireActual("react-native"),
   AppState: {
     currentState: "active",
     addEventListener: (_event: string, handler: (s: string) => void) => {

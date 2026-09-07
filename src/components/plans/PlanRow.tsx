@@ -1,10 +1,12 @@
 import { View, Text } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { Plan } from "../../api";
-import { Typography, Spacing, Radii, Shadows, ThemeColors } from "../../theme";
+import { Typography, Spacing, Radii, ThemeColors, soft } from "../../theme";
 import { PressableScale } from "../Animated";
 import { Button } from "../ui";
 import { getStatusMeta } from "./PlanHelpers";
+import { formatMoney } from "../../store/branding";
+import { SecureImage } from "../SecureImage";
 
 export function PlanRow({
   plan,
@@ -28,7 +30,6 @@ export function PlanRow({
   loading?: boolean;
 }) {
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
-  const sc = isDark ? "#000" : Shadows.sm.shadowColor;
   const meta = getStatusMeta(plan.status, colors);
   const canAct = plan.status === "planned" && (onVisit || onSkip);
 
@@ -38,14 +39,8 @@ export function PlanRow({
       style={{
         backgroundColor: colors.bg.card,
         borderRadius: Radii.xxl,
-        borderWidth: 1,
-        borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
         padding: Spacing.xl,
-        shadowColor: sc,
-        shadowOffset: Shadows.sm.shadowOffset,
-        shadowOpacity: Shadows.sm.shadowOpacity,
-        shadowRadius: Shadows.sm.shadowRadius,
-        elevation: Shadows.sm.elevation,
+        ...soft(isDark).raised,
         opacity: plan.status === "visited" ? 0.7 : 1,
       }}
     >
@@ -129,6 +124,32 @@ export function PlanRow({
               </Text>
             </View>
           )}
+          {/*
+            Отметка визита: когда и чем подтверждена.
+
+            «Посещён» без времени не отличает утренний обход от отметки задним
+            числом вечером, а снимок, который нельзя открыть, ничего не
+            доказывает. Оба поля приезжают из getPlans; раньше сервер не отдавал
+            ни того, ни другого.
+          */}
+          {plan.status === "visited" && (plan.visitedAt || plan.photoUrl) && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
+              {plan.visitedAt && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Feather name="clock" size={10} color={colors.text.secondary} />
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.secondary }}>
+                    {new Date(plan.visitedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                  </Text>
+                </View>
+              )}
+              {plan.photoUrl && (
+                <SecureImage
+                  uri={plan.photoUrl}
+                  style={{ width: 32, height: 32, borderRadius: Radii.md }}
+                />
+              )}
+            </View>
+          )}
           {hasDebt && (
             <View
               style={{
@@ -151,7 +172,7 @@ export function PlanRow({
                   color: colors.status.danger,
                 }}
               >
-                {Number(plan.shopDebt).toLocaleString("ru")} сум
+                {formatMoney(plan.shopDebt)}
               </Text>
             </View>
           )}

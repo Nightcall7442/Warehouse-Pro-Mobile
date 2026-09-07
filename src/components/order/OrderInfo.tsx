@@ -67,7 +67,8 @@ export function LoadingState({ colors }: { colors: ThemeColors }) {
 
 /** Pipeline tracker — shows progress or cancelled */
 export function PipelineBanner({ status, colors }: { status: string; colors: ThemeColors }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.new;
+  // Незнакомое состояние не выдаётся за «Новый»: пропуск виден, неправда нет.
+  const cfg = STATUS_CONFIG[status] ?? { ...STATUS_CONFIG.new, label: status, step: 0 };
   if (status === "cancelled") {
     return (
       <Card style={{ flexDirection: "row", alignItems: "center", gap: 16, padding: Spacing.lg, marginTop: Spacing.base, marginBottom: Spacing.base, borderColor: colors.status.danger + "30", borderWidth: 1 }}>

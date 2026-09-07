@@ -1,16 +1,19 @@
 // Warehouse Pro — Barcode Scanner v2 (cold palette, Card, PressableScale)
-import { useState } from "react";
-import { View, Text, StyleSheet, Alert, useWindowDimensions } from "react-native";
+import { useCallback, useState } from "react";
+import { View, Text, StyleSheet, Alert, ActivityIndicator, useWindowDimensions } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Radii } from "../../src/theme";
+import { Typography, Radii, safeBottomPadding } from "../../src/theme";
 import { findByBarcode } from "../../src/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card } from "../../src/components/ui";
 import { PressableScale } from "../../src/components/Animated";
 import * as Haptics from "expo-haptics";
+import { formatMoney } from "../../src/store/branding";
+import { unitShort } from "../../src/lib/units";
+import { readableInk } from "../../src/lib/contrast";
 
 export default function BarcodeScannerScreen() {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
@@ -21,6 +24,26 @@ export default function BarcodeScannerScreen() {
   const [scanned, setScanned] = useState(false);
   const [foundProduct, setFoundProduct] = useState<{ id: number; code: string; name: string; unitPrice: string; unit: string; available: string } | null>(null);
   const [searching, setSearching] = useState(false);
+
+  // Чернила на кнопках, залитых цветом арендатора. Белый литерал поверх такой
+  // заливки — ошибка: у светлого бренда «Заказать этот товар» пропадала совсем,
+  // а это единственная кнопка, ради которой сюда приходят. Надписи поверх
+  // камеры остаются белыми — там фон затемнение, а не бренд.
+  const actionInk = readableInk(colors.accent.primary);
+
+  /*
+    Камера живёт только пока экран открыт.
+
+    Сканер — вкладка, а вкладки expo-router не размонтируются: после
+    router.back() предпросмотр оставался включённым до перезапуска приложения.
+    Пока агент работает в других разделах, камера продолжает потреблять
+    батарею — а телефон нужен ему до вечера.
+  */
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(useCallback(() => {
+    setFocused(true);
+    return () => setFocused(false);
+  }, []));
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
@@ -56,7 +79,7 @@ export default function BarcodeScannerScreen() {
         <Text style={{ fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 16, fontFamily: Typography.fontMedium }}>Нет доступа к камере</Text>
         <PressableScale onPress={requestPermission} haptic="medium">
           <View style={{ marginTop: 16, paddingVertical: 12, paddingHorizontal: 24, borderRadius: Radii.md, backgroundColor: colors.accent.primary }}>
-            <Text style={{ color: "#fff", fontFamily: Typography.fontSemibold }}>Разрешить</Text>
+            <Text style={{ color: actionInk, fontFamily: Typography.fontSemibold }}>Разрешить</Text>
           </View>
         </PressableScale>
       </View>
@@ -65,14 +88,16 @@ export default function BarcodeScannerScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
-      <CameraView
-        style={StyleSheet.absoluteFill}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-        barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39"] }}
-      />
+      {focused && (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39"] }}
+        />
+      )}
 
       {/* Overlay */}
-      <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: "space-between" }}>
+      <View style={[StyleSheet.absoluteFill, { justifyContent: "space-between" }]}>
         {/* Top bar */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: insets.top + 8, paddingBottom: 12 }}>
           <PressableScale onPress={() => router.back()} haptic="light">
@@ -102,41 +127,46 @@ export default function BarcodeScannerScreen() {
 
         {/* Нижняя панель.
             Стояло paddingBottom: 32 числом. На Android с полосой жестов или
-            тремя кнопками (Redmi, MIUI и почти всё современное) системная
-            панель занимает у нижнего края 24–48 точек, а поверх экрана ещё
-            висит плавающий таб-бар приложения — он абсолютный и места в
-            разметке не занимает.
-            Итог: кнопку «Заказать этот товар» видно, а нажать нельзя —
-            нижняя треть уходит под систему. Товар отсканирован, добавить в
-            заказ нечем. Верх того же оверлея insets.top учитывал, низ забыли.
-            Число ниже — то же, что на остальных вкладках: отступ системы
-            плюс высота плавающего бара. */}
-        <View style={{ padding: 20, paddingBottom: insets.bottom + 100 }}>
+            тремя кнопками системная панель занимает у нижнего края 24–48
+            точек, а поверх экрана ещё висит плавающий таб-бар приложения — он
+            абсолютный и места в разметке не занимает. Кнопка «Заказать этот
+            товар» лежала под ними и не нажималась. */}
+        <View style={{ padding: 20, paddingBottom: safeBottomPadding(insets.bottom, 20) }}>
           {searching ? (
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, paddingVertical: 20, borderRadius: Radii.lg, backgroundColor: colors.bg.overlay }}>
-              <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 3, borderColor: "rgba(255,255,255,0.3)", borderTopColor: "#fff" }} />
+              {/* Было кольцо из View с borderTopColor, но вращения ему никто не
+                  задавал: агент видел застывшее колечко и надпись «Поиск
+                  товара...» — экран выглядел зависшим, и он начинал тыкать в
+                  камеру повторно. */}
+              <ActivityIndicator size="small" color="#fff" />
               <Text style={{ color: "#fff", fontSize: Typography.size.md }}>Поиск товара...</Text>
             </View>
           ) : foundProduct ? (
+            /* Единица берётся из общего справочника. Раньше она выбиралась
+               двоичной проверкой: «pcs» — «шт», всё остальное — «кг». Литры,
+               метры, ящики, упаковки и блоки (пять кодов из семи) получали
+               чужую подпись: агент наводил камеру на ящик, читал «1 200 сум/кг»
+               и «Остаток: 40 кг» — и называл магазину цену за килограмм там,
+               где она за ящик. */
             <View style={{ gap: 10 }}>
               <Card style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{foundProduct.name}</Text>
-                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary, marginTop: 2 }}>{foundProduct.unitPrice} сум/{foundProduct.unit === "pcs" ? "шт" : "кг"}</Text>
+                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary, marginTop: 2 }}>{formatMoney(foundProduct.unitPrice)}/{unitShort(foundProduct.unit)}</Text>
                   {foundProduct.available && (
-                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>Остаток: {Number(foundProduct.available).toFixed(0)} {foundProduct.unit === "pcs" ? "шт" : "кг"}</Text>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>Остаток: {Number(foundProduct.available).toFixed(0)} {unitShort(foundProduct.unit)}</Text>
                   )}
                 </View>
                 <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); addToCart(); }} haptic="medium">
                   <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-                    <Feather name="plus" size={20} color="#fff" />
+                    <Feather name="plus" size={20} color={actionInk} />
                   </View>
                 </PressableScale>
               </Card>
               <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); addToCart(); }} haptic="medium">
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: Radii.lg, backgroundColor: colors.accent.primary }}>
-                  <Feather name="shopping-cart" size={18} color="#fff" />
-                  <Text style={{ color: "#fff", fontSize: Typography.size.md, fontFamily: Typography.fontSemibold }}>Заказать этот товар</Text>
+                  <Feather name="shopping-cart" size={18} color={actionInk} />
+                  <Text style={{ color: actionInk, fontSize: Typography.size.md, fontFamily: Typography.fontSemibold }}>Заказать этот товар</Text>
                 </View>
               </PressableScale>
             </View>

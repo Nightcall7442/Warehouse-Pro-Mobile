@@ -17,6 +17,7 @@ import { Card, Badge, Button } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
 import { preparePhoto } from "../../src/lib/prepare-photo";
 import { PressableScale, FadeInItem, ShimmerSkeleton } from "../../src/components/Animated";
+import { formatMoney } from "../../src/store/branding";
 
 function InfoRow({ icon, label, value, onPress, colors }: { icon: string; label: string; value: string; onPress?: () => void; colors: ThemeColors }) {
   const content = (
@@ -45,7 +46,14 @@ export default function ShopDetailScreen() {
   const [editData, setEditData] = useState<Partial<Record<string, string>>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [territoryId, setTerritoryId] = useState<number | undefined>(undefined);
+  // null — территорию на экране ещё не выбирали, показываем ту, что в карточке.
+  // Просто хранить число нельзя: «Без территории» — это тоже выбор, и он даёт
+  // undefined; при откате к значению карточки он бы молча отменялся.
+  //
+  // Раньше значение переносили из карточки в состояние эффектом — экран сначала
+  // рисовался с пустой территорией и лишь вторым проходом с настоящей.
+  const [pickedTerritory, setPickedTerritory] = useState<{ id: number | undefined } | null>(null);
+  const setTerritoryId = (id: number | undefined) => setPickedTerritory({ id });
 
   const { data: territories = [] } = useQuery({ queryKey: ["territories"], queryFn: getTerritories });
 
@@ -55,18 +63,8 @@ export default function ShopDetailScreen() {
     enabled: !!id,
   });
 
-  /**
-   * Территория магазина подставляется при отрисовке, а не эффектом.
-   *
-   * Эффект выполняется уже после кадра, поэтому выбор территории на мгновение
-   * показывался пустым, хотя у магазина она задана. Условная запись при
-   * отрисовке сходится за один лишний проход: после присвоения territoryId уже
-   * не undefined, и условие больше не выполняется.
-   */
   const shopTerritoryId = shop ? (shop as unknown as Record<string, unknown>).territoryId as number | undefined : undefined;
-  if (shopTerritoryId !== undefined && territoryId === undefined) {
-    setTerritoryId(shopTerritoryId);
-  }
+  const territoryId = pickedTerritory ? pickedTerritory.id : shopTerritoryId;
 
   const updateMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -222,7 +220,13 @@ export default function ShopDetailScreen() {
         </View>
       </TouchableOpacity>
 
+      {/* В режиме правки под полями стоят «Сохранить» и «Отмена», и первое
+          касание при открытой клавиатуре по умолчанию уходит на её закрытие:
+          супервайзер правит адрес, жмёт «Сохранить» — ничего не происходит,
+          жмёт снова — сохраняется. Хуже того, второй промах он часто делает
+          по «Отмене» рядом и теряет правку целиком. */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await refetch(); setRefreshing(false); }} tintColor={colors.accent.primary} />}>
         {/* Debt banner */}
         <View style={{
@@ -235,7 +239,7 @@ export default function ShopDetailScreen() {
               {hasDebt ? "ТЕКУЩИЙ ДОЛГ" : "ЗАДОЛЖЕННОСТЬ"}
             </Text>
             <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size["2xl"], color: hasDebt ? colors.accent.danger : colors.accent.success }}>
-              {Number(shop.debt ?? 0).toLocaleString("ru")} сум
+              {formatMoney(shop.debt ?? 0)}
             </Text>
           </View>
           <Feather name={hasDebt ? "alert-circle" : "check-circle"} size={28} color={hasDebt ? colors.accent.danger : colors.accent.success} />

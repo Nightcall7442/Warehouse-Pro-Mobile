@@ -185,7 +185,7 @@ export default function GpsScreen() {
 
           {coords && state === "success" && (
             <View style={{ marginTop: Spacing.md, alignItems: "center", gap: Spacing.sm }}>
-              <Text style={{ fontSize: Typography.size.sm, fontFamily: "Courier New", color: colors.text.secondary, letterSpacing: 0.5 }}>{coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}</Text>
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMono, color: colors.text.secondary, letterSpacing: 0.5 }}>{coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}</Text>
               <AccuracyBar accuracy={coords.accuracy} colors={colors} />
             </View>
           )}
@@ -225,11 +225,11 @@ export default function GpsScreen() {
         <FadeInItem delay={100}>
           <Card style={{ alignItems: "center", paddingVertical: Spacing.lg }}>
             <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.muted, letterSpacing: 1.5, marginBottom: 4 }}>ПОСЛЕДНЯЯ ОТПРАВКА</Text>
-            <Text style={{ fontSize: Typography.size["2xl"], color: colors.text.primary, fontVariant: ["tabular-nums"], fontFamily: "Courier New" }}>
+            <Text style={{ fontSize: Typography.size["2xl"], color: colors.text.primary, fontVariant: ["tabular-nums"], fontFamily: Typography.fontMono }}>
               {lastSent.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </Text>
             {coords && (
-              <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 4, fontFamily: "Courier New" }}>
+              <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 4, fontFamily: Typography.fontMono }}>
                 {coords.lat.toFixed(5)}° N, {coords.lng.toFixed(5)}° E · ±{Math.round(coords.accuracy)} м
               </Text>
             )}

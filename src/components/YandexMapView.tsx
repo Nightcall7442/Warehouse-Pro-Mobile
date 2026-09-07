@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useImperativeHandle } from "react";
+import React, { useEffect, useRef, useState, useCallback, useImperativeHandle } from "react";
 import { View, Text } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import Constants from "expo-constants";
@@ -16,7 +16,19 @@ import Constants from "expo-constants";
 const configuredKey = String(
   Constants.expoConfig?.extra?.yandexMapsApiKey ?? process.env.EXPO_PUBLIC_YANDEX_MAPS_API_KEY ?? "",
 ).trim();
-const YANDEX_API_KEY = /^(YOUR_|CHANGE|<|xxx)/i.test(configuredKey) ? "" : configuredKey;
+/*
+  Запасной ключ — тот же, что уходит в веб-сборку.
+
+  На вебе карта супервайзера работала, в APK её не видели: eas.json не
+  передавал EXPO_PUBLIC_YANDEX_MAPS_API_KEY ни одному профилю сборки, в
+  app.json ключа тоже нет, и приложение уезжало к людям вообще без него.
+  Переменная окружения по-прежнему главнее — это правильное место для
+  собственного ключа; запасной нужен, чтобы карта не пропадала из-за
+  незаполненной настройки сборки.
+*/
+const FALLBACK_KEY = "dd072e98-24e7-4b2e-b328-2989bd981fa5";
+const looksLikePlaceholder = /^(YOUR_|CHANGE|<|xxx)/i.test(configuredKey);
+const YANDEX_API_KEY = !configuredKey || looksLikePlaceholder ? FALLBACK_KEY : configuredKey;
 
 export interface MapMarker {
   id: number;
@@ -84,7 +96,19 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number): string {
   <style>
     html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
   </style>
-  <script src="https://api-maps.yandex.ru/2.1/?apikey=${YANDEX_API_KEY}&lang=ru_RU"></script>
+  <script src="https://api-maps.yandex.ru/2.1/?apikey=${YANDEX_API_KEY}&lang=ru_RU"
+          onerror="report('script')"></script>
+  <script>
+    // Скрипт карт не загрузился (нет сети или ключ отклонён) — экран должен
+    // сказать это словами, а не остаться белым прямоугольником.
+    function report(reason) {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: "mapError", reason: reason }));
+      }
+    }
+    var readyFired = false;
+    setTimeout(function () { if (!readyFired) report("timeout"); }, 12000);
+  </script>
   <script>
     var markers = [];
     var map;
@@ -123,8 +147,10 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number): string {
       }
     }
 
-    function updateMarkers(list) {
-      markers = list || [];
+    function updateMarkers(json) {
+      // Разбор здесь, а не вклейка снаружи: имя агента — чужой текст, и
+      // разделители строк U+2028/U+2029 в нём ломали бы инъекцию целиком.
+      markers = JSON.parse(json) || [];
       if (!map) { pendingMarkers = markers; return; }
       renderMarkers();
     }
@@ -165,6 +191,8 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
   const webRef = useRef<WebView>(null);
   useImperativeHandle(ref, () => webRef.current as WebView);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
@@ -172,6 +200,7 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
         if (data.type === "markerClick" && onMarkerPress) {
           onMarkerPress(data.id);
         }
+        if (data.type === "mapError") setLoadError(String(data.reason ?? "unknown"));
       } catch {
         /* ignore */
       }
@@ -209,14 +238,14 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
     if (json === markersJsRef.current) return;
     markersJsRef.current = json;
     if (loadedRef.current) {
-      webRef.current?.injectJavaScript(`updateMarkers(${json}); true;`);
+      webRef.current?.injectJavaScript(`updateMarkers(${JSON.stringify(json)}); true;`);
     }
   }, [markers]);
 
   const handleLoadEnd = useCallback(() => {
     loadedRef.current = true;
     if (markersJsRef.current) {
-      webRef.current?.injectJavaScript(`updateMarkers(${markersJsRef.current}); true;`);
+      webRef.current?.injectJavaScript(`updateMarkers(${JSON.stringify(markersJsRef.current)}); true;`);
     }
   }, []);
 
@@ -227,6 +256,20 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
       <View style={[{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, style]}>
         <Text style={{ textAlign: "center", fontSize: 13, opacity: 0.7 }}>
           Карта недоступна: не задан ключ Яндекс.Карт. Его нужно передать сборке как EXPO_PUBLIC_YANDEX_MAPS_API_KEY.
+        </Text>
+      </View>
+    );
+  }
+
+  // Не загрузившаяся карта — белый прямоугольник, и по нему не отличить
+  // отклонённый ключ от пропавшей сети. Говорим словами, что случилось.
+  if (loadError) {
+    return (
+      <View style={[{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, style]}>
+        <Text style={{ textAlign: "center", fontSize: 13, opacity: 0.7 }}>
+          {loadError === "timeout"
+            ? "Карта не открылась: нет связи с Яндекс.Картами. Проверьте интернет и потяните экран вниз."
+            : "Карта не открылась: ключ Яндекс.Карт отклонён. Задайте свой ключ переменной EXPO_PUBLIC_YANDEX_MAPS_API_KEY при сборке."}
         </Text>
       </View>
     );

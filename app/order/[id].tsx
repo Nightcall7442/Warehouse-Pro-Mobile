@@ -30,6 +30,7 @@ import {
   Radii,
 } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
+import { isRetryableError } from "../../src/store/offline";
 import { PressableScale } from "../../src/components/Animated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -53,15 +54,14 @@ export default function OrderDetailScreen() {
   const queryClient = useQueryClient();
   const fadeIn = useSharedValue(0);
 
-  const { data: order, isLoading, isError, refetch, isFetching } = useQuery<OrderDetail>({
+  // Ошибка не подменяется. Раньше queryFn ловил ЛЮБУЮ и превращал её в «Заказ
+  // не найден» — вместе с обрывом связи, таймаутом и перезапуском сервера.
+  // Агент на слабой связи открывал свой же заказ и читал, что заказа нет, а
+  // ниже — что его, возможно, удалили или лишили прав. Он звонил в офис вместо
+  // того, чтобы просто повторить.
+  const { data: order, isLoading, isError, error, refetch, isFetching } = useQuery<OrderDetail>({
     queryKey: ["order", id],
-    queryFn: async () => {
-      try {
-        return await getOrderById(Number(id));
-      } catch {
-        throw new Error("Заказ не найден");
-      }
-    },
+    queryFn: () => getOrderById(Number(id)),
     enabled: !!id,
     staleTime: 30_000,
   });
@@ -195,16 +195,33 @@ export default function OrderDetailScreen() {
   if (isLoading) return <LoadingState colors={colors} />;
 
   if (isError || !order) {
+    // Запрос не дошёл — это про связь, а не про заказ: та же проверка, что
+    // решает, класть ли действие в очередь. Тогда заказ на месте, и человеку
+    // нужна кнопка «Повторить», а не рассказ про удаление и права.
+    const noConnection = isError && isRetryableError(error);
     return (
       <View style={styles.centered}>
-        <View style={[styles.errorIcon, { backgroundColor: colors.status.dangerDim }]}>
-          <Feather name="alert-triangle" size={28} color={colors.status.danger} />
+        <View style={[styles.errorIcon, { backgroundColor: noConnection ? colors.status.warningDim : colors.status.dangerDim }]}>
+          <Feather name={noConnection ? "wifi-off" : "alert-triangle"} size={28} color={noConnection ? colors.status.warning : colors.status.danger} />
         </View>
-        <Text style={styles.errorTitle}>Заказ не найден</Text>
-        <Text style={styles.errorSub}>Возможно, он был удалён или у вас нет доступа.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.errorBtn, { backgroundColor: colors.brand.primary, borderRadius: Radii.xl }]}>
-          <Feather name="arrow-left" size={16} color="#fff" />
-          <Text style={styles.errorBtnText}>Назад к заказам</Text>
+        <Text style={styles.errorTitle}>{noConnection ? "Заказ не загрузился" : "Заказ не найден"}</Text>
+        <Text style={styles.errorSub}>
+          {noConnection
+            ? "Нет связи с сервером. Заказ на месте — попробуйте ещё раз."
+            : "Возможно, он был удалён или у вас нет доступа."}
+        </Text>
+        {noConnection && (
+          <TouchableOpacity onPress={() => refetch()} style={[styles.errorBtn, { backgroundColor: colors.brand.primary, borderRadius: Radii.xl }]}>
+            <Feather name="refresh-cw" size={16} color="#fff" />
+            <Text style={styles.errorBtnText}>Повторить</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.errorBtn, { backgroundColor: noConnection ? colors.bg.elevated : colors.brand.primary, borderRadius: Radii.xl }]}
+        >
+          <Feather name="arrow-left" size={16} color={noConnection ? colors.text.primary : "#fff"} />
+          <Text style={[styles.errorBtnText, noConnection && { color: colors.text.primary }]}>Назад к заказам</Text>
         </TouchableOpacity>
       </View>
     );

@@ -1,4 +1,15 @@
 /**
+ * Хранилище zustand + persist на импорте тянет AsyncStorage, а его нативной
+ * части в jest нет — набор падал ещё до первого теста с «NativeModule:
+ * AsyncStorage is null». Подмена берётся готовая, из самого пакета: она хранит
+ * значения в памяти, то есть ведёт себя как настоящее хранилище, а не как
+ * набор пустышек.
+ */
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
+/**
  * Нативные модули Expo, которых в тестах нет.
  *
  * ── Что происходило ─────────────────────────────────────────────────────────
@@ -45,4 +56,33 @@ jest.mock("expo-location", () => ({
 
 jest.mock("expo-battery", () => ({
   getBatteryLevelAsync: jest.fn(async () => 1),
+}));
+
+/**
+ * TextEncoder/TextDecoder в среде jsdom.
+ *
+ * Тесты гоняются в jsdom, а он этих двух глобальных не даёт — они есть в
+ * браузере и в node, но не в его подделке под браузер. До SDK 57 это никого не
+ * трогало; в нём expo подменяет глобальный URL своей реализацией, та тянет
+ * кодировщик на импорте, и десяток наборов перестал запускаться вовсе — ещё до
+ * первой строки теста.
+ *
+ * Берутся настоящие, из node: подделка здесь была бы хуже отсутствия.
+ */
+const { TextEncoder, TextDecoder } = require("util");
+if (typeof global.TextEncoder === "undefined") global.TextEncoder = TextEncoder;
+if (typeof global.TextDecoder === "undefined") global.TextDecoder = TextDecoder;
+
+/**
+ * Отступы безопасной зоны в тестах.
+ *
+ * Нативной части у react-native-safe-area-context в jsdom нет, и любой экран,
+ * считающий отступ от системной панели, падал на импорте — ещё до первой
+ * проверки. Значения нулевые: тесты про отступы считают арифметику сами и
+ * подставляют свои числа.
+ */
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  SafeAreaProvider: ({ children }) => children,
+  SafeAreaView: ({ children }) => children,
 }));

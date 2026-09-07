@@ -1,5 +1,6 @@
 // Warehouse Pro — Tracking v2 (cold palette, Card component)
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useMemo, useRef, useState, useCallback } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   View,
   Text,
@@ -13,13 +14,17 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getAgentLocations, AgentLocation } from "../../src/api";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
+import { Typography, Spacing, Radii, KpiColors, BOTTOM_TAB_HEIGHT } from "../../src/theme";
 import { Card, ScreenHeader, Badge } from "../../src/components/ui";
 import { ShimmerSkeleton, PressableScale, FadeInItem } from "../../src/components/Animated";
 import YandexMapView, { centerOnAgent, fitAllMarkers } from "../../src/components/YandexMapView";
 import type { WebView } from "react-native-webview";
 
 const ONLINE_WINDOW = 600;
+
+// Высота плавающей панели вкладок. Третья копия одного числа в проекте:
+// в src/components/Layout.tsx оно объявлено без export, в app/(tabs)/orders.tsx
+// лежит своя копия. Экспортировать одну — правка чужого файла.
 
 function isOnline(createdAt: string | undefined): boolean {
   if (!createdAt) return false;
@@ -48,7 +53,23 @@ export default function TrackingScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [locations, setLocations] = useState<AgentLocation[]>([]);
+
+  /*
+    Опрос идёт, только пока экран открыт.
+
+    Вкладки не размонтируются: один раз открыв «Трекинг», супервайзер получал
+    запрос каждые 15 секунд до конца дня — и на других вкладках, и с телефоном
+    в кармане. Это 240 запросов в час к карте, которую никто не смотрит: на
+    тарифе с оплатой за мегабайты видно в счёте, на дешёвом аппарате — в
+    проценте заряда к обеду.
+  */
+  const [screenFocused, setScreenFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      return () => setScreenFocused(false);
+    }, []),
+  );
 
   const {
     data: polledLocations,
@@ -59,14 +80,18 @@ export default function TrackingScreen() {
   } = useQuery({
     queryKey: ["agentLocations"],
     queryFn: getAgentLocations,
-    refetchInterval: 15_000,
+    refetchInterval: screenFocused ? 15_000 : false,
     retry: 2,
   });
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (polledLocations) setLocations(polledLocations);
-  }, [polledLocations]);
+  /*
+    Ответ запроса и есть состояние экрана.
+
+    Раньше он ещё раз перекладывался в useState через эффект — лишняя отрисовка
+    на каждый ответ и подавленное предупреждение линтера. useMemo нужен ради
+    ссылки: список маркеров ниже пересобирается по ней, а не по содержимому.
+  */
+  const locations = useMemo<AgentLocation[]>(() => polledLocations ?? [], [polledLocations]);
 
   const onlineCount = locations.filter(l => isOnline(l.createdAt)).length;
   const offlineCount = locations.length - onlineCount;
@@ -79,12 +104,16 @@ export default function TrackingScreen() {
           id: l.agentId,
           lat: Number(l.lat),
           lng: Number(l.lng),
-          label: l.agentName ?? `Agent #${l.agentId}`,
+          // Подпись метки — по-русски, как в списке под картой. Когда сервер не
+          // прислал имя, на булавке стояла латинская «A» (берётся первая буква),
+          // а по нажатию открывалось «Agent #12» — при том, что тот же человек
+          // строкой ниже подписан «Агент #12».
+          label: l.agentName ?? `Агент #${l.agentId}`,
           color: isOnline(l.createdAt) ? KpiColors.teal : colors.text.muted,
           online: isOnline(l.createdAt),
           batteryLevel: l.batteryLevel ?? null,
         })),
-    [locations]
+    [locations, colors.text.muted]
   );
 
   const center = useMemo(() => {
@@ -130,9 +159,11 @@ export default function TrackingScreen() {
       {/* Stats */}
       <FadeInItem delay={0}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginHorizontal: Spacing.lg, marginTop: Spacing.md }}>
+          {/* «ОНЛАЙН» и «НЕ В СЕТИ» — одно и то же понятие, написанное на двух
+              языках, и стояли они рядом как пара. Оборот один на весь экран. */}
           {[
-            { label: "ОНЛАЙН", value: onlineCount, color: colors.status.success },
-            { label: "НЕ В СЕТИ", value: offlineCount, color: colors.status.warning },
+            { label: "НА СВЯЗИ", value: onlineCount, color: colors.status.success },
+            { label: "НЕ НА СВЯЗИ", value: offlineCount, color: colors.status.warning },
             { label: "ВСЕГО", value: locations.length, color: colors.accent.primary },
           ].map(k => (
             <Card key={k.label} style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
@@ -187,7 +218,7 @@ export default function TrackingScreen() {
               <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>{selectedLoc.agentName ?? `Агент #${selectedLoc.agentId}`}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
                 <Badge variant={isOnline(selectedLoc.createdAt) ? "success" : "warning"}>
-                  {isOnline(selectedLoc.createdAt) ? "Онлайн" : timeAgo(selectedLoc.createdAt)}
+                  {isOnline(selectedLoc.createdAt) ? "На связи" : timeAgo(selectedLoc.createdAt)}
                 </Badge>
                 {selectedLoc.batteryLevel != null && (
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: batteryColor(selectedLoc.batteryLevel) }}>🔋 {selectedLoc.batteryLevel}%</Text>
@@ -208,10 +239,14 @@ export default function TrackingScreen() {
       <FlatList
         data={locations}
         keyExtractor={l => String(l.id)}
-        // Плавающий таб-бар висит поверх и места в разметке не занимает, поэтому
-        // отступ снизу должен покрывать и системную полосу, и его высоту.
-        // Стояло +24 — последняя строка списка агентов уходила под бар.
-        contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 100 }}
+        /*
+          Панель вкладок стоит поверх экрана (position: absolute), места под
+          себя навигатор не резервирует, и отбить низ обязан каждый экран сам.
+          Отбито было 24 точки против примерно 80 занятых: супервайзер
+          долистывал список до конца и не мог нажать на последнего агента —
+          карточка наполовину под плашкой, касание уходило в кнопку вкладки.
+        */
+        contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.lg }}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.accent.primary} colors={[colors.accent.primary]} />
         }
@@ -245,7 +280,7 @@ export default function TrackingScreen() {
                   <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{loc.agentName ?? `Агент #${loc.agentId}`}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 }}>
                     <Badge variant={online ? "success" : "warning"}>
-                      {online ? "Онлайн" : timeAgo(loc.createdAt)}
+                      {online ? "На связи" : timeAgo(loc.createdAt)}
                     </Badge>
                     {loc.batteryLevel != null && (
                       <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: batteryColor(loc.batteryLevel) }}>🔋 {loc.batteryLevel}%</Text>

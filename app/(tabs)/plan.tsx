@@ -1,24 +1,27 @@
 // Warehouse Pro — Plan tab: monthly norms + today's visits + KPI
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
+import { useRefreshOnFocus } from "../../src/hooks/useRefreshOnFocus";
+import { useScrollTopOnFocus } from "../../src/hooks/useScrollTopOnFocus";
 import { View, Text, ScrollView, RefreshControl } from "react-native";
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Shadows, KpiColors } from "../../src/theme";
+import { Typography, Spacing, Radii, Shadows, KpiColors, BOTTOM_TAB_HEIGHT } from "../../src/theme";
 import { Card, Badge, EmptyState } from "../../src/components/ui";
+// Высота плавающей панели вкладок — одна на приложение. Здесь стояло голое
+// 100 (80 панели + отбивка), и такие же числа расползлись по другим экранам.
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, Plan } from "../../src/api";
 import { notify } from "../../src/store/toast";
+import { formatMoney } from "../../src/store/branding";
 
 type IconName = keyof typeof Feather.glyphMap;
 
 // ── Quota Card (monthly norms) ───────────────────────────────────────────────
-function QuotaCard({ colors, isDark: _isDark }: { colors: ReturnType<typeof useThemeColors>; isDark: boolean }) {
+function QuotaCard({ colors }: { colors: ReturnType<typeof useThemeColors> }) {
   const { data: quota, isLoading } = useQuery({
     queryKey: ["myQuota"],
     queryFn: () => getMyQuota().catch(() => null),
@@ -80,7 +83,8 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index, isPending }: {
     skipped: { icon: "clock", color: colors.status.warning, bg: colors.status.warningDim, label: "Пропущен" },
     planned: { icon: "circle", color: colors.status.info, bg: colors.status.infoDim, label: "Запланирован" },
   };
-  const cfg = STATUS_META[plan.status] ?? STATUS_META.planned;
+  // То же правило: незнакомое состояние показывается кодом, а не «Запланирован».
+  const cfg = STATUS_META[plan.status] ?? { ...STATUS_META.planned, label: plan.status };
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
   const shadowColor = isDark ? "#000" : Shadows.xs.shadowColor;
 
@@ -107,15 +111,24 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index, isPending }: {
           </Text>
           {hasDebt && (
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.status.danger, marginTop: 2 }}>
-              Долг: {Number(plan.shopDebt).toLocaleString("ru")} сум
+              Долг: {formatMoney(plan.shopDebt)}
             </Text>
           )}
         </View>
         {plan.status === "planned" ? (
           <View style={{ flexDirection: "row", gap: 6 }}>
             <PressableScale disabled={isPending} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSkip(); }} haptic="none" scaleTo={0.9}>
-              <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingVertical: 6, paddingHorizontal: 10 }}>
+              {/*
+                Рядом с «Готово» стояла кнопка из одной иконки-часов.
+
+                Что она делает, приходилось угадывать: часы одинаково читаются
+                и как «отложить», и как «история», и как «время визита». Обе
+                кнопки меняют состояние визита, и обе обязаны говорить, что
+                именно они меняют.
+              */}
+              <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingVertical: 6, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Feather name="clock" size={14} color={colors.status.warning} />
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: colors.status.warning }}>Отложить</Text>
               </View>
             </PressableScale>
             <PressableScale disabled={isPending} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDone(); }} haptic="none" scaleTo={0.9}>
@@ -184,7 +197,7 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>Зарплата</Text>
             <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
-              {Number(kpi.salary.total).toLocaleString("ru")} сум
+              {formatMoney(kpi.salary.total)}
             </Text>
           </View>
         </View>
@@ -195,6 +208,12 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
 
 // ── Main Plan Screen ─────────────────────────────────────────────────────────
 export default function PlanScreen() {
+  // Вкладку не размонтируют при переключении, поэтому запрос уходит один раз
+  // за запуск. Здесь данные этого экрана помечаются устаревшими при возврате
+  // на него — подробности в самом хуке.
+  useRefreshOnFocus([["plans"], ["myQuota"], ["agentKpi"]]);
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollTopOnFocus(scrollRef);
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
@@ -244,14 +263,15 @@ export default function PlanScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.md, paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.md, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.xl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand.primary} />}
         showsVerticalScrollIndicator={false}
       >
         {/* Monthly norms */}
         <FadeInItem delay={0}>
-          <QuotaCard colors={colors} isDark={isDark} />
+          <QuotaCard colors={colors} />
         </FadeInItem>
 
         {/* Today's visits */}
@@ -292,7 +312,13 @@ export default function PlanScreen() {
                 index={idx}
                 onDone={() => updateMutation.mutate({ planId: plan.id, status: "visited" })}
                 onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
-                isPending={updateMutation.isPending}
+                // Пендинг — по строке, а не по всему экрану. isPending у
+                // мутации один на список, и отметка одного визита гасила
+                // «Готово» и «Отложить» во ВСЕХ карточках: на медленной связи
+                // список замирал целиком, и агент ждал вместо того, чтобы
+                // отмечать следующий магазин. Сравниваем с planId строки —
+                // приём уже применён в app/(tabs)/deliveries.tsx.
+                isPending={updateMutation.isPending && updateMutation.variables?.planId === plan.id}
               />
             ))
           )}
@@ -305,7 +331,7 @@ export default function PlanScreen() {
               <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>ДОЛГИ</Text>
               {debtShops.length > 0 ? (
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.danger }}>
-                  {debtShops.length} маг. · {totalDebt.toLocaleString("ru")} сум
+                  {debtShops.length} маг. · {formatMoney(totalDebt)}
                 </Text>
               ) : (
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.success }}>Нет долгов</Text>
@@ -317,7 +343,7 @@ export default function PlanScreen() {
                   <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }} numberOfLines={1}>{p.shopName ?? "Магазин"}</Text>
                 </View>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.danger }}>
-                  {Number(p.shopDebt).toLocaleString("ru")} сум
+                  {formatMoney(p.shopDebt)}
                 </Text>
               </View>
             )) : (

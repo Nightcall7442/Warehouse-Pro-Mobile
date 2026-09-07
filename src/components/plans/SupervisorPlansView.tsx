@@ -5,8 +5,9 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getPlans, getAgentsList, createSalesTarget, Plan } from "../../api";
 import { useThemeColors, useThemeStore } from "../../store/theme";
-import { Typography, Spacing, Radii, Gradients } from "../../theme";
+import { Typography, Spacing, Radii, Gradients, BOTTOM_TAB_HEIGHT } from "../../theme";
 import { ScreenHeader, EmptyState } from "../ui";
+import { ErrorState } from "../QueryState";
 import { NeumorphicProgressBar } from "../Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../Animated";
 import { fmtDate } from "./PlanHelpers";
@@ -15,7 +16,9 @@ import { DateNav } from "./DateNav";
 import { CreatePlanModal } from "./CreatePlanModal";
 import { BottomSheet, SelectRow } from "./PlanHelpers";
 import { notify } from "../../store/toast";
+import { errorText } from "../../lib/error-text";
 import { LinearGradient } from "expo-linear-gradient";
+import { useCurrencySymbol } from "../../store/branding";
 
 export function SupervisorPlansView() {
   const insets = useSafeAreaInsets();
@@ -31,14 +34,23 @@ export function SupervisorPlansView() {
   const dateStr = fmtDate(date);
   const isToday = dateStr === fmtDate(new Date());
 
-  const { data: agents, isLoading: agentsLoading } = useQuery({ queryKey: ["agentsList"], queryFn: getAgentsList });
+  const { data: agents, isLoading: agentsLoading, isError: agentsError } = useQuery({ queryKey: ["agentsList"], queryFn: getAgentsList });
   const selectedAgent = agents?.find(a => a.id === filterAgentId);
 
-  const { data: plans, isLoading, refetch } = useQuery({
+  const { data: plans, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["supervisorPlans", dateStr, filterAgentId],
     queryFn: () => getPlans(filterAgentId ?? undefined, dateStr),
     refetchInterval: 60_000,
   });
+
+  // Свой признак «тянут вручную»: запрос повторяется сам раз в минуту, и на
+  // isFetching кружок обновления выскакивал бы каждую минуту без касания. На
+  // isLoading, как было, он гас мгновенно — обновление выглядело сломанным.
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try { await refetch(); } finally { setRefreshing(false); }
+  };
 
   const groupedPlans = useMemo(() => {
     if (filterAgentId || !plans || plans.length === 0) return null;
@@ -105,7 +117,7 @@ export function SupervisorPlansView() {
         <SectionList sections={groupedPlans} keyExtractor={item => String(item.id)}
           contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }}
           stickySectionHeadersEnabled ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
-          refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent.primary} />}
           renderSectionHeader={({ section }) => (
             <View style={{ backgroundColor: colors.bg.primary, paddingVertical: Spacing.sm }}>
               <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.accent.primary, textTransform: "uppercase", letterSpacing: 0.5 }}>{section.title} · {section.data.length}</Text>
@@ -120,8 +132,23 @@ export function SupervisorPlansView() {
         <FlatList data={plans ?? []} keyExtractor={p => String(p.id)}
           contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
-          refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.accent.primary} />}
-          ListEmptyComponent={<EmptyState icon="calendar" title="На этот день планов нет" description="Нажмите «+», чтобы назначить маршрут" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent.primary} />}
+          ListEmptyComponent={
+            // «Нажмите "+", чтобы назначить маршрут» при отказе связи — совет
+            // делать заново то, что уже сделано: планы на день есть, просто не
+            // доехали. Отказ должен называться отказом.
+            isError ? (
+              <ErrorState
+                what="планы"
+                error={error}
+                description="Это сбой связи, а не пустой день. Проверьте подключение и попробуйте снова."
+                onRetry={() => { void refetch(); }}
+                retrying={refreshing}
+              />
+            ) : (
+              <EmptyState icon="calendar" title="На этот день планов нет" description="Нажмите «+», чтобы назначить маршрут" />
+            )
+          }
           renderItem={({ item: plan, index }) => (
             <FadeInItem delay={index * 30}><PlanRow plan={plan} showAgent={!filterAgentId} showCity colors={colors} isDark={isDark} /></FadeInItem>
           )}
@@ -132,7 +159,13 @@ export function SupervisorPlansView() {
         <FlatList data={agents ?? []} keyExtractor={a => String(a.id)}
           contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingBottom: insets.bottom + Spacing.lg }}
           ListHeaderComponent={<SelectRow label="Все агенты" icon="users" selected={!filterAgentId} colors={colors} isDark={isDark} onPress={() => { setFilterAgentId(null); setShowAgentPicker(false); }} />}
-          ListEmptyComponent={!agentsLoading ? <EmptyState icon="user" title="Нет агентов" /> : null}
+          ListEmptyComponent={
+            // «Нет агентов» — утверждение о штате. При отказе список тоже
+            // пуст, и супервайзер решал бы, что агентов ему не завели.
+            agentsError ? <EmptyState icon="alert-circle" title="Не удалось загрузить агентов" description="Закройте список и откройте снова." />
+            : !agentsLoading ? <EmptyState icon="user" title="Нет агентов" />
+            : null
+          }
           renderItem={({ item: agent }) => (
             <SelectRow label={agent.name} icon="user" selected={filterAgentId === agent.id} colors={colors} isDark={isDark} onPress={() => { setFilterAgentId(agent.id); setShowAgentPicker(false); }} />
           )}
@@ -153,6 +186,7 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
   visible: boolean; agents: Array<{ id: number; name: string }>; onClose: () => void; onCreated: () => void;
 }) {
   const colors = useThemeColors();
+  const currencySymbol = useCurrencySymbol();
   const insets = useSafeAreaInsets();
   const [agentId, setAgentId] = useState<number | null>(null);
   const [targetAmount, setTargetAmount] = useState("");
@@ -168,7 +202,10 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
   const mutation = useMutation({
     mutationFn: () => createSalesTarget({ userId: agentId!, periodType: "monthly", periodStart, periodEnd, targetAmount: Number(targetAmount.replace(/\s/g, "")), visitTarget: visitTarget ? Number(visitTarget) : undefined }),
     onSuccess: () => { notify.success("Норма создана"); onCreated(); setAgentId(null); setTargetAmount(""); setVisitTarget(""); },
-    onError: (e: Error) => notify.error(e.message),
+    // e.message — это текст axios: супервайзер, у которого в кабинете моргнул
+    // интернет, читал «Network Error» вместо «нет связи». Слова самого сервера
+    // errorText пропускает как есть — они русские и по делу.
+    onError: (e: Error) => notify.error(errorText(e)),
   });
 
   if (!visible) return null;
@@ -192,7 +229,7 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
                 <Feather name="chevron-down" size={18} color={colors.text.muted} />
               </View>
             </PressableScale>
-            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Норма выручки (сум)</Text>
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Норма выручки ({currencySymbol})</Text>
             <TextInput style={{ backgroundColor: colors.bg.input, borderRadius: 12, borderWidth: 1, borderColor: colors.border.default, padding: 14, fontFamily: Typography.fontMedium, fontSize: 18, color: colors.text.primary, marginBottom: 20 }}
               placeholder="5 000 000" placeholderTextColor={colors.text.muted} value={targetAmount} onChangeText={setTargetAmount} keyboardType="numeric" returnKeyType="done" />
             <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Норма визитов (%)</Text>
@@ -216,13 +253,15 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
                   <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={colors.text.muted} /></View>
                 </PressableScale>
               </View>
-              <FlatList data={agents} keyExtractor={a => String(a.id)} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 100 }}
+              <FlatList data={agents} keyExtractor={a => String(a.id)} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT }}
                 ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border.subtle }} />}
                 renderItem={({ item: agent }) => (
                   <PressableScale onPress={() => { setAgentId(agent.id); setShowAgentPicker(false); }} haptic="light">
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14 }}>
                       <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: agentId === agent.id ? colors.accent.primary : colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: agentId === agent.id ? "#fff" : colors.brand.primary }}>{agent.name.charAt(0)}</Text>
+                        {/* Кружок выбранного агента залит фирменным цветом —
+                            буква берёт чернила по его яркости. */}
+                        <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: agentId === agent.id ? colors.brand.ink : colors.brand.primary }}>{agent.name.charAt(0)}</Text>
                       </View>
                       <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 15, color: colors.text.primary }}>{agent.name}</Text>
                       {agentId === agent.id && <Feather name="check" size={20} color={colors.accent.primary} />}
