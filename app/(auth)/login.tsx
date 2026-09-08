@@ -13,10 +13,11 @@
 // надпись и ни одно условие показа не тронуты.
 import { useState, useEffect, useRef } from "react";
 import { errorText } from "../../src/lib/error-text";
-import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
+import { TenantChoiceRequired } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Gradients, Radii, Spacing, soft } from "../../src/theme";
 import { useBrandingStore } from "../../src/store/branding";
@@ -36,6 +37,17 @@ export default function LoginScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
+  /*
+    Один адрес может быть заведён в нескольких организациях. Сервер в таком
+    случае не выбирает за человека — данные в этих организациях разные — а
+    отвечает 409 и называет их.
+
+    Механизм был собран целиком и не подключён: api.ts бросает
+    TenantChoiceRequired, store принимает tenantId, сервер его ждёт — а ловить
+    ошибку было некому. Человек, заведённый в двух организациях, видел на
+    экране текст отказа и войти с телефона НЕ МОГ ВООБЩЕ. В вебе выбор есть.
+  */
+  const [orgChoice, setOrgChoice] = useState<{ message: string; organizations: Array<{ tenantId: number; name: string }> } | null>(null);
   const { login, loginWithBiometric } = useAuthStore();
   const { capabilities, biometricEnabled, loginWithBiometric: biometricAuth } = useBiometricAuth();
 
@@ -60,11 +72,18 @@ export default function LoginScreen() {
     dangerBg: colors.status.dangerDim,
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (tenantId?: number) => {
     if (!email.trim() || !password) { setError("Введите email и пароль"); return; }
     setError(""); setLoading(true);
-    try { await login(email.trim().toLowerCase(), password); }
+    try {
+      await login(email.trim().toLowerCase(), password, tenantId);
+    }
     catch (e: unknown) {
+      // Не отказ, а вопрос: в какой из организаций входим.
+      if (e instanceof TenantChoiceRequired) {
+        setOrgChoice({ message: e.message, organizations: e.organizations });
+        return;
+      }
       // Здесь наружу выходил текст axios: «Network Error», «timeout of
       // 15000ms exceeded». Агент, у которого пропала связь, читал об этом
       // по-английски на экране входа. Разбор отказа — в lib/error-text.
@@ -115,7 +134,7 @@ export default function LoginScreen() {
           {/* ── Dark hero header (matching web left panel) ──────────────────── */}
           <LinearGradient colors={C.heroBg} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={{ paddingTop: insets.top + Spacing.xxl, paddingBottom: Spacing["3xl"], paddingHorizontal: Spacing["2xl"] }}>
-            {/* Subtle grid pattern effect */}
+            {/* Световое пятно в углу шапки — чтобы плоскость не выглядела заливкой. */}
             <View style={{ position: "absolute", top: 0, right: 0, width: 200, height: 200, opacity: 0.05 }}>
               <View style={{ flex: 1, backgroundColor: "#fff", borderRadius: Radii.full }} />
             </View>
@@ -187,7 +206,7 @@ export default function LoginScreen() {
                   <TextInput
                     style={{ flex: 1, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: C.text }}
                     placeholder="you@company.com" placeholderTextColor={C.textMuted}
-                    value={email} onChangeText={setEmail} autoCapitalize="none"
+                    value={email} onChangeText={v => { setEmail(v); setOrgChoice(null); }} autoCapitalize="none"
                     keyboardType="email-address" autoComplete="email" editable={!loading}
                   />
                 </View>
@@ -201,8 +220,8 @@ export default function LoginScreen() {
                   <TextInput
                     style={{ flex: 1, padding: Spacing.base, paddingRight: 44, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: C.text }}
                     placeholder="••••••••" placeholderTextColor={C.textMuted}
-                    value={password} onChangeText={setPassword} secureTextEntry={!showPassword}
-                    autoComplete="password" editable={!loading} onSubmitEditing={handleLogin}
+                    value={password} onChangeText={v => { setPassword(v); setOrgChoice(null); }} secureTextEntry={!showPassword}
+                    autoComplete="password" editable={!loading} onSubmitEditing={() => handleLogin()}
                   />
                   <TouchableOpacity style={{ position: "absolute", right: Spacing.md }} onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
                     <Feather name={showPassword ? "eye-off" : "eye"} size={16} color={C.textMuted} />
@@ -210,10 +229,38 @@ export default function LoginScreen() {
                 </View>
               </View>
 
+              {/* Выбор организации.
+                  Строки приподняты на цвете холста, как второстепенные
+                  действия рядом с коралловым главным: это не отказ, а вопрос,
+                  и выглядеть тревожно он не должен. */}
+              {orgChoice ? (
+                <View style={{ marginBottom: Spacing.lg + 2, padding: Spacing.md, borderRadius: Radii.lg, backgroundColor: C.inputBg, ...soft(isDark).insetSm }}>
+                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: Spacing.sm + 2 }}>
+                    {orgChoice.message}
+                  </Text>
+                  {orgChoice.organizations.map(org => (
+                    <PressableScale key={org.tenantId} onPress={() => handleLogin(org.tenantId)} disabled={loading} haptic="light">
+                      <View style={{
+                        flexDirection: "row", alignItems: "center", gap: Spacing.sm + 2,
+                        paddingVertical: Spacing.md, paddingHorizontal: Spacing.base,
+                        borderRadius: Radii.md, backgroundColor: C.card, marginTop: Spacing.sm,
+                        ...soft(isDark).raisedSm,
+                      }}>
+                        <Feather name="briefcase" size={15} color={C.accent} />
+                        <Text style={{ flex: 1, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text }}>
+                          {org.name}
+                        </Text>
+                        <Feather name="chevron-right" size={15} color={C.textMuted} />
+                      </View>
+                    </PressableScale>
+                  ))}
+                </View>
+              ) : null}
+
               {/* Главная кнопка.
                   Коралловый градиент и приподнятость — так же выглядит FAB на
                   главной и активная вкладка. Единственный акцент в приложении. */}
-              <PressableScale onPress={handleLogin} disabled={loading} haptic="medium">
+              <PressableScale onPress={() => handleLogin()} disabled={loading} haptic="medium">
                 <LinearGradient
                   colors={[C.accentLight, C.accent]}
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -223,7 +270,10 @@ export default function LoginScreen() {
                     ...soft(isDark).raisedSm,
                     opacity: loading ? 0.7 : 1,
                   }}>
-                  {loading && <Feather name="loader" size={16} color="#fff" />}
+                  {/* Крутящийся кружок системы, а не значок «loader».
+                      Значок неподвижен: во время входа он просто стоял на
+                      кнопке, и это читалось как «зависло», а не «идёт». */}
+                  {loading && <ActivityIndicator size="small" color="#fff" />}
                   <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>
                     {loading ? "Вход..." : "Войти"}
                   </Text>
