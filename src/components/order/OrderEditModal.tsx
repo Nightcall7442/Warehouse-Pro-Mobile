@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { clampDiscountText } from "../../lib/discount";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable, ScrollView, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useThemeStore } from "../../store/theme";
 import {
   Typography,
   Spacing,
   Radii,
   ThemeColors,
+  soft,
 } from "../../theme";
 
 interface OrderItem {
@@ -52,6 +54,7 @@ export function OrderEditModal({
   visible, notes, discount, items, saving,
   onNotesChange, onDiscountChange, onSaveItems, onSave, onClose, colors,
 }: OrderEditModalProps) {
+  const { isDark } = useThemeStore();
   const [editItems, setEditItems] = useState<EditableItem[]>([]);
   const [activeTab, setActiveTab] = useState<"items" | "details">("items");
 
@@ -208,7 +211,7 @@ export function OrderEditModal({
                   return (
                     <View key={item.id} style={{
                       backgroundColor: colors.bg.card, borderRadius: Radii.lg,
-                      borderWidth: 1, borderColor: changed ? colors.accent.primary + "40" : colors.border.subtle,
+                      ...(changed ? soft(isDark).raisedSm : soft(isDark).inset),
                       padding: 14,
                     }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
@@ -247,9 +250,12 @@ export function OrderEditModal({
                           onChangeText={(v) => updateQuantity(idx, v)}
                           keyboardType="decimal-pad"
                           style={{
-                            flex: 1, textAlign: "center", backgroundColor: colors.bg.input,
-                            borderRadius: Radii.md, borderWidth: 1,
-                            borderColor: changed ? colors.accent.primary : colors.border.default,
+                            flex: 1, textAlign: "center",
+                            // Правленое количество отмечается заливкой, а не
+                            // обводкой: поле остаётся утопленным в холст, иначе
+                            // оно перестало бы читаться как поле.
+                            backgroundColor: changed ? colors.accent.primary + "18" : colors.bg.input,
+                            borderRadius: Radii.md, ...soft(isDark).inset,
                             padding: 10, color: colors.text.primary,
                             fontSize: Typography.size.md, fontFamily: Typography.fontBold,
                           }}
@@ -296,13 +302,13 @@ export function OrderEditModal({
                   <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>Заметки</Text>
                   <TextInput value={notes} onChangeText={onNotesChange} placeholder="Заметки к заказу..."
                     placeholderTextColor={colors.text.muted}
-                    style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base, minHeight: 60, textAlignVertical: "top" }} multiline />
+                    style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base, minHeight: 60, textAlignVertical: "top" }} multiline />
                 </View>
                 <View>
                   <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>Скидка (%)</Text>
                   <TextInput value={discount} onChangeText={v => onDiscountChange(clampDiscountText(v))} placeholder="0" keyboardType="decimal-pad"
                     placeholderTextColor={colors.text.muted}
-                    style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base }} />
+                    style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base }} />
                 </View>
                 <TouchableOpacity onPress={onSave} disabled={saving}
                   style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center", opacity: saving ? 0.6 : 1 }}>

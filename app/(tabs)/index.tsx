@@ -10,7 +10,7 @@ import { useAuthStore } from "../../src/store/auth";
 import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts } from "../../src/api";
 import { Card } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
-import { Typography, Spacing, Radii, KpiColors, Gradients, type ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii, KpiColors, Gradients, soft, type ThemeColors } from "../../src/theme";
 import { orderStatusLabel, orderStatusColor, deliveryStatusLabel } from "../../src/lib/order-status";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -188,7 +188,7 @@ function AgentHome() {
             <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
           </PressableScale>
         </View>
-        <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, overflow: "hidden", marginBottom: 16, borderWidth: 1, borderColor: colors.border.subtle }}>
+        <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, marginBottom: 16, ...soft(isDark).raised }}>
           {plansLoading ? (
             <View style={{ padding: 16, gap: 10 }}>
               <ShimmerSkeleton height={44} radius={Radii.md} />
@@ -206,7 +206,7 @@ function AgentHome() {
                 <Feather name="wifi-off" size={20} color={colors.text.tertiary} />
               </View>
               <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.primary }}>Не удалось загрузить визиты</Text>
-              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: isDark ? "#a39d92" : colors.text.secondary, textAlign: "center" }}>
+              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.secondary, textAlign: "center" }}>
                 Это сбой связи, а не пустой маршрут. Потяните вниз, чтобы обновить.
               </Text>
             </View>
@@ -257,7 +257,7 @@ function AgentHome() {
 
       {/* ── Revenue sparkline card (matching web) ────────────────────────── */}
       <FadeInItem delay={120}>
-        <View style={{ backgroundColor: colors.bg.card, borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.border.subtle }}>
+        <View style={{ backgroundColor: colors.bg.card, borderRadius: 24, padding: 20, marginBottom: 16, ...soft(isDark).raised }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <View>
               <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>Динамика продаж</Text>
@@ -286,7 +286,7 @@ function AgentHome() {
             </LinearGradient>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/shops")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.subtle }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="shopping-bag" size={20} color={colors.accent.primary} />
               </View>
@@ -296,7 +296,7 @@ function AgentHome() {
         </View>
         <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
           <PressableScale onPress={() => router.push("/(tabs)/gps")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.subtle }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.status.successDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="navigation" size={16} color={colors.status.success} />
               </View>
@@ -304,7 +304,7 @@ function AgentHome() {
             </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/barcode")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.subtle }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="maximize" size={16} color={colors.accent.primary} />
               </View>
@@ -312,7 +312,7 @@ function AgentHome() {
             </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.subtle }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="user" size={16} color={colors.status.info} />
               </View>
@@ -347,21 +347,21 @@ function AgentHome() {
           <View style={{
             backgroundColor: colors.bg.card,
             borderRadius: 20, padding: 16, marginBottom: 12,
-            borderWidth: 1, borderColor: colors.border.subtle,
+            ...soft(isDark).raised,
             flexDirection: "row", alignItems: "center", justifyContent: "space-between",
           }}>
             <View style={{ flex: 1 }}>
               {/* Подпись 12-м, а не восьмым: восьмой на солнце не читается, и
                   от показателя остаётся голое число без имени. */}
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, letterSpacing: 0.6, color: isDark ? "#a39d92" : colors.accent.primary }}>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, letterSpacing: 0.6, color: colors.accent.primary }}>
                 ВЫРУЧКА ЗА СЕГОДНЯ
               </Text>
               {ordersFailed ? (
                 <>
-                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, marginTop: 4, color: isDark ? "#a39d92" : colors.accent.primary }}>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, marginTop: 4, color: colors.accent.primary }}>
                     —
                   </Text>
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: isDark ? "#a39d92" : colors.accent.primary }}>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: colors.accent.primary }}>
                     Нет связи — потяните вниз, чтобы обновить
                   </Text>
                 </>
@@ -372,7 +372,7 @@ function AgentHome() {
                   <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 24, marginTop: 4, color: colors.text.primary }}>
                     {money(todayTotals.sum)}
                   </Text>
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: isDark ? "#a39d92" : colors.accent.primary }}>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: colors.accent.primary }}>
                     {todayTotals.count === 0
                       ? "заказов ещё нет"
                       : `${todayTotals.count} ${ordersWord(todayTotals.count)}`}
@@ -382,9 +382,9 @@ function AgentHome() {
             </View>
             <View style={{
               width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center",
-              backgroundColor: isDark ? "rgba(201,162,39,0.16)" : "rgba(201,162,39,0.12)",
+              backgroundColor: colors.status.successDim,
             }}>
-              <Feather name="trending-up" size={20} color="#c9a227" />
+              <Feather name="trending-up" size={20} color={colors.status.success} />
             </View>
           </View>
         )}
@@ -392,7 +392,7 @@ function AgentHome() {
         {/* This section was a hardcoded "Создайте первый заказ" panel — it never
             queried anything, so it read as empty however many orders the agent
             had actually placed that day. */}
-        <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: colors.border.subtle }}>
+        <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, ...soft(isDark).raised }}>
           {ordersLoading ? (
             <View style={{ padding: 16, gap: 10 }}>
               <ShimmerSkeleton height={44} radius={Radii.md} />
@@ -463,6 +463,7 @@ function AlertIcon({ severity, size = 14, colors }: { severity: string; size?: n
 function SupervisorHome() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -629,7 +630,7 @@ function SupervisorHome() {
             </LinearGradient>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/plans")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="calendar" size={18} color={colors.brand.primaryLight} />
               </View>
@@ -639,7 +640,7 @@ function SupervisorHome() {
         </View>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           <PressableScale onPress={() => router.push("/(tabs)/shops")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 6, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 6, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="shopping-bag" size={16} color={colors.accent.primary} />
               </View>
@@ -647,7 +648,7 @@ function SupervisorHome() {
             </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 6, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, borderRadius: Radii.lg, gap: 6, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="user" size={16} color={colors.status.info} />
               </View>
@@ -713,6 +714,7 @@ const courierStatusMeta = (c: ThemeColors): Record<string, { icon: IconName; lab
 function CourierHome() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 
@@ -779,7 +781,7 @@ function CourierHome() {
             {/* Row 1: Assigned + In Transit */}
             <View style={{ flexDirection: "row", gap: 12 }}>
               {/* Assigned */}
-              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, borderWidth: 1, borderColor: colors.border.subtle }}>
+              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, ...soft(isDark).raised }}>
                 <CardDots />
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ОЖИДАЮТ</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 28, color: colors.status.info, marginTop: 8 }}>{assigned}</Text>
@@ -788,7 +790,7 @@ function CourierHome() {
                 </View>
               </View>
               {/* In Transit */}
-              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, borderWidth: 1, borderColor: colors.border.subtle }}>
+              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, ...soft(isDark).raised }}>
                 <CardDots />
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>В ПУТИ</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 28, color: colors.status.warning, marginTop: 8 }}>{inTransit}</Text>
@@ -800,13 +802,13 @@ function CourierHome() {
             {/* Row 2: Delivered + Progress */}
             <View style={{ flexDirection: "row", gap: 12 }}>
               {/* Delivered */}
-              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, borderWidth: 1, borderColor: colors.border.subtle }}>
+              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, ...soft(isDark).raised }}>
                 <CardDots />
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ДОСТАВЛЕНО</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 28, color: colors.status.success, marginTop: 8 }}>{delivered}</Text>
               </View>
               {/* Progress ring */}
-              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border.subtle }}>
+              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, alignItems: "center", justifyContent: "center", ...soft(isDark).raised }}>
                 <ProgressRing value={deliveryPct} size={64} strokeWidth={6} color={deliveryPct >= 80 ? colors.status.success : colors.accent.primary} />
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 10, color: colors.text.secondary, marginTop: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Прогресс</Text>
               </View>
@@ -817,7 +819,7 @@ function CourierHome() {
 
       {/* ── Progress bar card (matching web) ──────────────────────────────── */}
       <FadeInItem delay={120}>
-        <View style={{ backgroundColor: colors.bg.card, borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.border.subtle }}>
+        <View style={{ backgroundColor: colors.bg.card, borderRadius: 24, padding: 20, marginBottom: 16, ...soft(isDark).raised }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 10, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ПРОГРЕСС ДНЯ</Text>
             <Text style={{ fontFamily: Typography.fontBold, fontSize: 13, color: deliveryPct >= 80 ? colors.status.success : colors.accent.primary }}>
@@ -844,7 +846,7 @@ function CourierHome() {
             </LinearGradient>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.subtle }}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="user" size={20} color={colors.status.info} />
               </View>
@@ -863,7 +865,7 @@ function CourierHome() {
           </View>
           <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.tertiary }}>{total} заказов</Text>
         </View>
-        <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: colors.border.subtle }}>
+        <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, ...soft(isDark).raised }}>
           {isLoading ? (
             <View style={{ padding: 16, gap: 10 }}>
               {[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={56} radius={Radii.lg} />)}

@@ -5,8 +5,8 @@ import { format, parseISO } from "date-fns";
 import { ru } from "date-fns/locale";
 import { getMyQuota } from "../api";
 import { computePace, money } from "../lib/monthly-plan";
-import { useThemeColors } from "../store/theme";
-import { Typography, Spacing, Radii } from "../theme";
+import { useThemeColors, useThemeStore } from "../store/theme";
+import { Typography, Spacing, Radii, soft } from "../theme";
 import { ShimmerSkeleton } from "./Animated";
 import { ErrorState } from "./QueryState";
 import { useBrandingStore } from "../store/branding";
@@ -23,6 +23,7 @@ import { useBrandingStore } from "../store/branding";
 
 export function MonthlyPlanCard() {
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const { currencySymbol, symbolPosition } = useBrandingStore(s => s.branding);
 
   // Знак валюты был приклеен справа вручную, мимо formatMoney, который знает
@@ -46,9 +47,7 @@ export function MonthlyPlanCard() {
 
   const surface = {
     backgroundColor: colors.bg.card,
-    borderRadius: Radii.xl,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
+    borderRadius: Radii.xl, ...soft(isDark).raised,
   };
 
   if (isLoading) {

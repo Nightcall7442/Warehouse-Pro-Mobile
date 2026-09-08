@@ -9,9 +9,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, router } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useThemeColors } from "../../src/store/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii, Gradients, ThemeColors, soft } from "../../src/theme";
 import { getShop, getShopForSupervisor, updateShop, uploadShopPhoto, uploadFile, getTerritories, Territory } from "../../src/api";
 import { Card, Badge, Button } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
@@ -36,6 +36,7 @@ function InfoRow({ icon, label, value, onPress, colors }: { icon: string; label:
 }
 
 export default function ShopDetailScreen() {
+  const { isDark } = useThemeStore();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -232,7 +233,7 @@ export default function ShopDetailScreen() {
         <View style={{
           backgroundColor: hasDebt ? colors.accent.danger + "18" : colors.accent.success + "18",
           borderRadius: Radii.xl, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-          borderWidth: 1, borderColor: hasDebt ? colors.accent.danger + "40" : colors.accent.success + "40", marginBottom: 16,
+          ...(hasDebt ? soft(isDark).raisedSm : soft(isDark).inset), marginBottom: 16,
         }}>
           <View>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: hasDebt ? colors.accent.danger : colors.accent.success, marginBottom: 4 }}>
@@ -261,13 +262,13 @@ export default function ShopDetailScreen() {
                     multiline={f.key === "notes"}
                     numberOfLines={f.key === "notes" ? 3 : 1}
                     textAlignVertical={f.key === "notes" ? "top" : "center"}
-                    style={{ backgroundColor: colors.bg.input, borderRadius: Radii.md, padding: 12, fontFamily: Typography.fontRegular, fontSize: Typography.size.base, color: colors.text.primary, borderWidth: 1, borderColor: colors.border.default, minHeight: f.key === "notes" ? 80 : undefined }} />
+                    style={{ backgroundColor: colors.bg.input, borderRadius: Radii.md, padding: 12, fontFamily: Typography.fontRegular, fontSize: Typography.size.base, color: colors.text.primary, ...soft(isDark).inset, minHeight: f.key === "notes" ? 80 : undefined }} />
                 ))}
                 {/* GPS */}
                 <View style={{ marginTop: 8 }}>
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, marginBottom: 6 }}>ГЕОЛОКАЦИЯ</Text>
                   <PressableScale onPress={captureGPS} disabled={gpsLoading} haptic="medium"
-                    style={{ backgroundColor: (editData.gpsLat || shop.gpsLat) ? colors.accent.success + "15" : colors.bg.input, borderWidth: 1, borderColor: (editData.gpsLat || shop.gpsLat) ? colors.accent.success : colors.border.default, borderRadius: Radii.md, padding: 12, flexDirection: "row", alignItems: "center", gap: 8, opacity: gpsLoading ? 0.6 : 1 }}>
+                    style={{ backgroundColor: (editData.gpsLat || shop.gpsLat) ? colors.accent.success + "15" : colors.bg.input, ...(((editData.gpsLat || shop.gpsLat)) ? soft(isDark).raisedSm : soft(isDark).inset), borderRadius: Radii.md, padding: 12, flexDirection: "row", alignItems: "center", gap: 8, opacity: gpsLoading ? 0.6 : 1 }}>
                     {gpsLoading ? <ActivityIndicator size="small" color={colors.accent.primary} /> : <Feather name={(editData.gpsLat || shop.gpsLat) ? "check-circle" : "crosshair"} size={16} color={(editData.gpsLat || shop.gpsLat) ? colors.accent.success : colors.accent.primary} />}
                     <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.primary }}>{(editData.gpsLat || shop.gpsLat) ? "Координаты сохранены" : "Определить местоположение"}</Text>
                   </PressableScale>
@@ -278,12 +279,12 @@ export default function ShopDetailScreen() {
                     <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, marginBottom: 6 }}>ТЕРРИТОРИЯ</Text>
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                       <TouchableOpacity onPress={() => setTerritoryId(undefined)}
-                        style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, borderWidth: 1, borderColor: !territoryId ? colors.accent.primary : colors.border.default, backgroundColor: !territoryId ? colors.accent.primary + "15" : colors.bg.input }}>
+                        style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, ...((!territoryId) ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: !territoryId ? colors.accent.primary + "15" : colors.bg.input }}>
                         <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: !territoryId ? colors.accent.primary : colors.text.secondary }}>Без территории</Text>
                       </TouchableOpacity>
                       {territories.map((ter: Territory) => (
                         <TouchableOpacity key={ter.id} onPress={() => setTerritoryId(ter.id)}
-                          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, borderWidth: 1, borderColor: territoryId === ter.id ? colors.accent.primary : colors.border.default, backgroundColor: territoryId === ter.id ? colors.accent.primary + "15" : colors.bg.input }}>
+                          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, ...((territoryId === ter.id) ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: territoryId === ter.id ? colors.accent.primary + "15" : colors.bg.input }}>
                           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ter.color || colors.accent.primary }} />
                           <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: territoryId === ter.id ? colors.accent.primary : colors.text.secondary }}>{ter.name}</Text>
                         </TouchableOpacity>

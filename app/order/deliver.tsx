@@ -12,8 +12,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import * as Network from "expo-network";
 import { getOrderById, completeDelivery, type CompleteDeliveryInput } from "../../src/api";
-import { Typography, Radii } from "../../src/theme";
-import { useThemeColors } from "../../src/store/theme";
+import { Typography, Radii, Spacing, soft } from "../../src/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { notify } from "../../src/store/toast";
 import { useBrandingStore } from "../../src/store/branding";
 import { useOfflineStore, isRetryableError } from "../../src/store/offline";
@@ -43,6 +43,7 @@ const RETURN_REASONS = [
 ];
 
 export default function DeliveryScreen() {
+  const { isDark } = useThemeStore();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useThemeColors();
@@ -208,7 +209,7 @@ export default function DeliveryScreen() {
     );
   };
 
-  const s = makeStyles(colors);
+  const s = makeStyles(colors, isDark);
 
   // Раньше стояло только `isLoading || !order`. При сбое запроса isLoading
   // становится false, order остаётся пустым — и курьер у двери магазина
@@ -276,11 +277,13 @@ export default function DeliveryScreen() {
                   key={opt.value}
                   onPress={() => setResult(opt.value)}
                   style={{
-                    flex: 1, minWidth: "45%", paddingVertical: 14, paddingHorizontal: 12,
+                    flex: 1, minWidth: "45%", paddingVertical: Spacing.base, paddingHorizontal: Spacing.md,
                     borderRadius: Radii.lg,
                     backgroundColor: isSelected ? `${opt.color}15` : colors.bg.input,
-                    borderWidth: 2,
-                    borderColor: isSelected ? opt.color : colors.border.default,
+                    // Выбранное «выступает», остальное «утоплено» — тот же
+                    // приём, что у сегмент-контрола: состояние читается на
+                    // ощупь, а не по толщине обводки.
+                    ...(isSelected ? soft(isDark).raisedSm : soft(isDark).inset),
                     alignItems: "center",
                   }}
                 >
@@ -321,7 +324,7 @@ export default function DeliveryScreen() {
                     height: 48, paddingHorizontal: 12,
                     fontFamily: Typography.fontBold, fontSize: Typography.size.xl,
                     color: colors.text.primary, backgroundColor: colors.bg.input,
-                    borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default,
+                    borderRadius: Radii.lg, ...soft(isDark).inset,
                     marginBottom: 8,
                   }}
                 />
@@ -350,10 +353,9 @@ export default function DeliveryScreen() {
                   key={m}
                   onPress={() => setPaymentMethod(m)}
                   style={{
-                    flex: 1, paddingVertical: 10, borderRadius: Radii.md,
+                    flex: 1, paddingVertical: Spacing.sm + 2, borderRadius: Radii.md,
                     backgroundColor: paymentMethod === m ? colors.brand.primaryDim : colors.bg.input,
-                    borderWidth: 1,
-                    borderColor: paymentMethod === m ? colors.brand.primary : colors.border.default,
+                    ...(paymentMethod === m ? soft(isDark).raisedSm : soft(isDark).inset),
                     alignItems: "center",
                   }}
                 >
@@ -382,7 +384,7 @@ export default function DeliveryScreen() {
                     height: 44, paddingHorizontal: 12,
                     fontFamily: Typography.fontRegular, fontSize: Typography.size.base,
                     color: colors.text.primary, backgroundColor: colors.bg.input,
-                    borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default,
+                    borderRadius: Radii.lg, ...soft(isDark).inset,
                     marginBottom: 8,
                   }}
                 />
@@ -406,10 +408,9 @@ export default function DeliveryScreen() {
                   key={r.value}
                   onPress={() => setReturnReason(r.value)}
                   style={{
-                    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16,
+                    paddingHorizontal: Spacing.sm + 2, paddingVertical: Spacing.xs + 2, borderRadius: Radii.lg,
                     backgroundColor: returnReason === r.value ? colors.brand.primaryDim : colors.bg.input,
-                    borderWidth: 1,
-                    borderColor: returnReason === r.value ? colors.brand.primary : colors.border.default,
+                    ...(returnReason === r.value ? soft(isDark).raisedSm : soft(isDark).inset),
                   }}
                 >
                   <Text style={{
@@ -460,7 +461,7 @@ export default function DeliveryScreen() {
                           fontFamily: Typography.fontBold, fontSize: Typography.size.md,
                           color: qty > 0 ? colors.status.warning : colors.text.primary,
                           backgroundColor: colors.bg.input, borderRadius: Radii.md,
-                          borderWidth: 1, borderColor: qty > 0 ? colors.status.warning : colors.border.default,
+                          ...soft(isDark).insetSm,
                         }}
                       />
                       <TouchableOpacity
@@ -492,7 +493,7 @@ export default function DeliveryScreen() {
               minHeight: 60, paddingHorizontal: 12, paddingTop: 10,
               fontFamily: Typography.fontRegular, fontSize: Typography.size.base,
               color: colors.text.primary, backgroundColor: colors.bg.input,
-              borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default,
+              borderRadius: Radii.lg, ...soft(isDark).inset,
               textAlignVertical: "top",
             }}
           />
@@ -525,15 +526,19 @@ export default function DeliveryScreen() {
   );
 }
 
-function makeStyles(colors: ReturnType<typeof useThemeColors>) {
+function makeStyles(colors: ReturnType<typeof useThemeColors>, isDark: boolean) {
   return {
     screen: { flex: 1, backgroundColor: colors.bg.primary },
+    /*
+      Карточка отделяется от холста объёмом, а не линией — как Card в
+      components/ui и как всё остальное в этом языке. Рамка вокруг поверхности
+      цвета холста читалась как чертёж, а не как предмет.
+    */
     card: {
-      padding: 16,
+      padding: Spacing.lg,
       backgroundColor: colors.bg.card,
-      borderRadius: Radii.lg,
-      borderWidth: 1,
-      borderColor: colors.border.default,
+      borderRadius: Radii.xl,
+      ...soft(isDark).raised,
     },
   };
 }

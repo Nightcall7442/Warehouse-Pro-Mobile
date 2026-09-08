@@ -10,8 +10,8 @@ import { Feather } from "@expo/vector-icons";
 import { getAvailableShops, getProducts, createOrder, Shop } from "../../src/api";
 import { useOfflineStore, uuidv4, isRetryableError } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
-import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding } from "../../src/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card, SearchInput, Skeleton } from "../../src/components/ui";
 import { PressableScale } from "../../src/components/Animated";
@@ -100,6 +100,7 @@ function StepIndicator({ step, total, colors }: { step: number; total: number; c
 
 // ── Step 1: Shop Picker ──────────────────────────────────────────────────────
 function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSelect: (s: Shop) => void; colors: ThemeColors }) {
+  const { isDark } = useThemeStore();
   const [search, setSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("");
   const [recentIds, setRecentIds] = useState<number[]>([]);
@@ -145,7 +146,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
     const hasDebt = Number(shop.debt ?? 0) > 0;
     return (
       <PressableScale onPress={() => { onSelect(shop); }} haptic="light" style={{ marginBottom: 8 }}>
-        <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderWidth: selected ? 1.5 : 1, borderColor: selected ? colors.accent.primary : colors.border.default }}>
+        <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, ...(selected ? soft(isDark).raisedSm : soft(isDark).inset),}}>
           <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: selected ? colors.accent.primary + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
             <Feather name="shopping-bag" size={18} color={selected ? colors.accent.primary : colors.text.muted} />
           </View>
@@ -161,7 +162,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
               <Feather name="check" size={14} color="#fff" />
             </View>
           ) : (
-            <View style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: colors.border.default }} />
+            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg.input, ...soft(isDark).insetSm }} />
           )}
         </Card>
       </PressableScale>
@@ -174,11 +175,11 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
       {/* City quick filter */}
       {cities.length > 1 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-          <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: !cityFilter ? colors.accent.primary : colors.border.default }}>
+          <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, ...(!cityFilter ? soft(isDark).raisedSm : soft(isDark).inset) }}>
             <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>Все города</Text>
           </TouchableOpacity>
           {cities.map(c => (
-            <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: cityFilter === c ? colors.accent.primary : colors.border.default }}>
+            <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, ...((cityFilter === c) ? soft(isDark).raisedSm : soft(isDark).inset),}}>
               <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: cityFilter === c ? "#fff" : colors.text.secondary }}>{c}</Text>
             </TouchableOpacity>
           ))}
@@ -214,6 +215,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
 
 // ── Step 2: Product Picker + Cart ────────────────────────────────────────────
 function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors }) {
+  const { isDark } = useThemeStore();
   const [showPicker, setShowPicker] = useState(false);
 
   const lineTotal = (l: OrderLine) => l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100);
@@ -256,7 +258,7 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
                 <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{idx + 1}</Text>
               </View>
               <Text style={{ flex: 1, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, lineHeight: 20 }} numberOfLines={2}>{line.name}</Text>
-              <TouchableOpacity onPress={() => onChange(lines.filter((_, i) => i !== idx))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
+              <TouchableOpacity onPress={() => onChange(lines.filter((_, i) => i !== idx))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.bg.elevated, ...soft(isDark).raised, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="x" size={14} color={colors.text.muted} />
               </TouchableOpacity>
             </View>
@@ -274,14 +276,14 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
                 <TextInput value={line.quantity} onChangeText={v => {
                   const next = [...lines]; next[idx] = { ...next[idx], quantity: v.replace(",", ".") }; onChange(next);
                 }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
-                  style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
+                  style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>СКИДКА (%)</Text>
                 <TextInput value={line.discount} onChangeText={v => {
                   const next = [...lines]; next[idx] = { ...next[idx], discount: clampDiscountText(v) }; onChange(next);
                 }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
-                  style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
+                  style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
               </View>
               <View style={{ flex: 1.2, gap: 4 }}>
                 <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>СУММА</Text>
@@ -309,6 +311,7 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
 function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   visible: boolean; onClose: () => void; lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors;
 }) {
+  const { isDark } = useThemeStore();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [onlyInStock, setOnlyInStock] = useState(true);
@@ -346,7 +349,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
             </TouchableOpacity>
           </View>
           {/* Search */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingHorizontal: 14, paddingVertical: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).raised, paddingHorizontal: 14, paddingVertical: 10 }}>
             <Feather name="search" size={16} color={colors.text.muted} />
             <TextInput style={{ flex: 1, color: colors.text.primary, fontSize: Typography.size.base, fontFamily: Typography.fontRegular }} placeholder="Название или артикул…" placeholderTextColor={colors.text.muted} value={search} onChangeText={setSearch} autoFocus />
             {/* Очистка поиска была голой иконкой 16 точек. */}
@@ -358,7 +361,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
           </View>
           {/* Stock filter */}
           <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
-            <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: onlyInStock ? colors.accent.primary : colors.border.default, backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
+            <View style={{ width: 20, height: 20, borderRadius: 4, ...(onlyInStock ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
               {onlyInStock && <Feather name="check" size={12} color="#fff" />}
             </View>
             <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, fontFamily: Typography.fontMedium }}>Только в наличии</Text>
@@ -378,7 +381,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                     onChange([...lines, { productId: p.id, name: p.name, unitPrice: Number(p.unitPrice), quantity: "1", discount: "0", available: parseStock(p.available), unit: p.unit }]);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }} haptic="light">
-                    <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 4, borderWidth: 1, borderColor: added ? colors.status.success : colors.border.default, backgroundColor: added ? colors.status.success + "0D" : colors.bg.card }}>
+                    <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 4, ...(added ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: added ? colors.status.success + "0D" : colors.bg.card }}>
                       <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: added ? colors.status.success + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
                         <Feather name={added ? "check" : "package"} size={16} color={added ? colors.status.success : colors.text.muted} />
                       </View>
@@ -413,6 +416,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
   shopName: string; lines: OrderLine[]; notes: string; onNotesChange: (v: string) => void;
   paymentMethod: string; onPaymentChange: (v: string) => void; colors: ThemeColors;
 }) {
+  const { isDark } = useThemeStore();
   const { subtotal, totalQty } = useMemo(() => {
     let sub = 0, qty = 0;
     for (const l of lines) { sub += l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100); qty += Number(l.quantity || 0); }
@@ -496,7 +500,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
           <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>необязательно</Text>
         </View>
         <TextInput value={notes} onChangeText={onNotesChange} placeholder="Комментарий к заказу…" placeholderTextColor={colors.text.tertiary} multiline numberOfLines={3} textAlignVertical="top"
-          style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary, minHeight: 80 }} />
+          style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary, minHeight: 80 }} />
       </Card>
     </View>
   );
@@ -542,6 +546,7 @@ async function clearDraft() {
 export default function NewOrderScreen() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string }>();
   const { addOrder } = useOfflineStore();
@@ -803,7 +808,7 @@ export default function NewOrderScreen() {
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <TouchableOpacity onPress={() => step > 1 ? setStep(s => s - 1) : router.back()}
-            style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
+            style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.bg.elevated, ...soft(isDark).raised, alignItems: "center", justifyContent: "center" }}>
             <Feather name="arrow-left" size={18} color={colors.text.primary} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>

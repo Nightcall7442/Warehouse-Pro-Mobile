@@ -13,7 +13,7 @@ import { SecureImage } from "../../src/components/SecureImage";
 import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { MonthlyPlanCard } from "../../src/components/MonthlyPlanCard";
-import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT } from "../../src/theme";
+import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT, soft } from "../../src/theme";
 import { Card, Badge } from "../../src/components/ui";
 // То же число, что и на других вкладках: высота плавающей панели. Голое 100
 // в отступе не говорило, откуда оно, и переживало правку панели лишь наполовину.
@@ -142,7 +142,7 @@ export default function ProfileScreen() {
             {/* Avatar row */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.lg, marginBottom: Spacing.xl }}>
               <PressableScale onPress={handleAvatarPress} haptic="light">
-                <View style={{ width: 64, height: 64, borderRadius: Radii.lg, overflow: "hidden", backgroundColor: colors.brand.primaryDim, borderWidth: 2, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
+                <View style={{ width: 64, height: 64, borderRadius: Radii.lg, overflow: "hidden", backgroundColor: colors.brand.primaryDim, ...soft(isDark).insetSm, alignItems: "center", justifyContent: "center" }}>
                   {user?.avatar ? (
                     <Image source={{ uri: user.avatar }} style={{ width: 64, height: 64 }} />
                   ) : (
@@ -210,7 +210,7 @@ export default function ProfileScreen() {
               disabled={pwdMutation.isPending || !currentPwd || !newPwd}
               haptic="medium"
             >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20, borderWidth: 1, borderColor: colors.border.default, opacity: pwdMutation.isPending || !currentPwd || !newPwd ? 0.4 : 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20, ...soft(isDark).raised, opacity: pwdMutation.isPending || !currentPwd || !newPwd ? 0.4 : 1 }}>
                 {pwdMutation.isPending ? <ActivityIndicator color={colors.text.primary} size="small" /> : <Feather name="lock" size={14} color={colors.text.secondary} />}
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>Изменить пароль</Text>
               </View>
@@ -227,7 +227,7 @@ export default function ProfileScreen() {
                 <View style={{
                   paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
                   backgroundColor: !isDark ? colors.accent.primary : colors.bg.elevated,
-                  borderWidth: 1.5, borderColor: !isDark ? colors.accent.primary : colors.border.default,
+                  ...((!isDark) ? soft(isDark).raisedSm : soft(isDark).inset),
                 }}>
                   <Feather name="sun" size={18} color={!isDark ? "#fff" : colors.text.secondary} />
                   <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: !isDark ? "#fff" : colors.text.secondary }}>Светлая</Text>
@@ -237,7 +237,7 @@ export default function ProfileScreen() {
                 <View style={{
                   paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
                   backgroundColor: isDark ? colors.accent.primary : colors.bg.elevated,
-                  borderWidth: 1.5, borderColor: isDark ? colors.accent.primary : colors.border.default,
+                  ...(isDark ? soft(isDark).raisedSm : soft(isDark).inset),
                 }}>
                   <Feather name="moon" size={18} color={isDark ? "#fff" : colors.text.secondary} />
                   <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: isDark ? "#fff" : colors.text.secondary }}>Тёмная</Text>

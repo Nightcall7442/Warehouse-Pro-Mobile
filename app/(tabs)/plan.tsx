@@ -8,7 +8,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Shadows, KpiColors, BOTTOM_TAB_HEIGHT } from "../../src/theme";
+import { Typography, Spacing, Radii, KpiColors, BOTTOM_TAB_HEIGHT, soft } from "../../src/theme";
 import { Card, Badge, EmptyState } from "../../src/components/ui";
 // Высота плавающей панели вкладок — одна на приложение. Здесь стояло голое
 // 100 (80 панели + отбивка), и такие же числа расползлись по другим экранам.
@@ -86,17 +86,16 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index, isPending }: {
   // То же правило: незнакомое состояние показывается кодом, а не «Запланирован».
   const cfg = STATUS_META[plan.status] ?? { ...STATUS_META.planned, label: plan.status };
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
-  const shadowColor = isDark ? "#000" : Shadows.xs.shadowColor;
 
   return (
     <FadeInItem delay={index * 50}>
       <View style={{
         flexDirection: "row", alignItems: "center",
         backgroundColor: colors.bg.card, borderRadius: Radii.lg,
-        padding: 12, marginBottom: 8, borderWidth: 1,
-        borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
-        shadowColor, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity,
-        shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation,
+        padding: 12, marginBottom: 8,
+        // Пара теней вместо волосяной обводки и одиночной тени: строка плана
+        // выступает из холста так же, как карточка списка.
+        ...soft(isDark).raised,
         opacity: plan.status === "visited" ? 0.6 : 1,
       }}>
         <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: cfg.bg, alignItems: "center", justifyContent: "center" }}>

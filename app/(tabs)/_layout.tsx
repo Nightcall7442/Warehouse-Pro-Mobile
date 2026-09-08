@@ -40,10 +40,10 @@ const TAB_LABELS: Record<string, string> = {
 };
 
 function CustomTabBar(props: BottomTabBarProps) {
+  const { isDark } = useThemeStore();
   const { state, descriptors, navigation } = props;
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
-  const { isDark } = useThemeStore();
   const { user } = useAuthStore();
 
   // Агент: Главная, Магазины, Каталог, Заказы, Профиль

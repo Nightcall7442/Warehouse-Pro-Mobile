@@ -3,8 +3,8 @@ import { Animated, Text, View, Easing } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useToastStore } from "../store/toast";
-import { useThemeColors } from "../store/theme";
-import { Typography, Radii, Shadows } from "../theme";
+import { useThemeColors, useThemeStore } from "../store/theme";
+import { Typography, Radii, Shadows, soft } from "../theme";
 
 const AUTO_DISMISS_MS = 3200;
 
@@ -24,6 +24,7 @@ const ICONS: Record<string, keyof typeof Feather.glyphMap> = {
  * use Alert.alert — a toast can't wait for an answer and shouldn't.
  */
 export function ToastHost() {
+  const { isDark } = useThemeStore();
   const { toast, hide } = useToastStore();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -73,8 +74,7 @@ export function ToastHost() {
         style={{
           flexDirection: "row", alignItems: "center", gap: 10,
           backgroundColor: colors.bg.card,
-          borderRadius: Radii.lg,
-          borderWidth: 1, borderColor: colors.border.default,
+          borderRadius: Radii.lg, ...soft(isDark).raised,
           borderLeftWidth: 3, borderLeftColor: accentColor,
           paddingVertical: 12, paddingHorizontal: 14,
           ...Shadows.lg,

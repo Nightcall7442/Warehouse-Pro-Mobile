@@ -5,7 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getPlans, getAgentsList, createSalesTarget, Plan } from "../../api";
 import { useThemeColors, useThemeStore } from "../../store/theme";
-import { Typography, Spacing, Radii, Gradients, BOTTOM_TAB_HEIGHT } from "../../theme";
+import { Typography, Spacing, Radii, Gradients, BOTTOM_TAB_HEIGHT, soft } from "../../theme";
 import { ScreenHeader, EmptyState } from "../ui";
 import { ErrorState } from "../QueryState";
 import { NeumorphicProgressBar } from "../Charts";
@@ -93,7 +93,7 @@ export function SupervisorPlansView() {
           onNext={() => setDate(d => new Date(d.getTime() + 86_400_000))} />
 
         <PressableScale onPress={() => setShowAgentPicker(true)} haptic="selection">
-          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: filterAgentId ? colors.accent.primary : colors.border.default, padding: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, backgroundColor: colors.bg.card, borderRadius: Radii.md, ...(filterAgentId ? soft(isDark).raisedSm : soft(isDark).inset), padding: 10 }}>
             <Feather name="user" size={15} color={filterAgentId ? colors.accent.primary : colors.text.muted} />
             <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: filterAgentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? "Все агенты"}</Text>
             <Feather name="chevron-down" size={16} color={colors.text.muted} />
@@ -186,6 +186,7 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
   visible: boolean; agents: Array<{ id: number; name: string }>; onClose: () => void; onCreated: () => void;
 }) {
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const currencySymbol = useCurrencySymbol();
   const insets = useSafeAreaInsets();
   const [agentId, setAgentId] = useState<number | null>(null);
@@ -223,17 +224,17 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
             <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Агент</Text>
             <PressableScale onPress={() => setShowAgentPicker(true)} haptic="light">
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.bg.input, borderRadius: 12, borderWidth: 1, borderColor: agentId ? colors.accent.primary : colors.border.default, padding: 14, marginBottom: 20 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.bg.input, borderRadius: 12, ...(agentId ? soft(isDark).raisedSm : soft(isDark).inset), padding: 14, marginBottom: 20 }}>
                 {selectedAgent ? <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}><Text style={{ fontFamily: Typography.fontBold, fontSize: 14, color: colors.brand.primary }}>{selectedAgent.name.charAt(0)}</Text></View> : <Feather name="user" size={18} color={colors.text.muted} />}
                 <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 15, color: agentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? "Выберите агента"}</Text>
                 <Feather name="chevron-down" size={18} color={colors.text.muted} />
               </View>
             </PressableScale>
             <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Норма выручки ({currencySymbol})</Text>
-            <TextInput style={{ backgroundColor: colors.bg.input, borderRadius: 12, borderWidth: 1, borderColor: colors.border.default, padding: 14, fontFamily: Typography.fontMedium, fontSize: 18, color: colors.text.primary, marginBottom: 20 }}
+            <TextInput style={{ backgroundColor: colors.bg.input, borderRadius: 12, ...soft(isDark).inset, padding: 14, fontFamily: Typography.fontMedium, fontSize: 18, color: colors.text.primary, marginBottom: 20 }}
               placeholder="5 000 000" placeholderTextColor={colors.text.muted} value={targetAmount} onChangeText={setTargetAmount} keyboardType="numeric" returnKeyType="done" />
             <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Норма визитов (%)</Text>
-            <TextInput style={{ backgroundColor: colors.bg.input, borderRadius: 12, borderWidth: 1, borderColor: colors.border.default, padding: 14, fontFamily: Typography.fontMedium, fontSize: 18, color: colors.text.primary, marginBottom: 24 }}
+            <TextInput style={{ backgroundColor: colors.bg.input, borderRadius: 12, ...soft(isDark).inset, padding: 14, fontFamily: Typography.fontMedium, fontSize: 18, color: colors.text.primary, marginBottom: 24 }}
               placeholder="80" placeholderTextColor={colors.text.muted} value={visitTarget} onChangeText={setVisitTarget} keyboardType="numeric" returnKeyType="done" />
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 24, padding: 12, backgroundColor: colors.bg.elevated, borderRadius: 12 }}>
               <Feather name="calendar" size={16} color={colors.text.muted} />

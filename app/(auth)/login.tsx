@@ -1,4 +1,16 @@
-// Warehouse Pro — Login v3 (premium design matching web Login.tsx)
+// Warehouse Pro — экран входа, язык оформления v7
+//
+// ── Почему он переписан ──────────────────────────────────────────────────────
+//
+// Это единственный экран, до которого язык не дошёл вовсе. Цвета он из темы
+// брал, а всё остальное делал по-своему: карточка отделялась от холста рамкой
+// в один пиксель, скругления стояли числами, поля ввода были обведёнными
+// коробками. В этом языке поверхность отделяется ОБЪЁМОМ — парой теней, — а
+// поле ввода утоплено в холст жёлобом. Человек открывал приложение, видел одно
+// оформление, входил и попадал в другое.
+//
+// Изменено только оформление. Ни одна кнопка, ни один обработчик, ни одна
+// надпись и ни одно условие показа не тронуты.
 import { useState, useEffect, useRef } from "react";
 import { errorText } from "../../src/lib/error-text";
 import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from "react-native";
@@ -6,7 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Gradients } from "../../src/theme";
+import { Typography, Gradients, Radii, Spacing, soft } from "../../src/theme";
 import { useBrandingStore } from "../../src/store/branding";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressableScale } from "../../src/components/Animated";
@@ -37,7 +49,6 @@ export default function LoginScreen() {
   const C = {
     bg: colors.bg.primary,
     card: colors.bg.card,
-    cardBorder: colors.border.subtle,
     heroBg: Gradients.primary,
     accent: colors.brand.primary,
     accentLight: colors.brand.primaryLight,
@@ -45,10 +56,8 @@ export default function LoginScreen() {
     textSec: colors.text.secondary,
     textMuted: colors.text.tertiary,
     inputBg: colors.bg.input,
-    inputBorder: colors.border.default,
     danger: colors.status.danger,
     dangerBg: colors.status.dangerDim,
-    dangerBorder: colors.status.dangerDim,
   };
 
   const handleLogin = async () => {
@@ -105,10 +114,10 @@ export default function LoginScreen() {
 
           {/* ── Dark hero header (matching web left panel) ──────────────────── */}
           <LinearGradient colors={C.heroBg} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={{ paddingTop: insets.top + 32, paddingBottom: 40, paddingHorizontal: 24 }}>
+            style={{ paddingTop: insets.top + Spacing.xxl, paddingBottom: Spacing["3xl"], paddingHorizontal: Spacing["2xl"] }}>
             {/* Subtle grid pattern effect */}
             <View style={{ position: "absolute", top: 0, right: 0, width: 200, height: 200, opacity: 0.05 }}>
-              <View style={{ flex: 1, backgroundColor: "#fff", borderRadius: 100 }} />
+              <View style={{ flex: 1, backgroundColor: "#fff", borderRadius: Radii.full }} />
             </View>
 
             {/* Знак организации.
@@ -120,13 +129,13 @@ export default function LoginScreen() {
 
                 Логотип лежит на светлой плашке: шапка тёмная в обеих темах, а
                 логотип арендатора может быть тёмным — на тёмном он пропал бы. */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 32 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginBottom: Spacing.xxl }}>
               {branding.logoUrl ? (
-                <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   <SecureImage uri={branding.logoUrl} style={{ width: 34, height: 34 }} resizeMode="contain" />
                 </View>
               ) : (
-                <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" }}>
+                <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" }}>
                   <Feather name="home" size={20} color="#fff" />
                 </View>
               )}
@@ -137,39 +146,46 @@ export default function LoginScreen() {
             <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 32, color: "#fff", lineHeight: 38, letterSpacing: -1 }}>
               Управляйте{"\n"}бизнесом{"\n"}из кармана
             </Text>
-            <Text style={{ fontFamily: Typography.fontRegular, fontSize: 14, color: "rgba(255,255,255,0.88)", marginTop: 16, lineHeight: 22 }}>
+            <Text style={{ fontFamily: Typography.fontRegular, fontSize: 14, color: "rgba(255,255,255,0.88)", marginTop: Spacing.lg, lineHeight: 22 }}>
               Заказы, склад, агенты и аналитика — всё в одном приложении
             </Text>
           </LinearGradient>
 
-          {/* ── Form card (matching web right panel) ────────────────────────── */}
-          <View style={{ flex: 1, paddingHorizontal: 20, marginTop: -20 }}>
+          {/* ── Карточка входа ─────────────────────────────────────────────────
+              Рамки нет: поверхность отделяется от холста парой теней — светлый
+              блик сверху-слева, серая тень снизу-справа. Так устроены все
+              карточки приложения (см. Card в components/ui). */}
+          <View style={{ flex: 1, paddingHorizontal: Spacing.xl, marginTop: -Spacing.xl }}>
             <View style={{
-              backgroundColor: C.card, borderRadius: 20, padding: 28, paddingTop: 32,
-              borderWidth: 1, borderColor: C.cardBorder,
-              shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDark ? 0.3 : 0.06, shadowRadius: 16, elevation: 8,
+              backgroundColor: C.card, borderRadius: Radii["2xl"],
+              padding: Spacing["2xl"], paddingTop: Spacing.xxl,
+              ...soft(isDark).raisedLg,
             }}>
               {/* Header */}
-              <View style={{ marginBottom: 28 }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: 26, color: C.text, letterSpacing: -0.5 }}>Добро пожаловать</Text>
-                <Text style={{ fontFamily: Typography.fontRegular, fontSize: 14, color: C.textSec, marginTop: 6 }}>Войдите, чтобы начать рабочий день</Text>
+              <View style={{ marginBottom: Spacing.xxl }}>
+                <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 26, color: C.text, letterSpacing: -0.6 }}>Добро пожаловать</Text>
+                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.base, color: C.textSec, marginTop: Spacing.xs + 2 }}>Войдите, чтобы начать рабочий день</Text>
               </View>
 
-              {/* Error */}
+              {/* Error.
+                  Заливка вместо рамки: в этом языке цвет несёт смысл сам, а
+                  обводка вокруг цветной плашки читается как вторая граница. */}
               {error ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 10, backgroundColor: C.dangerBg, marginBottom: 20, borderWidth: 1, borderColor: C.dangerBorder }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm + 2, padding: Spacing.md, borderRadius: Radii.md, backgroundColor: C.dangerBg, marginBottom: Spacing.xl }}>
                   <Feather name="alert-circle" size={16} color={C.danger} />
-                  <Text style={{ flex: 1, color: C.danger, fontSize: 13, fontFamily: Typography.fontMedium }}>{error}</Text>
+                  <Text style={{ flex: 1, color: C.danger, fontSize: Typography.size.sm, fontFamily: Typography.fontMedium }}>{error}</Text>
                 </View>
               ) : null}
 
-              {/* Email */}
-              <View style={{ marginBottom: 18 }}>
-                <Text style={{ fontSize: 13, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: 8 }}>Email</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: 10, borderWidth: 1, borderColor: C.inputBorder }}>
-                  <Feather name="mail" size={16} color={C.textMuted} style={{ marginLeft: 14 }} />
+              {/* Email.
+                  Поле — вдавленный жёлоб, а не обведённая коробка: тот же
+                  приём, что у поиска (SearchInput) и у сегмент-контрола. */}
+              <View style={{ marginBottom: Spacing.lg + 2 }}>
+                <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: Spacing.sm }}>Email</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: Radii.lg, ...soft(isDark).inset }}>
+                  <Feather name="mail" size={16} color={C.textMuted} style={{ marginLeft: Spacing.base }} />
                   <TextInput
-                    style={{ flex: 1, padding: 14, fontSize: 14, fontFamily: Typography.fontRegular, color: C.text }}
+                    style={{ flex: 1, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: C.text }}
                     placeholder="you@company.com" placeholderTextColor={C.textMuted}
                     value={email} onChangeText={setEmail} autoCapitalize="none"
                     keyboardType="email-address" autoComplete="email" editable={!loading}
@@ -178,45 +194,53 @@ export default function LoginScreen() {
               </View>
 
               {/* Password */}
-              <View style={{ marginBottom: 18 }}>
-                <Text style={{ fontSize: 13, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: 8 }}>Пароль</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: 10, borderWidth: 1, borderColor: C.inputBorder }}>
-                  <Feather name="lock" size={16} color={C.textMuted} style={{ marginLeft: 14 }} />
+              <View style={{ marginBottom: Spacing.lg + 2 }}>
+                <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: Spacing.sm }}>Пароль</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: Radii.lg, ...soft(isDark).inset }}>
+                  <Feather name="lock" size={16} color={C.textMuted} style={{ marginLeft: Spacing.base }} />
                   <TextInput
-                    style={{ flex: 1, padding: 14, paddingRight: 44, fontSize: 14, fontFamily: Typography.fontRegular, color: C.text }}
+                    style={{ flex: 1, padding: Spacing.base, paddingRight: 44, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: C.text }}
                     placeholder="••••••••" placeholderTextColor={C.textMuted}
                     value={password} onChangeText={setPassword} secureTextEntry={!showPassword}
                     autoComplete="password" editable={!loading} onSubmitEditing={handleLogin}
                   />
-                  <TouchableOpacity style={{ position: "absolute", right: 12 }} onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
+                  <TouchableOpacity style={{ position: "absolute", right: Spacing.md }} onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
                     <Feather name={showPassword ? "eye-off" : "eye"} size={16} color={C.textMuted} />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Login button (matching web #4f46e5) */}
+              {/* Главная кнопка.
+                  Коралловый градиент и приподнятость — так же выглядит FAB на
+                  главной и активная вкладка. Единственный акцент в приложении. */}
               <PressableScale onPress={handleLogin} disabled={loading} haptic="medium">
-                <View style={{
-                  backgroundColor: C.accent, borderRadius: 10, paddingVertical: 14,
-                  flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-                  shadowColor: C.accent, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4,
-                  opacity: loading ? 0.7 : 1,
-                }}>
+                <LinearGradient
+                  colors={[C.accentLight, C.accent]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={{
+                    borderRadius: Radii.lg, paddingVertical: Spacing.base,
+                    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm,
+                    ...soft(isDark).raisedSm,
+                    opacity: loading ? 0.7 : 1,
+                  }}>
                   {loading && <Feather name="loader" size={16} color="#fff" />}
-                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 14, color: "#fff" }}>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>
                     {loading ? "Вход..." : "Войти"}
                   </Text>
-                </View>
+                </LinearGradient>
               </PressableScale>
 
-              {/* Biometric */}
+              {/* Biometric.
+                  Приподнятая поверхность цвета холста — второстепенное
+                  действие рядом с коралловым главным. Лунка под значком
+                  вдавлена, как у строк профиля. */}
               {capabilities.hasHardware && capabilities.isEnrolled && biometricEnabled && (
                 <PressableScale onPress={handleBiometricLogin} disabled={biometricLoading} haptic="medium">
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 16, paddingVertical: 14, borderRadius: 10, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "#f9fafb", borderWidth: 1, borderColor: C.cardBorder }}>
-                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? "rgba(79,70,229,0.12)" : "rgba(79,70,229,0.08)", alignItems: "center", justifyContent: "center" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm + 2, marginTop: Spacing.lg, paddingVertical: Spacing.base, borderRadius: Radii.lg, backgroundColor: C.card, ...soft(isDark).raisedSm }}>
+                    <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center", ...soft(isDark).insetSm }}>
                       <Feather name={Platform.OS === "ios" ? "smartphone" : "key"} size={16} color={C.accent} />
                     </View>
-                    <Text style={{ fontSize: 13, fontFamily: Typography.fontMedium, color: C.text }}>
+                    <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text }}>
                       {biometricLoading ? "Проверка..." : Platform.OS === "ios" ? "Войти с Face ID" : "Войти с отпечатком"}
                     </Text>
                   </View>
@@ -224,20 +248,22 @@ export default function LoginScreen() {
               )}
 
               {/* Hint */}
-              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, marginTop: 20, paddingHorizontal: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: Spacing.sm, marginTop: Spacing.xl, paddingHorizontal: Spacing.xs }}>
                 <Feather name="info" size={13} color={C.textMuted} style={{ marginTop: 2 }} />
-                <Text style={{ flex: 1, fontSize: 12, color: C.textMuted, lineHeight: 18 }}>Используйте данные от веб-версии {branding.companyName}</Text>
+                <Text style={{ flex: 1, fontSize: Typography.size.xs + 1, fontFamily: Typography.fontRegular, color: C.textMuted, lineHeight: 18 }}>Используйте данные от веб-версии {branding.companyName}</Text>
               </View>
             </View>
 
-            {/* Footer (matching web) */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 28, paddingBottom: insets.bottom + 20 }}>
+            {/* Footer */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.xxl - 4, paddingBottom: insets.bottom + Spacing.xl }}>
               {/* Год берётся из часов, а не вписан: «© 2025» на экране входа
                   в 2026-м выглядит как брошенное приложение. */}
-              <Text style={{ fontSize: 12, color: C.textMuted }}>© {new Date().getFullYear()} {branding.companyName}</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e" }} />
-                <Text style={{ fontSize: 12, color: C.textMuted }}>v2.5.0</Text>
+              <Text style={{ fontSize: Typography.size.xs + 1, fontFamily: Typography.fontRegular, color: C.textMuted }}>© {new Date().getFullYear()} {branding.companyName}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
+                {/* Зелёный берётся из темы: вписанный числом он не менялся бы
+                    вместе с ней и в тёмной выглядел бы ядовитым. */}
+                <View style={{ width: 6, height: 6, borderRadius: Radii.full, backgroundColor: colors.status.success }} />
+                <Text style={{ fontSize: Typography.size.xs + 1, fontFamily: Typography.fontRegular, color: C.textMuted }}>v2.5.0</Text>
               </View>
             </View>
           </View>
