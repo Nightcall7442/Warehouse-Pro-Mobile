@@ -1224,7 +1224,7 @@ export interface AgentKpiData {
   debtCollectionRate: number;
   targetRevenue: number;
   targetProgress: number;
-  salary?: { base: number; commission: number; bonus: number; total: number };
+  salary?: { base: number; commission: number; total: number };
 }
 
 export async function getAgentKpi(period: string): Promise<AgentKpiData> {
@@ -1253,7 +1253,6 @@ export interface MySalary {
   productRateCount: number;
 
   kpiScore: number;
-  bonusAmount: number;
 
   /** Чем платят курьеру: суммой за довезённую заявку или процентом. */
   courierPayMode: "per_delivery" | "percent";
@@ -1274,7 +1273,6 @@ export interface MySalary {
   breakdown: {
     base: number;
     commission: number;
-    bonus: number;
     fraudDeduction: number;
     delivery: number;
     allowance: number;

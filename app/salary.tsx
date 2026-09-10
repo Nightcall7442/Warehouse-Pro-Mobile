@@ -243,12 +243,6 @@ export default function SalaryScreen() {
                     value={formatMoney(salary.commissionAmount)}
                     colors={colors}
                   />
-                  <Line
-                    label="Премия"
-                    note={`балл KPI ${salary.kpiScore}/100`}
-                    value={formatMoney(salary.bonusAmount)}
-                    colors={colors}
-                  />
                   {salary.breakdown.fraudDeduction < 0 && (
                     <Line
                       label="Вычет за подозрительные визиты"
