@@ -14,7 +14,8 @@ import { Card, Badge, EmptyState } from "../../src/components/ui";
 // 100 (80 панели + отбивка), и такие же числа расползлись по другим экранам.
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
-import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, Plan } from "../../src/api";
+import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, getMySalary, Plan } from "../../src/api";
+import { useRouter } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { formatMoney } from "../../src/store/branding";
 
@@ -155,6 +156,21 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
     retry: false,
   });
 
+  /*
+    Зарплата — отдельным запросом, потому что она и живёт отдельно: агентский
+    KPI её не считает и никогда не содержал.
+
+    Отказ гасится в null: у кого зарплата не настроена, строки просто не
+    будет — показывать ему ошибку на экране плана незачем.
+  */
+  const { data: salary } = useQuery({
+    queryKey: ["mySalary", "month"],
+    queryFn: () => getMySalary("month").then((res) => res.totalSalary).catch(() => null),
+    retry: false,
+  });
+
+  const router = useRouter();
+
   if (isLoading) return <ShimmerSkeleton height={120} radius={Radii.xxl} />;
   if (!kpi) return null;
 
@@ -190,16 +206,32 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
         </View>
       ))}
 
-      {/* Salary */}
-      {kpi.salary && (
-        <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>Зарплата</Text>
-            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
-              {formatMoney(kpi.salary.total)}
-            </Text>
+      {/*
+        Зарплата.
+
+        Здесь стояло `{kpi.salary && …}`, и оно не рисовалось НИКОГДА:
+        kpi.agentKpi поля salary не возвращает и не возвращал — блок ждал
+        числа, которого в ответе нет. Со стороны это выглядело как «зарплату
+        на телефоне не показывают».
+
+        Теперь число берётся у своей ручки (kpi.salary) и ведёт на разбор:
+        одной суммой человек её не проверит, а спорить о зарплате приходят с
+        разложением.
+      */}
+      {salary != null && (
+        <PressableScale onPress={() => router.push("/salary")} haptic="light">
+          <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>Зарплата</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
+                  {formatMoney(salary)}
+                </Text>
+                <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+              </View>
+            </View>
           </View>
-        </View>
+        </PressableScale>
       )}
     </Card>
   );

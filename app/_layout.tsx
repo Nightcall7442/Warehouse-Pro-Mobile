@@ -204,6 +204,12 @@ export default function RootLayout() {
               <Stack.Screen name="order/[id]" options={{ headerShown: false }} />
               <Stack.Screen name="order/deliver" options={{ headerShown: false }} />
               <Stack.Screen name="merchandiser/visit" options={{ headerShown: false, presentation: "modal" }} />
+              {/*
+                Своя шапка, поэтому системная выключена: иначе на экране
+                оказались бы два заголовка друг над другом — незаявленный
+                экран получает её по умолчанию.
+              */}
+              <Stack.Screen name="salary" options={{ headerShown: false }} />
             </Stack>
             {/* Поверх всего: экран блокировки по простою. Ниже Stack, чтобы
                 закрывать любой открытый экран, включая модальные. */}

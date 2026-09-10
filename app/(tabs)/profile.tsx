@@ -19,6 +19,7 @@ import { Card, Badge } from "../../src/components/ui";
 // в отступе не говорило, откуда оно, и переживало правку панели лишь наполовину.
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
 import Constants from "expo-constants";
+import { useRouter } from "expo-router";
 
 type IconName = keyof typeof Feather.glyphMap;
 
@@ -56,7 +57,9 @@ export default function ProfileScreen() {
   useEffect(() => { if (user?.name) setNewName(user.name); }, [user?.name]);
 
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
+  const router = useRouter();
   const isAgent = user?.role === "agent";
+  const isCourier = user?.role === "courier";
   // Monthly quotas are set against field staff. A CEO has no personal plan, so
   // showing them a permanent "норма не назначена" card would be noise.
   const isFieldRole = user?.role === "agent" || user?.role === "merchandiser";
@@ -217,6 +220,40 @@ export default function ProfileScreen() {
             </PressableScale>
           </Card>
         </FadeInItem>
+
+        {/*
+          Моя зарплата.
+
+          Зарплату получают агенты и курьеры — те, у кого веба нет вовсе, — а
+          посмотреть её на телефоне было негде: число существовало только на
+          экране начальника. Здесь же и подтверждают получение выданного.
+
+          Начальству ссылки нет: у директора и супервайзера для этого есть
+          ведомость всей команды, а собственная строка в ней и так видна.
+        */}
+        {(isAgent || isCourier) && (
+          <FadeInItem delay={70}>
+            <PressableScale onPress={() => router.push("/salary")} haptic="light">
+              <Card style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.lg, marginTop: Spacing.base }}>
+                <View style={{
+                  width: 38, height: 38, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center",
+                  backgroundColor: colors.accent.primary + "18",
+                }}>
+                  <Feather name="dollar-sign" size={18} color={colors.accent.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
+                    Моя зарплата
+                  </Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }}>
+                    Начислено, выдано и подтверждение получения
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
+              </Card>
+            </PressableScale>
+          </FadeInItem>
+        )}
 
         {/* ── Appearance Card ── */}
         <FadeInItem delay={80}>

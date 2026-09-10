@@ -1075,6 +1075,85 @@ export async function getAgentKpi(period: string): Promise<AgentKpiData> {
   return trpcQuery<AgentKpiData>("kpi.agentKpi", { period });
 }
 
+/* ── Зарплата ──────────────────────────────────────────────────────────────
+   Своя, а не чужая: сервер считает строго по вошедшему (ctx.user.id).
+   Открыто и агенту, и курьеру — расчёт у них разный, а ручка одна.
+   ────────────────────────────────────────────────────────────────────────── */
+export interface MySalary {
+  agentName: string;
+  /** Подпись периода, «ГГГГ-ММ-ДД — ГГГГ-ММ-ДД» — её рисует сервер. */
+  period: string;
+
+  baseSalary: number;
+  commissionRate: number;
+  salesAmount: number;
+  commissionAmount: number;
+  /**
+   * По скольким проданным товарам процент НЕ общий.
+   *
+   * Этим объясняется расхождение суммы с простым «продажи × процент»: без
+   * пояснения человек читает его как ошибку расчёта.
+   */
+  productRateCount: number;
+
+  kpiScore: number;
+  bonusAmount: number;
+
+  /** Чем платят курьеру: суммой за довезённую заявку или процентом. */
+  courierPayMode: "per_delivery" | "percent";
+  deliveryRate: number;
+  deliveredCount: number;
+  deliveredAmount: number;
+  deliveryPay: number;
+
+  /** Обед и дорожные — ставки ЗА ОДИН рабочий день. */
+  mealAllowance: number;
+  travelAllowance: number;
+  /** В скольких днях периода человек выходил возить. */
+  workDays: number;
+  allowancePay: number;
+
+  totalSalary: number;
+
+  breakdown: {
+    base: number;
+    commission: number;
+    bonus: number;
+    fraudDeduction: number;
+    delivery: number;
+    allowance: number;
+  };
+}
+
+export async function getMySalary(period: "week" | "month" | "quarter" = "month"): Promise<MySalary> {
+  return trpcQuery<MySalary>("kpi.salary", { period });
+}
+
+/** Одна выдача денег на руки. */
+export interface MyPayout {
+  id: number;
+  /** Аванс отличается от выплаты только тем, что выдан до конца периода. */
+  kind: "payout" | "advance";
+  amount: string;
+  paidAt: string;
+  note: string | null;
+  /**
+   * Когда человек сам подтвердил получение.
+   *
+   * Пусто — не «не получил», а «ещё не подтвердил»: деньги могли отдать в
+   * руки, а телефон он откроет вечером.
+   */
+  confirmedAt: string | null;
+}
+
+export async function getMyPayouts(period: "week" | "month" | "quarter" = "month"): Promise<MyPayout[]> {
+  return trpcQuery<MyPayout[]>("kpi.myPayouts", { period });
+}
+
+export async function confirmPayout(id: number): Promise<{ success: boolean }> {
+  return trpcMutation("kpi.confirmPayout", { id });
+}
+
 // ── Returns ───────────────────────────────────────────────────────────────────
 export interface Return {
   id: number;
