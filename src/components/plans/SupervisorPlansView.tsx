@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { View, Text, FlatList, SectionList, RefreshControl, TextInput, KeyboardAvoidingView, Platform, ScrollView, Modal } from "react-native";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getPlans, getAgentsList, createSalesTarget, Plan } from "../../api";
@@ -37,10 +38,32 @@ export function SupervisorPlansView() {
   const { data: agents, isLoading: agentsLoading, isError: agentsError } = useQuery({ queryKey: ["agentsList"], queryFn: getAgentsList });
   const selectedAgent = agents?.find(a => a.id === filterAgentId);
 
+  /*
+    Опрос раз в минуту — ТОЛЬКО на открытом экране.
+
+    Стоял без этого условия, и вкладки expo-router не размонтируются: экран
+    планов, однажды открытый, продолжал ходить на сервер раз в минуту, пока
+    приложение вообще запущено. У супервайзера, свернувшего приложение утром,
+    это несколько сотен запросов за день — то есть радио телефона будится
+    ровно столько же раз, и всё ради данных, на которые никто не смотрит.
+
+    Соседний экран агента так и сделан; здесь условия просто не было.
+  */
+  const [screenFocused, setScreenFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      return () => setScreenFocused(false);
+    }, []),
+  );
+
   const { data: plans, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["supervisorPlans", dateStr, filterAgentId],
     queryFn: () => getPlans(filterAgentId ?? undefined, dateStr),
-    refetchInterval: 60_000,
+    refetchInterval: screenFocused ? 60_000 : false,
+    // Вернулись на экран — данные помечаются устаревшими сразу, не дожидаясь
+    // ближайшего тика опроса.
+    refetchOnMount: "always",
   });
 
   // Свой признак «тянут вручную»: запрос повторяется сам раз в минуту, и на
