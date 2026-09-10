@@ -210,6 +210,8 @@ export default function RootLayout() {
                 экран получает её по умолчанию.
               */}
               <Stack.Screen name="salary" options={{ headerShown: false }} />
+              <Stack.Screen name="notifications" options={{ headerShown: false }} />
+              <Stack.Screen name="debts" options={{ headerShown: false }} />
             </Stack>
             {/* Поверх всего: экран блокировки по простою. Ниже Stack, чтобы
                 закрывать любой открытый экран, включая модальные. */}

@@ -44,6 +44,7 @@ import { OrderInfoCard } from "../../src/components/order/OrderInfo";
 import { OrderItemsList, OrderFinancialSummary } from "../../src/components/order/OrderItems";
 import { OrderActions } from "../../src/components/order/OrderActions";
 import { OrderEditModal } from "../../src/components/order/OrderEditModal";
+import { OrderComments } from "../../src/components/order/OrderComments";
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -275,6 +276,13 @@ export default function OrderDetailScreen() {
           onDelete={handleDelete}
           colors={colors}
         />
+        {/*
+          Переписка — под действиями, а не над ними: сперва то, что с заказом
+          делают, потом то, что о нём говорят. Обе ручки открыты агенту и не
+          вызывались из приложения ниоткуда — переписка велась в вебе, а
+          агент, которого она касается, её не видел.
+        */}
+        <OrderComments orderId={Number(id)} />
         <View style={{ height: 32 }} />
         </ScrollView>
       </Animated.View>

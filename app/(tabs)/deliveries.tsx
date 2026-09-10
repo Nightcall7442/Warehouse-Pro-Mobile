@@ -23,6 +23,7 @@ import { notify } from "../../src/store/toast";
 import * as Haptics from "expo-haptics";
 import * as Network from "expo-network";
 import { formatMoney } from "../../src/store/branding";
+import { getCourierKpi } from "../../src/api";
 import { deliveryStatusLabel } from "../../src/lib/order-status";
 
 /* Слово — из общего словаря, здесь только значок и вид плашки. */
@@ -33,6 +34,82 @@ const STATUS_CONFIG: Record<string, { icon: keyof typeof Feather.glyphMap; varia
   delivered:        { icon: "check-circle", variant: "success" },
   failed:           { icon: "x-circle",     variant: "danger" },
 };
+
+/**
+ * Итоги месяца у курьера.
+ *
+ * ── Почему отдельно от колец выше ───────────────────────────────────────────
+ *
+ * Кольца считают СЕГОДНЯШНИЙ маршрут: сколько ждёт, сколько в пути. Это
+ * вопрос «что я ещё не сделал». А «сколько я отвёз за месяц» — вопрос про
+ * работу целиком, и по сегодняшнему дню на него не ответить.
+ *
+ * ── Почему рядом с зарплатой ────────────────────────────────────────────────
+ *
+ * Довезённое и рабочие дни — ровно те числа, из которых складывается его
+ * выплата (ставка × довезённое, суточные × дни). Видеть их порознь значит
+ * заставлять человека сверять два экрана, чтобы проверить свои деньги.
+ */
+function MonthTotals() {
+  const colors = useThemeColors();
+  const router = useRouter();
+
+  /*
+    Отказ гасится в null: блока просто не будет. Экран доставок — рабочий, и
+    ронять его из-за показателей нельзя.
+  */
+  const { data } = useQuery({
+    queryKey: ["courierKpi", "month"],
+    queryFn: () => getCourierKpi("month").catch(() => null),
+    retry: false,
+  });
+
+  if (!data) return null;
+
+  const cells = [
+    { label: "Довезено", value: String(data.delivered) },
+    { label: "Сорвано", value: String(data.failed) },
+    // Ноль назначенных — это не «ноль процентов успеха», а «мерить нечего».
+    { label: "Успешных", value: data.delivered + data.failed > 0 ? `${data.successRate}%` : "—" },
+    { label: "Рабочих дней", value: String(data.workDays) },
+  ];
+
+  return (
+    <Card style={{ marginTop: 12, marginBottom: 12 }} onPress={() => router.push("/salary")}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.md }}>
+        <Text style={{
+          fontFamily: Typography.fontMedium, fontSize: Typography.size.xs,
+          letterSpacing: 1.5, textTransform: "uppercase", color: colors.text.muted,
+        }}>
+          Итоги месяца
+        </Text>
+        <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+      </View>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: Spacing.md }}>
+        {cells.map((c) => (
+          <View key={c.label} style={{ width: "50%" }}>
+            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
+              {c.value}
+            </Text>
+            <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
+              {c.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle, flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>
+          Привезено денег
+        </Text>
+        <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.primary }}>
+          {formatMoney(data.cashCollected)}
+        </Text>
+      </View>
+    </Card>
+  );
+}
 
 type DeliveryRow =
   | { type: "header"; key: string; title: string }
@@ -486,6 +563,16 @@ export default function DeliveriesScreen() {
               </Card>
             </View>
             <NeumorphicProgressBar value={totalDeliveries > 0 ? Math.round(deliveredCount / Math.max(totalDeliveries, 1) * 100) : 0} height={6} color={KpiColors.green} />
+            {/*
+              Итоги месяца — под сегодняшним маршрутом.
+
+              Кольца выше отвечают «что осталось СЕГОДНЯ», и это разные
+              вопросы: курьер не видел, сколько он отвёз за месяц, сколько
+              довёз денег и в скольких днях выходил. Ручка (kpi.courierKpi)
+              была написана и не вызывалась ниоткуда — свои показатели он не
+              видел вовсе.
+            */}
+            <MonthTotals />
           </>
         }
         ListEmptyComponent={

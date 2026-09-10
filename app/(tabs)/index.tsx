@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
-import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts } from "../../src/api";
+import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, getNotificationCounts } from "../../src/api";
 import { Card } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
 import { Typography, Spacing, Radii, KpiColors, Gradients, soft, type ThemeColors } from "../../src/theme";
@@ -31,6 +31,56 @@ function ordersWord(n: number): string {
 }
 
 // ── CardDots — 3 colored dots (cold palette) ──────────────────────────────────
+/**
+ * Колокол с числом непрочитанных.
+ *
+ * Толчок на телефон — сигнал, а не запись: смахнул с экрана блокировки, и
+ * узнать было неоткуда. Счётчик стоит на главной, потому что сюда человек
+ * попадает всегда, а в профиль заходит редко.
+ *
+ * Один на три главные — агентскую, начальничью и курьерскую: уведомления
+ * приходят каждому, а три копии значка разъедутся при первой же правке.
+ */
+function NotificationBell() {
+  const router = useRouter();
+  const colors = useThemeColors();
+
+  /*
+    Одно число отдельным лёгким запросом. Тянуть ради него весь список
+    уведомлений было бы дороже самого экрана уведомлений.
+
+    Отказ гасится в ноль: значка просто не будет — главная не про уведомления,
+    и ронять её из-за них нельзя.
+  */
+  const { data } = useQuery({
+    queryKey: ["notificationCounts"],
+    queryFn: () => getNotificationCounts().catch(() => null),
+    retry: false,
+  });
+  const unread = data?.unread ?? 0;
+
+  return (
+    <PressableScale onPress={() => router.push("/notifications")} haptic="light">
+      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.bg.card, alignItems: "center", justifyContent: "center" }}>
+        <Feather name="bell" size={18} color={colors.text.secondary} />
+        {unread > 0 && (
+          <View style={{
+            position: "absolute", top: 1, right: 1, minWidth: 16, height: 16, paddingHorizontal: 4,
+            borderRadius: 8, backgroundColor: colors.status.danger,
+            alignItems: "center", justifyContent: "center",
+          }}>
+            {/* Больше девяти — «9+»: точное число на значке в шестнадцать
+                точек не читается, а «много» читается. */}
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: 9, color: "#fff" }}>
+              {unread > 9 ? "9+" : unread}
+            </Text>
+          </View>
+        )}
+      </View>
+    </PressableScale>
+  );
+}
+
 function CardDots() {
   return (
     <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
@@ -158,11 +208,14 @@ function AgentHome() {
               {format(new Date(), "EEEE, d MMMM yyyy", { locale: ru })}
             </Text>
           </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+            <NotificationBell />
           <PressableScale onPress={() => router.push("/profile")} haptic="light">
             <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.accent.primary }}>
               <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.accent.primary }}>{firstName.charAt(0).toUpperCase()}</Text>
             </View>
           </PressableScale>
+          </View>
         </View>
       </FadeInItem>
 
@@ -521,11 +574,14 @@ function SupervisorHome() {
               {format(new Date(), "EEEE, d MMMM yyyy", { locale: ru })}
             </Text>
           </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+            <NotificationBell />
           <PressableScale onPress={() => router.push("/profile")} haptic="light">
             <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.brand.primary }}>
               <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.brand.primary }}>{firstName.charAt(0).toUpperCase()}</Text>
             </View>
           </PressableScale>
+          </View>
         </View>
       </FadeInItem>
 
@@ -755,11 +811,14 @@ function CourierHome() {
               {format(new Date(), "EEEE, d MMMM yyyy", { locale: ru })}
             </Text>
           </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+            <NotificationBell />
           <PressableScale onPress={() => router.push("/profile")} haptic="light">
             <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.accent.primary }}>
               <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.accent.primary }}>{firstName.charAt(0).toUpperCase()}</Text>
             </View>
           </PressableScale>
+          </View>
         </View>
       </FadeInItem>
 

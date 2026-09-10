@@ -255,6 +255,40 @@ export default function ProfileScreen() {
           </FadeInItem>
         )}
 
+        {/*
+          Долги по моим заказам.
+
+          Долг агент видел только в карточке магазина — по одному, и лишь если
+          помнил, к кому зайти. Вопрос «кому идти собирать» задают каждый день,
+          и отвечать на него перебором точек нельзя.
+
+          Только агенту: у курьера своих заказов нет, а начальник смотрит долги
+          по всей организации отдельным отчётом.
+        */}
+        {isAgent && (
+          <FadeInItem delay={75}>
+            <PressableScale onPress={() => router.push("/debts")} haptic="light">
+              <Card style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.lg, marginTop: Spacing.base }}>
+                <View style={{
+                  width: 38, height: 38, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center",
+                  backgroundColor: colors.status.danger + "18",
+                }}>
+                  <Feather name="alert-circle" size={18} color={colors.status.danger} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
+                    Мои долги
+                  </Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }}>
+                    Кому идти собирать деньги
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
+              </Card>
+            </PressableScale>
+          </FadeInItem>
+        )}
+
         {/* ── Appearance Card ── */}
         <FadeInItem delay={80}>
           <Card style={{ padding: Spacing.xl, marginTop: Spacing.base }}>

@@ -639,6 +639,116 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
   return trpcQuery<SmartAlert[]>("notification.smartAlerts");
 }
 
+/* ── Уведомления ───────────────────────────────────────────────────────────
+   Толчок на телефон — это только сигнал: пропустил его, и узнать было
+   неоткуда. Список отвечает на «что мне приходило», а сервер и так хранит
+   прочитанное месяц, непрочитанное три.
+   ────────────────────────────────────────────────────────────────────────── */
+export type NotificationType = "order" | "payment" | "stock" | "system";
+
+export interface AppNotification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  message: string | null;
+  isRead: boolean;
+  /** Куда вело уведомление в вебе — на телефоне разбирается отдельно. */
+  link: string | null;
+  createdAt: string;
+}
+
+export async function getNotifications(opts?: { unreadOnly?: boolean; cursor?: number; limit?: number }): Promise<{ items: AppNotification[]; hasMore: boolean }> {
+  return trpcQuery<{ items: AppNotification[]; hasMore: boolean }>("notification.list", {
+    unreadOnly: opts?.unreadOnly,
+    cursor: opts?.cursor,
+    limit: opts?.limit ?? 30,
+  });
+}
+
+export async function getNotificationCounts(): Promise<{ unread: number; byType: Record<NotificationType, number> }> {
+  return trpcQuery<{ unread: number; byType: Record<NotificationType, number> }>("notification.counts");
+}
+
+export async function markNotificationRead(id: number): Promise<unknown> {
+  return trpcMutation("notification.markRead", { id });
+}
+
+export async function markAllNotificationsRead(): Promise<unknown> {
+  return trpcMutation("notification.markAllRead", undefined);
+}
+
+/* ── Показатели курьера ────────────────────────────────────────────────────
+   Своё, а не чужое: без courierId сервер считает вошедшего.
+   ────────────────────────────────────────────────────────────────────────── */
+export interface CourierStats {
+  courierId: number;
+  courierName: string;
+  /** Довезённые заказы — за них и платят. */
+  delivered: number;
+  /** Сорванные: магазин закрыт, отказ, не дозвонились. */
+  failed: number;
+  /** Довезены, но товар вернулся — полностью или частью. */
+  returned: number;
+  deliveredAmount: number;
+  /** Наличные, привезённые в кассу. */
+  cashCollected: number;
+  /** В скольких РАЗНЫХ днях периода он что-то довёз. */
+  workDays: number;
+  /** Доля довезённого от назначенного. Ноль назначенных — мерить нечего. */
+  successRate: number;
+}
+
+export async function getCourierKpi(period: "week" | "month" | "quarter" = "month"): Promise<CourierStats> {
+  return trpcQuery<CourierStats>("kpi.courierKpi", { period });
+}
+
+/* ── Долги по моим заказам ─────────────────────────────────────────────────
+   Кому идти собирать. Считается по заказам агента, за вычетом уже внесённых
+   платежей; заказы без остатка сюда не попадают.
+   ────────────────────────────────────────────────────────────────────────── */
+export interface MyDebt {
+  orderId: number;
+  orderNumber: string;
+  paymentMethod: string;
+  status: string;
+  createdAt: string;
+  shopId: number;
+  shopName: string;
+  shopPhone: string | null;
+  shopAddress: string | null;
+  total: string;
+  paid: string;
+  remaining: string;
+}
+
+export async function getMyDebts(): Promise<MyDebt[]> {
+  return trpcQuery<MyDebt[]>("agent.myDebts");
+}
+
+/* ── Переписка по заказу ───────────────────────────────────────────────────
+   Часть заказа: сервер не даёт ни читать, ни писать в чужой.
+   ────────────────────────────────────────────────────────────────────────── */
+export interface OrderComment {
+  id: number;
+  orderId: number;
+  userId: number;
+  content: string;
+  parentId: number | null;
+  createdAt: string;
+  userName: string | null;
+  userAvatar: string | null;
+  /** Ответы на этот комментарий — сервер уже собрал их деревом. */
+  replies?: OrderComment[];
+}
+
+export async function getOrderComments(orderId: number): Promise<OrderComment[]> {
+  return trpcQuery<OrderComment[]>("order.listComments", { orderId });
+}
+
+export async function addOrderComment(orderId: number, content: string, parentId?: number): Promise<{ id: number }> {
+  return trpcMutation("order.addComment", { orderId, content, parentId });
+}
+
 export async function getProducts(search?: string): Promise<Product[]> {
   const res = await trpcQuery<Product[] | { data: Product[] }>("product.listAll", search ? { search } : undefined);
   return Array.isArray(res) ? res : (res as { data?: Product[] })?.data ?? [];
