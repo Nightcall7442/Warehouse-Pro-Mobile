@@ -358,6 +358,12 @@ export interface Order {
 export interface OrderDetail extends Order {
   items: Array<{
     id: number;
+    /*
+      Товар позиции. Сервер его отдавал всегда (services/order.ts: getById), а
+      в типе его не было — и добавить строку в заказ с телефона было нечем:
+      сервер различает правку позиции (itemId) и вставку новой (productId).
+    */
+    productId: number;
     productName: string;
     productCode?: string;
     quantity: number;
@@ -821,7 +827,19 @@ export async function updateOrder(id: number, data: { notes?: string; discount?:
   return trpcMutation<void>("order.update", { id, ...data });
 }
 
-export async function updateOrderItems(id: number, items: Array<{ itemId: number; quantity: number }>): Promise<void> {
+/**
+ * Правка состава заказа.
+ *
+ * Одним списком три действия, как их различает сервер: {itemId, quantity} —
+ * изменить количество, {itemId, quantity: 0} — убрать позицию,
+ * {productId, quantity, unitPrice} — добавить товар.
+ *
+ * Кому и когда это можно, решает сервер: свой заказ и пока он не уехал.
+ */
+export async function updateOrderItems(
+  id: number,
+  items: Array<{ itemId?: number; productId?: number; quantity: number; unitPrice?: string }>,
+): Promise<void> {
   return trpcMutation<void>("order.updateItems", { id, items });
 }
 

@@ -24,6 +24,7 @@ import {
   deleteOrder,
   updateOrder,
   updateOrderItems,
+  getProducts,
   type OrderDetail,
 } from "../../src/api";
 import {
@@ -113,8 +114,30 @@ export default function OrderDetailScreen() {
     },
   });
 
+  /*
+    Каталог для добавления товара.
+
+    Грузится только когда его попросили: окно правки открывают ради количества
+    гораздо чаще, чем ради нового товара, а позиций у организации сотни.
+    Отказ гасится в пустой список — тогда в окне просто нечего выбрать, но
+    количество правится как раньше.
+  */
+  const [needCatalog, setNeedCatalog] = useState(false);
+  const { data: catalog } = useQuery({
+    queryKey: ["catalog", "orderEdit"],
+    queryFn: () => getProducts().catch(() => []),
+    enabled: needCatalog,
+    retry: false,
+  });
+
   const updateItemsMutation = useMutation({
-    mutationFn: (items: Array<{ itemId: number; quantity: number }>) => updateOrderItems(Number(id), items),
+    /*
+      Три действия одним списком: изменить количество ({itemId, quantity}),
+      убрать позицию ({itemId, quantity: 0}) и добавить товар
+      ({productId, quantity, unitPrice}). Так их и понимает сервер.
+    */
+    mutationFn: (items: Array<{ itemId?: number; productId?: number; quantity: number; unitPrice?: string }>) =>
+      updateOrderItems(Number(id), items),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       notify.success("Количество товаров обновлено");
@@ -293,6 +316,9 @@ export default function OrderDetailScreen() {
         discount={editDiscount}
         items={(order?.items ?? []).map(item => ({
           id: item.id,
+          // Товар нужен, чтобы добавленную строку было чем отправить: сервер
+          // различает правку позиции (itemId) и вставку новой (productId).
+          productId: item.productId,
           productName: item.productName,
           productCode: item.productCode,
           quantity: item.quantity,
@@ -302,6 +328,8 @@ export default function OrderDetailScreen() {
         saving={updateMutation.isPending || updateItemsMutation.isPending}
         onNotesChange={setEditNotes}
         onDiscountChange={setEditDiscount}
+        catalog={catalog}
+        onNeedCatalog={() => setNeedCatalog(true)}
         onSaveItems={(items) => updateItemsMutation.mutate(items)}
         onSave={() => updateMutation.mutate()}
         onClose={() => setShowEditModal(false)}
