@@ -16,6 +16,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FadeInItem } from "../../src/components/Animated";
 import { startBackgroundTracking, stopBackgroundTracking, bufferLocation } from "../../src/backgroundLocation";
 
+/**
+ * Запасной опрос — только для телефонов, где не дали фоновую геолокацию.
+ *
+ * Пять минут, а не две: это принудительная съёмка, она идёт даже когда агент
+ * никуда не двигался, и каждая такая съёмка стоит батареи. Там, где система
+ * следит сама, этот таймер не запускается вовсе.
+ */
+const FALLBACK_TRACK_MS = 5 * 60 * 1000;
+
 type GpsState = "idle" | "locating" | "success" | "error";
 
 function AccuracyBar({ accuracy, colors }: { accuracy: number; colors: ThemeColors }) {
@@ -128,19 +137,54 @@ export default function GpsScreen() {
     }
   };
 
+  /* ═════════════════════════════════════════════════════════════════════════
+     Точку снимает КТО-ТО ОДИН.
+
+     ── Что было ─────────────────────────────────────────────────────────────
+
+     При включённом трекинге работали сразу два источника:
+
+       • системная задача (backgroundLocation): отдаёт точку, когда агент
+         сдвинулся на 50 метров, и не чаще раза в две минуты;
+       • свой таймер в экране: раз в пять минут будил приёмник НЕЗАВИСИМО от
+         того, двигался человек или нет.
+
+     Второй и сажал батарею. Агент сидит в магазине, обедает или стоит в
+     пробке — телефон всё равно каждые пять минут берёт свежую точку, ту же
+     самую, что и в прошлый раз. Система в это время уже знает, где телефон,
+     и отдала бы это даром.
+
+     ── Как теперь ───────────────────────────────────────────────────────────
+
+     Если системная задача запустилась — своего таймера нет вовсе: она
+     работает и когда приложение свёрнуто, и когда открыто. Таймер остаётся
+     ЗАПАСНЫМ ходом и включается только там, где разрешения на фоновую
+     геолокацию не дали: без него у такого агента следа не будет совсем.
+     ═════════════════════════════════════════════════════════════════════════ */
   useEffect(() => {
-    if (autoTrack) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      void locate();
-      intervalRef.current = setInterval(locate, 5 * 60 * 1000);
-      startBackgroundTracking().then(result => {
-        if (!result.success && __DEV__) console.warn("Background location permission not granted:", result.reason);
-      });
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    if (!autoTrack) {
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       stopBackgroundTracking();
+      return;
     }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+
+    let cancelled = false;
+    // Первую точку — сразу: человек включил трекинг и должен увидеть, что он
+    // работает, а не ждать первого шага или пяти минут.
+    void locate();
+
+    startBackgroundTracking().then(result => {
+      if (cancelled) return;
+      if (result.success) return;
+      if (__DEV__) console.warn("Background location permission not granted:", result.reason);
+      // Запасной ход — только когда система следить отказалась.
+      intervalRef.current = setInterval(locate, FALLBACK_TRACK_MS);
+    });
+
+    return () => {
+      cancelled = true;
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    };
   }, [autoTrack]);
 
   useEffect(() => {
@@ -208,7 +252,19 @@ export default function GpsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Авто-слежение</Text>
-              <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>Отправка каждые 2 минуты</Text>
+              {/*
+                Подпись говорит, как оно работает НА САМОМ ДЕЛЕ.
+
+                «Каждые 2 минуты» было неправдой в обе стороны: стоящий на
+                месте агент слал точку раз в пять минут своим таймером, а
+                идущий — по сдвигу на 50 метров. И главное, из «каждые две
+                минуты» человек делает вывод, что телефон всё время что-то
+                считает, — а он молчит, пока агент не двинулся. Это и есть
+                причина, по которой батарея не садится.
+              */}
+              <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
+                Отправка при перемещении, не чаще раза в 2 минуты
+              </Text>
             </View>
             <Switch value={autoTrack} onValueChange={v => { Haptics.selectionAsync(); setAutoTrack(v); }} trackColor={{ false: colors.bg.elevated, true: colors.brand.primary }} thumbColor="#fff" />
           </View>

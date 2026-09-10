@@ -129,7 +129,16 @@ export function AgentPlansView() {
   const handleOptimize = async () => {
     setOptimizing(true);
     try {
-      const { coords } = await (await import("expo-location")).getCurrentPositionAsync({ accuracy: 1 });
+      /*
+        Точность — та же, что у всех остальных съёмок в приложении.
+
+        Здесь стояло `accuracy: 1`, то есть Lowest — это километры. Батарею
+        оно бережёт, но маршрут строится ОТ этой точки, и с километровой
+        ошибкой порядок объезда по городу выходит неверным. Balanced берётся
+        по вышкам и Wi-Fi, стоит немногим дороже и даёт десятки метров.
+      */
+      const Loc = await import("expo-location");
+      const { coords } = await Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.Balanced });
       const result = await getOptimizedRoute(coords.latitude, coords.longitude);
       if (result.plans.length > 0) {
         setOptimizedPlanIds(result.plans.map(p => p.id));
