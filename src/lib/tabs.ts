@@ -83,6 +83,19 @@ export function isTabVisible(name: string, role: string | undefined): boolean {
   // Надзорные экраны: планы визитов и нормы.
   if (name === "plans" || name === "targets") return oversight;
 
+  /*
+    Долги магазинов — надзорным ролям.
+
+    Ровно те же три роли, что и у сервера: shop.receivablesAging стоит на
+    managementQuery (владелец, оператор, супервайзер). Вкладка, открывающая
+    экран с отказом, хуже отсутствующей — за этим следит проверка ролей.
+
+    Агенту вкладки не даём: у него свой экран «Долги по моим заказам»
+    (app/debts.tsx), и там разговор про накладные, а не про объезд чужих
+    маршрутов.
+  */
+  if (name === "debtors") return oversight;
+
   // Магазины — всем, кроме курьера: он едет по заказам, а не по точкам.
   if (name === "shops") return !courier;
 

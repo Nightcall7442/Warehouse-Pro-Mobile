@@ -24,6 +24,7 @@ const TAB_ICONS: Record<string, IconName> = {
   deliveries: "truck",
   profile: "user",
   tracking: "map",
+  debtors: "alert-circle",
 };
 
 const TAB_LABELS: Record<string, string> = {
@@ -37,6 +38,7 @@ const TAB_LABELS: Record<string, string> = {
   deliveries: "Доставки",
   profile: "Профиль",
   tracking: "Слежение",
+  debtors: "Долги",
 };
 
 function CustomTabBar(props: BottomTabBarProps) {
@@ -208,6 +210,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{ title: "Профиль", headerShown: false }}
+      />
+      <Tabs.Screen
+        name="debtors"
+        options={{ title: "Долги", headerShown: false }}
       />
       <Tabs.Screen name="gps" options={{ tabBarButton: () => null }} />
       <Tabs.Screen name="tracking" options={{ title: "Карта", headerShown: false }} />

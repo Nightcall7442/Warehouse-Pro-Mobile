@@ -7,7 +7,9 @@ import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
-import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, getNotificationCounts } from "../../src/api";
+import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, getNotificationCounts, getReceivablesAging } from "../../src/api";
+import { debtorTotals } from "../../src/lib/debtors";
+import { formatMoney } from "../../src/store/branding";
 import { Card } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
 import { Typography, Spacing, Radii, KpiColors, Gradients, soft, type ThemeColors } from "../../src/theme";
@@ -539,6 +541,15 @@ function SupervisorHome() {
     queryKey: ["smartAlerts"], queryFn: getSmartAlerts, retry: false,
   });
 
+  /*
+    Долги магазинов. Тот же ключ, что и на вкладке «Долги», — значит открытая
+    вкладка достаётся уже посчитанной, без второго похода на сервер.
+  */
+  const { data: aging } = useQuery({
+    queryKey: ["receivablesAging"], queryFn: getReceivablesAging, retry: false,
+  });
+  const debts = debtorTotals(aging);
+
   // Derived data
   const revenueTrend = (trends ?? []).slice(-7).map(t => Number(t.revenue));
   const ordersTrend = (trends ?? []).slice(-7).map(t => t.orderCount);
@@ -611,6 +622,66 @@ function SupervisorHome() {
               );
             })}
           </ScrollView>
+        </FadeInItem>
+      )}
+
+      {/* ── Долги магазинов ──────────────────────────────────────────────
+        Выше графиков намеренно.
+
+        Динамика продаж отвечает на вопрос «как идут дела», а долги — на «что
+        делать сегодня». Второе важнее и требует действия, поэтому стоит
+        первым. Карточка ведёт на вкладку, где список отсортирован от самых
+        старых долгов.
+
+        Показывается, только когда долг есть: пустая карточка «0 сум» на
+        главной занимает место и не сообщает ничего.
+      */}
+      {debts.totalDebt > 0 && (
+        <FadeInItem delay={80}>
+          <PressableScale onPress={() => router.push("/debtors")} haptic="light">
+            <Card style={{ marginBottom: Spacing.base }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <Feather name="alert-circle" size={16} color={colors.status.warning} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>
+                  Долги магазинов
+                </Text>
+                <View style={{ flex: 1 }} />
+                <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "flex-end", gap: Spacing.lg }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>
+                    всего
+                  </Text>
+                  <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
+                    {formatMoney(debts.totalDebt)}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>
+                    магазинов
+                  </Text>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
+                    {debts.debtorCount}
+                  </Text>
+                </View>
+              </View>
+
+              {/*
+                Просроченное — отдельной строкой и красным. Это единственное
+                число здесь, по которому что-то делают: остальное справка.
+              */}
+              {debts.overdue > 0 && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.status.danger }} />
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger }}>
+                    старше месяца: {formatMoney(debts.overdue)}
+                  </Text>
+                </View>
+              )}
+            </Card>
+          </PressableScale>
         </FadeInItem>
       )}
 

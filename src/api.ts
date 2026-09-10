@@ -743,6 +743,42 @@ export async function getMyDebts(): Promise<MyDebt[]> {
   return trpcQuery<MyDebt[]>("agent.myDebts");
 }
 
+/* ── Долги магазинов целиком: для супервайзера ──────────────────────────────
+   Не «сколько должны», а «сколько и КАК ДАВНО»: миллион недельного долга и
+   миллион полугодового — это две разные организации, и решение, к кому ехать,
+   принимается именно из различия. Возраст считается по неоплаченным заказам.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** Границы возраста: неделя — обычная отсрочка, месяц — пора ехать, два — трудные деньги. */
+export type AgeBucket = "d0_7" | "d8_30" | "d31_60" | "d60plus";
+
+export interface ShopAging {
+  shopId: number;
+  shopName: string;
+  /** Телефон магазина: долг закрывается звонком, и номер нужен в той же строке. */
+  phone: string | null;
+  /** Агент, за которым числится магазин, — на чьём маршруте висит долг. */
+  agentName: string | null;
+  debt: number;
+  buckets: Record<AgeBucket, number>;
+  /** Долг без привязки к заказу: ручные начисления. Состарить его нечем. */
+  unattributed: number;
+  /** Возраст самого старого неоплаченного заказа, дней. */
+  oldestDays: number | null;
+}
+
+export interface ReceivablesAging {
+  totalDebt: number;
+  buckets: Record<AgeBucket, number>;
+  unattributed: number;
+  debtorCount: number;
+  shops: ShopAging[];
+}
+
+export async function getReceivablesAging(): Promise<ReceivablesAging> {
+  return trpcQuery<ReceivablesAging>("shop.receivablesAging");
+}
+
 /* ── Переписка по заказу ───────────────────────────────────────────────────
    Часть заказа: сервер не даёт ни читать, ни писать в чужой.
    ────────────────────────────────────────────────────────────────────────── */
