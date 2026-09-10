@@ -24,6 +24,7 @@ import {
   deleteOrder,
   updateOrder,
   updateOrderItems,
+  setPromisedDelivery,
   getProducts,
   type OrderDetail,
 } from "../../src/api";
@@ -46,6 +47,11 @@ import { OrderItemsList, OrderFinancialSummary } from "../../src/components/orde
 import { OrderActions } from "../../src/components/order/OrderActions";
 import { OrderEditModal } from "../../src/components/order/OrderEditModal";
 import { OrderComments } from "../../src/components/order/OrderComments";
+import { PromisedDelivery } from "../../src/components/order/PromisedDelivery";
+import { canMovePromise } from "../../src/lib/promised-delivery";
+import { Card } from "../../src/components/ui";
+import { Spacing } from "../../src/theme";
+import { errorText } from "../../src/lib/error-text";
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -147,6 +153,30 @@ export default function OrderDetailScreen() {
     onError: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       notify.error("Не удалось обновить количество");
+    },
+  });
+
+  /*
+    Перенести обещанный срок.
+
+    Ровно та возможность, ради которой магазин звонит агенту: «сегодня не
+    успеваем — привезём в понедельник». Через правку заказа этого было бы
+    не сделать: она открыта только офису.
+
+    Отказ показываем словами сервера: по закрытому заказу он объясняет,
+    почему нельзя, и своя выдумка на этом месте была бы хуже.
+  */
+  const promiseMutation = useMutation({
+    mutationFn: (v: string | null) => setPromisedDelivery(Number(id), v),
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notify.success("Срок сохранён");
+      queryClient.invalidateQueries({ queryKey: ["order", id] });
+      queryClient.invalidateQueries({ queryKey: ["myOrders"] });
+    },
+    onError: (e) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      notify.error(errorText(e));
     },
   });
 
@@ -287,6 +317,20 @@ export default function OrderDetailScreen() {
         >
         <PipelineBanner status={order.status} colors={colors} />
         <OrderInfoCard order={order} colors={colors} />
+        {/*
+          Обещанный срок — сразу под сведениями о заказе: агент, открывший
+          карточку по звонку «где мой товар», ищет здесь именно его.
+        */}
+        <Card style={{ marginTop: Spacing.md }}>
+          <PromisedDelivery
+            value={order.promisedDeliveryAt ?? null}
+            onChange={(v) => promiseMutation.mutate(v)}
+            status={order.status}
+            deliveredAt={order.deliveredAt ?? null}
+            editable={canMovePromise(order.status)}
+            disabled={promiseMutation.isPending}
+          />
+        </Card>
         <OrderItemsList order={order} colors={colors} />
         <OrderFinancialSummary order={order} subtotal={subtotal} discount={discount} colors={colors} />
         <OrderActions

@@ -344,6 +344,14 @@ export interface CreateOrderInput {
   discount?: number;
   paymentMethod?: "cash" | "card" | "transfer" | "debt";
   idempotencyKey?: string;
+  /*
+    Когда обещали привезти — ISO с поясом.
+
+    Ставит агент, стоя в магазине: это он говорит срок вслух. Не назвал —
+    поля нет, и это законно: «не обещали» и «обещали на сегодня» разные
+    вещи, а подставленный срок был бы его обещанием, которого он не давал.
+  */
+  promisedDeliveryAt?: string;
 }
 
 export interface Order {
@@ -381,6 +389,10 @@ export interface OrderDetail extends Order {
   agent?: { id: number; name: string } | null;
   deliveryResult?: string | null;
   deliveryNotes?: string | null;
+  /** Обещанный срок или null, если срок магазину не называли. */
+  promisedDeliveryAt?: string | null;
+  /** Когда довезли — чтобы отличить «вовремя» от «позже обещанного». */
+  deliveredAt?: string | null;
 }
 
 // ──────────────────────────────────────
@@ -841,6 +853,22 @@ export async function updateOrderItems(
   items: Array<{ itemId?: number; productId?: number; quantity: number; unitPrice?: string }>,
 ): Promise<void> {
   return trpcMutation<void>("order.updateItems", { id, items });
+}
+
+/**
+ * Перенести обещанный срок доставки.
+ *
+ * Своя ручка, а не order.update: та открыта только офису и заодно правит
+ * скидку со способом оплаты. Здесь ровно одна возможность — та, что нужна
+ * агенту, которому магазин звонит: «сегодня не успеваем, привезём в
+ * понедельник».
+ *
+ * null означает снятое обещание, а не «оставить как было»: иначе ошибочно
+ * поставленный срок нечем было бы убрать. Сервер откажет по закрытому
+ * заказу — переписывать обещание задним числом нельзя.
+ */
+export async function setPromisedDelivery(orderId: number, promisedDeliveryAt: string | null): Promise<void> {
+  return trpcMutation<void>("order.setPromisedDelivery", { orderId, promisedDeliveryAt });
 }
 
 export async function listAllOrders(params?: { page?: number; pageSize?: number; status?: string; showDeleted?: boolean }): Promise<{ data: Order[]; total: number }> {

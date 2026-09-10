@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getAvailableShops, getProducts, createOrder, Shop } from "../../src/api";
+import { PromisedDelivery } from "../../src/components/order/PromisedDelivery";
 import { useOfflineStore, uuidv4, isRetryableError } from "../../src/store/offline";
 import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
@@ -412,9 +413,12 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
 }
 
 // ── Step 3: Review ───────────────────────────────────────────────────────────
-function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPaymentChange, colors }: {
+function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPaymentChange, promisedAt, onPromisedChange, colors }: {
   shopName: string; lines: OrderLine[]; notes: string; onNotesChange: (v: string) => void;
-  paymentMethod: string; onPaymentChange: (v: string) => void; colors: ThemeColors;
+  paymentMethod: string; onPaymentChange: (v: string) => void;
+  /* Когда обещали привезти. null — срок не называли, и это законный ответ. */
+  promisedAt: string | null; onPromisedChange: (v: string | null) => void;
+  colors: ThemeColors;
 }) {
   const { isDark } = useThemeStore();
   const { subtotal, totalQty } = useMemo(() => {
@@ -502,6 +506,14 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
         <TextInput value={notes} onChangeText={onNotesChange} placeholder="Комментарий к заказу…" placeholderTextColor={colors.text.tertiary} multiline numberOfLines={3} textAlignVertical="top"
           style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary, minHeight: 80 }} />
       </Card>
+      {/*
+        Обещанный срок — последним, рядом с примечаниями: это то, что агент
+        договаривает уже на выходе из магазина, а не выбирает вместе с
+        товаром.
+      */}
+      <Card style={{ padding: Spacing.base }}>
+        <PromisedDelivery value={promisedAt} onChange={onPromisedChange} />
+      </Card>
     </View>
   );
 }
@@ -515,6 +527,9 @@ interface OrderDraft {
   lines: OrderLine[];
   notes: string;
   paymentMethod: string;
+  /* Необязательное: черновики, сохранённые до появления срока, обязаны
+     восстанавливаться по-прежнему. */
+  promisedAt?: string | null;
   savedAt: number;
 }
 
@@ -567,6 +582,12 @@ export default function NewOrderScreen() {
   });
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  /*
+    Когда обещали привезти. null и остаётся null, пока агент не нажал сам:
+    подставленный срок был бы его обещанием магазину, которого он не давал,
+    и просрочкой, которой не было.
+  */
+  const [promisedAt, setPromisedAt] = useState<string | null>(null);
   /**
    * Когда экран открыт с уже выбранным магазином или товаром, черновик не
    * спрашивается вовсе — значит проверка пройдена сразу, и это начальное
@@ -643,6 +664,7 @@ export default function NewOrderScreen() {
               setLines(draft.lines);
               setNotes(draft.notes);
               setPaymentMethod(draft.paymentMethod);
+              setPromisedAt(draft.promisedAt ?? null);
               setStep(draft.shop ? 2 : 1);
             }},
           ]
@@ -656,10 +678,10 @@ export default function NewOrderScreen() {
   useEffect(() => {
     if (!draftChecked || lines.length === 0) return;
     const timer = setTimeout(() => {
-      saveDraft({ shop: selectedShop, lines, notes, paymentMethod });
+      saveDraft({ shop: selectedShop, lines, notes, paymentMethod, promisedAt });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [selectedShop, lines, notes, paymentMethod, draftChecked]);
+  }, [selectedShop, lines, notes, paymentMethod, promisedAt, draftChecked]);
 
   // The backend only accepts one order-level discount percentage (per-line
   // discounts aren't stored server-side) and recomputes subtotal itself from
@@ -717,7 +739,7 @@ export default function NewOrderScreen() {
       // Ровно эта ошибка описана и исправлена в самой очереди
       // (src/store/offline.ts), но точка входа сохраняла старую копию.
       if (isRetryableError(e) && selectedShop) {
-        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
+        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, promisedDeliveryAt: promisedAt ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
         const queued = await addOrder(offlineOrder);
         if (!queued) {
           // Запись очереди на диск не удалась — на рабочих телефонах кончается
@@ -783,6 +805,7 @@ export default function NewOrderScreen() {
     const input = {
       shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt",
       idempotencyKey: idempotencyKeyRef.current,
+      promisedDeliveryAt: promisedAt ?? undefined,
       discount: overallDiscountPercent,
       items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Math.max(0, Number(l.discount || 0)) })),
     };
@@ -825,7 +848,7 @@ export default function NewOrderScreen() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); addRecentShopSafely(s.id); }} colors={colors} />}
         {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} />}
-        {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} colors={colors} />}
+        {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} promisedAt={promisedAt} onPromisedChange={setPromisedAt} colors={colors} />}
       </ScrollView>
 
       {/* Bottom CTA */}
