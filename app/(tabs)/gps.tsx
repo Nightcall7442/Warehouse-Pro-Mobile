@@ -13,6 +13,7 @@ import { Card, Button, Badge } from "../../src/components/ui";
 import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LocationDisclosure } from "../../src/components/LocationDisclosure";
 import { FadeInItem } from "../../src/components/Animated";
 import { startBackgroundTracking, stopBackgroundTracking, bufferLocation } from "../../src/backgroundLocation";
 
@@ -51,14 +52,33 @@ export default function GpsScreen() {
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [error, setError] = useState("");
   const [autoTrack, setAutoTrack] = useState(false);
+  const [askConsent, setAskConsent] = useState(false);
   const [lastSent, setLastSent] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLocating = useRef(false);
   const spin = useSharedValue(0);
 
+  /*
+    Восстановление после перезапуска — только если разрешение ещё живо.
+
+    Прежде трекинг включался по сохранённому признаку безоговорочно. Если
+    человек тем временем отозвал доступ к геолокации в настройках телефона,
+    приложение при следующем запуске молча просило разрешение снова —
+    системным окном, без всякого разъяснения. Это ровно тот случай, который
+    правило Google и запрещает: окно говорит «разрешить доступ», а о том, что
+    след увидит начальник, не говорит ничего.
+
+    Теперь так: разрешение на месте — продолжаем молча, человек согласие уже
+    давал. Разрешения нет — трекинг остаётся выключенным, и когда человек
+    включит его сам, он снова увидит раскрытие.
+  */
   useEffect(() => {
-    AsyncStorage.getItem(AUTO_TRACK_KEY).then(v => { if (v === "true") setAutoTrack(true); });
+    AsyncStorage.getItem(AUTO_TRACK_KEY).then(async v => {
+      if (v !== "true") return;
+      const { status } = await Location.getBackgroundPermissionsAsync();
+      if (status === "granted") setAutoTrack(true);
+    });
   }, []);
 
   useEffect(() => { AsyncStorage.setItem(AUTO_TRACK_KEY, String(autoTrack)); }, [autoTrack]);
@@ -266,7 +286,27 @@ export default function GpsScreen() {
                 Отправка при перемещении, не чаще раза в 2 минуты
               </Text>
             </View>
-            <Switch value={autoTrack} onValueChange={v => { Haptics.selectionAsync(); setAutoTrack(v); }} trackColor={{ false: colors.bg.elevated, true: colors.brand.primary }} thumbColor="#fff" />
+            {/*
+              Включение идёт через раскрытие, выключение — сразу.
+
+              Правило Google Play: заметное разъяснение ДО системного запроса
+              разрешения, и согласие отдельным действием. Системное окно
+              говорит «разрешить доступ к местоположению» и НЕ говорит, что
+              след увидит начальник, — а человек соглашается именно на это.
+
+              Выключение спрашивать не о чем: отказаться от слежки можно без
+              объяснений и мгновенно.
+            */}
+            <Switch
+              value={autoTrack}
+              onValueChange={v => {
+                Haptics.selectionAsync();
+                if (v) setAskConsent(true);
+                else setAutoTrack(false);
+              }}
+              trackColor={{ false: colors.bg.elevated, true: colors.brand.primary }}
+              thumbColor="#fff"
+            />
           </View>
           {autoTrack && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
@@ -275,6 +315,14 @@ export default function GpsScreen() {
           )}
         </Card>
       </FadeInItem>
+
+      <LocationDisclosure
+        visible={askConsent}
+        onAccept={() => { setAskConsent(false); setAutoTrack(true); }}
+        /* Отказ ничего не включает и ни к чему не ведёт: трекинг остаётся
+           выключенным, экран работает как работал. */
+        onDecline={() => setAskConsent(false)}
+      />
 
       {/* Last sent */}
       {lastSent && (
