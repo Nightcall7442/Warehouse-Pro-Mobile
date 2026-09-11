@@ -112,7 +112,7 @@ export default function GpsScreen() {
      * пользуемся. Дыру в маршруте потом нечем восстановить.
      */
     try {
-      let c: { lat: number; lng: number; accuracy: number };
+      let c: { lat: number; lng: number; accuracy: number; mocked: boolean };
       let batteryPct: number | undefined;
 
       try {
@@ -123,7 +123,7 @@ export default function GpsScreen() {
           ]),
           Battery.getBatteryLevelAsync().catch(() => null),
         ]);
-        c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 999 };
+        c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 999, mocked: pos.mocked === true };
         batteryPct = battery !== null ? Math.round(battery * 100) : undefined;
       } catch {
         // Вот здесь виноват действительно GPS: координат нет.
@@ -136,7 +136,7 @@ export default function GpsScreen() {
       setCoords(c);
 
       try {
-        await saveLocation(c.lat, c.lng, c.accuracy, batteryPct);
+        await saveLocation(c.lat, c.lng, c.accuracy, batteryPct, undefined, c.mocked);
         setState("success");
         setLastSent(new Date());
       } catch {
@@ -147,6 +147,7 @@ export default function GpsScreen() {
           accuracy: c.accuracy,
           batteryLevel: batteryPct,
           recordedAt: new Date().toISOString(),
+          mocked: c.mocked,
         });
         setError("Точка снята, но не отправлена — нет связи. Она сохранена и уйдёт сама, когда связь появится.");
         setState("error");

@@ -52,6 +52,19 @@ beforeEach(() => {
   mockSaveLocation.mockResolvedValue(undefined);
 });
 
+describe("подменённые координаты", () => {
+  it("признак mocked от системы доходит до сервера", async () => {
+    mockGetCurrentPositionAsync.mockResolvedValue({ ...position, mocked: true });
+    await sendVisitPing();
+    expect(mockSaveLocation.mock.calls[0][5]).toBe(true);
+  });
+
+  it("без признака — false, а не undefined-как-повезёт", async () => {
+    await sendVisitPing();
+    expect(mockSaveLocation.mock.calls[0][5]).toBe(false);
+  });
+});
+
 describe("точка при отметке визита", () => {
   it("уходит с координатами, точностью и зарядом", async () => {
     await sendVisitPing();

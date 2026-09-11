@@ -36,6 +36,8 @@ interface PendingPoint {
   lng: number;
   accuracy: number;
   batteryLevel?: number;
+  /** Координаты подменены (так сказала система). */
+  mocked?: boolean;
   /**
    * Когда точка снята, в формате ISO.
    *
@@ -99,7 +101,7 @@ async function flushPending(): Promise<void> {
   while (remaining.length > 0 && sent < FLUSH_BATCH) {
     const point = remaining[0];
     try {
-      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt);
+      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt, point.mocked);
       remaining.shift();
       sent += 1;
       // Пауза между точками: залп подряд упирается в лимит запросов и роняет
@@ -144,6 +146,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     // Время берётся у самой координаты, а не «сейчас»: система могла отдать
     // накопленную точку с задержкой, и её собственная метка точнее.
     recordedAt: new Date(location.timestamp).toISOString(),
+    mocked: location.mocked === true,
   }));
 
   const toBuffer: PendingPoint[] = [];
@@ -157,7 +160,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     const point = points[i];
     if (serverRefusing) { toBuffer.push(point); continue; }
     try {
-      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt);
+      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt, point.mocked);
       if (i < points.length - 1) await delay(FLUSH_GAP_MS);
     } catch (e) {
       if (__DEV__) console.warn("Background location upload failed, buffering:", e);

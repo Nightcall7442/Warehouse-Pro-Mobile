@@ -536,6 +536,13 @@ export async function saveLocation(
    * времени получения, а это значение служит для показа.
    */
   recordedAt?: string,
+  /**
+   * Система пометила координаты как подменённые (Android: приложение
+   * «фиктивное местоположение»). Единственный признак фрода, который не
+   * бывает случайным, — сервер считает по нему; отсутствие GPS фродом
+   * не считается.
+   */
+  mocked?: boolean,
 ): Promise<void> {
   await trpcMutation("agent.saveLocation", {
     lat: String(lat),
@@ -543,6 +550,7 @@ export async function saveLocation(
     accuracy: accuracy !== undefined ? String(accuracy) : undefined,
     batteryLevel,
     recordedAt,
+    mocked: mocked === true ? true : undefined,
   });
 }
 
