@@ -411,6 +411,11 @@ export interface OrderDetail extends Order {
  * нескольким. Сервер не выбирает за человека — данные в этих организациях
  * разные — а называет их и ждёт повторного запроса с tenantId.
  */
+/** Пароль подошёл, но у человека включён второй фактор: нужен код из приложения. */
+export class TotpCodeRequired extends Error {
+  constructor(message: string) { super(message); this.name = "TotpCodeRequired"; }
+}
+
 export class TenantChoiceRequired extends Error {
   readonly organizations: Array<{ tenantId: number; name: string }>;
   constructor(message: string, organizations: Array<{ tenantId: number; name: string }>) {
@@ -423,13 +428,14 @@ export class TenantChoiceRequired extends Error {
 export async function login(
   email: string,
   password: string,
-  tenantId?: number
+  tenantId?: number,
+  code?: string,
 ): Promise<{ user: User; token: string }> {
   let res;
   try {
     res = await axios.post(
       `${API_BASE}/api/login`,
-      tenantId === undefined ? { email, password } : { email, password, tenantId },
+      { email, password, ...(tenantId === undefined ? {} : { tenantId }), ...(code ? { code } : {}) },
       {
         timeout: 15_000,
         headers: { "Content-Type": "application/json" }
@@ -443,6 +449,9 @@ export async function login(
         data.error ?? "Выберите организацию",
         data.organizations ?? [],
       );
+    }
+    if (response?.status === 401 && data?.code === "TOTP_REQUIRED") {
+      throw new TotpCodeRequired(data.error ?? "Введите код из приложения");
     }
     throw e;
   }

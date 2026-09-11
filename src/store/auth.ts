@@ -7,7 +7,7 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, tenantId?: number) => Promise<void>;
+  login: (email: string, password: string, tenantId?: number, code?: string) => Promise<void>;
   loginWithBiometric: () => Promise<boolean>;
   logout: () => Promise<void>;
   hydrate: () => Promise<void>;
@@ -225,7 +225,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  login: async (email, password, tenantId) => {
+  login: async (email, password, tenantId, code) => {
     // Вход чистит кэши предыдущей сессии независимо от того, чем она
     // закончилась.
     //
@@ -241,7 +241,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     // нового вошедшего залила бы их под его именем.
     await stopTrackingOnSignOut();
 
-    const result = await apiLogin(email, password, tenantId);
+    const result = await apiLogin(email, password, tenantId, code);
 
     if (result?.user) {
       await writeCachedUser(result.user);

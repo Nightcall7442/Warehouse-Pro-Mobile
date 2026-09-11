@@ -17,7 +17,7 @@ import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, Touc
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
-import { TenantChoiceRequired } from "../../src/api";
+import { TenantChoiceRequired, TotpCodeRequired } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Gradients, Radii, Spacing, soft } from "../../src/theme";
 import { useBrandingStore } from "../../src/store/branding";
@@ -49,6 +49,9 @@ export default function LoginScreen() {
     экране текст отказа и войти с телефона НЕ МОГ ВООБЩЕ. В вебе выбор есть.
   */
   const [orgChoice, setOrgChoice] = useState<{ message: string; organizations: Array<{ tenantId: number; name: string }> } | null>(null);
+  // Второй фактор: сервер попросил код — показываем поле и шлём тот же вход с кодом.
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState("");
   const { login, loginWithBiometric } = useAuthStore();
   const { capabilities, biometricEnabled, loginWithBiometric: biometricAuth } = useBiometricAuth();
 
@@ -77,12 +80,16 @@ export default function LoginScreen() {
     if (!email.trim() || !password) { setError("Введите email и пароль"); return; }
     setError(""); setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password, tenantId);
+      await login(email.trim().toLowerCase(), password, tenantId, code.trim() || undefined);
     }
     catch (e: unknown) {
       // Не отказ, а вопрос: в какой из организаций входим.
       if (e instanceof TenantChoiceRequired) {
         setOrgChoice({ message: e.message, organizations: e.organizations });
+        return;
+      }
+      if (e instanceof TotpCodeRequired) {
+        setNeedCode(true);
         return;
       }
       // Здесь наружу выходил текст axios: «Network Error», «timeout of
@@ -229,6 +236,22 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {needCode ? (
+                <View style={{ marginBottom: Spacing.lg + 2 }}>
+                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: Spacing.sm }}>Код из приложения</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: Radii.lg, ...soft(isDark).inset }}>
+                    <Feather name="shield" size={16} color={C.textMuted} style={{ marginLeft: Spacing.base }} />
+                    <TextInput
+                      testID="login-totp"
+                      style={{ flex: 1, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: C.text }}
+                      placeholder="123 456" placeholderTextColor={C.textMuted}
+                      value={code} onChangeText={setCode} keyboardType="number-pad" autoComplete="one-time-code"
+                      autoFocus editable={!loading} onSubmitEditing={() => handleLogin()}
+                    />
+                  </View>
+                </View>
+              ) : null}
 
               {/* Выбор организации.
                   Строки приподняты на цвете холста, как второстепенные
