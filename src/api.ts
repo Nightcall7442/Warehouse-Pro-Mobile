@@ -68,6 +68,13 @@ api.interceptors.response.use(
     }
     if (status === 401 && !isSelfInflicted401(url)) {
       await SecureStore.deleteItemAsync("session_token").catch(() => {});
+      // Фоновый GPS останавливается здесь же, а не только в logout():
+      // см. endSessionLocally в store/auth.ts.
+      {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { stopTrackingOnSignOut } = require("./store/auth");
+        await stopTrackingOnSignOut?.().catch?.(() => {});
+      }
       // Clearing the token alone isn't enough — without this, the auth
       // store still thinks the user is logged in (isAuthenticated stays
       // true) until the next manual hydrate(), so the UI silently shows
@@ -1470,6 +1477,8 @@ export interface RecordPartialPaymentInput {
   method: "cash" | "card" | "transfer";
   debtDueDate?: string;
   notes?: string;
+  /** Ключ повтора: делать один раз при открытии окна, слать тот же при каждой попытке (uuidv4 из store/offline). */
+  idempotencyKey?: string;
 }
 
 export async function recordPartialPayment(input: RecordPartialPaymentInput): Promise<{ success: boolean }> {
@@ -1493,7 +1502,7 @@ export async function recordPartialDelivery(input: RecordPartialDeliveryInput): 
 export interface RecordDeliveryAndPaymentInput {
   orderId: number;
   deliveredItems: Array<{ itemId: number; deliveredQuantity: number; returnReason?: string }>;
-  payment: { paidAmount: string; method: "cash" | "card" | "transfer"; debtDueDate?: string; notes?: string };
+  payment: { paidAmount: string; method: "cash" | "card" | "transfer"; debtDueDate?: string; notes?: string; idempotencyKey?: string };
   photos?: string[];
 }
 

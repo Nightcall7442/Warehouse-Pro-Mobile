@@ -10,6 +10,7 @@ import { Feather } from "@expo/vector-icons";
 import { getAvailableShops, getProducts, createOrder, Shop } from "../../src/api";
 import { PromisedDelivery } from "../../src/components/order/PromisedDelivery";
 import { useOfflineStore, uuidv4, isRetryableError } from "../../src/store/offline";
+import { useOfflineCopy } from "../../src/hooks/useOfflineCopy";
 import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
@@ -105,7 +106,23 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
   const [search, setSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("");
   const [recentIds, setRecentIds] = useState<number[]>([]);
-  const { data: shops, isLoading } = useQuery({ queryKey: ["availableShops"], queryFn: getAvailableShops });
+  /*
+    Живые данные с сервера, а при их отсутствии — копия с диска.
+
+    Кэш react-query живёт только в памяти: агент, открывший приложение утром
+    в подсобке без связи, видел на первом же шаге «Ничего не найдено», хотя
+    офлайн-очередь умеет принять заказ. Хук и модуль копии были написаны и
+    покрыты тестом, но провод отсюда потерялся при слиянии ветвей 07.09.
+  */
+  const { data: liveShops, isLoading: liveLoading } = useQuery({ queryKey: ["availableShops"], queryFn: getAvailableShops });
+  const { data: shops, fromCopy, savedAt } = useOfflineCopy<typeof liveShops>("shops", liveShops);
+  // Пока грузится живое, но копия уже есть — показываем копию, не скелет.
+  const isLoading = liveLoading && !shops;
+  // Про возраст копии сказано прямо: по остаткам и ценам агент разговаривает
+  // с хозяином магазина, и выдавать вчерашнее за сегодняшнее молча нельзя.
+  const copyNotice = fromCopy && savedAt
+    ? `Список сохранён ${new Date(savedAt).toLocaleDateString("ru")} — связи нет, он мог устареть`
+    : null;
 
   // Load recent shop IDs on mount
   useEffect(() => {
@@ -172,6 +189,12 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
 
   return (
     <View style={{ padding: Spacing.base, gap: Spacing.md, flex: 1 }}>
+      {copyNotice && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.status.warningDim, borderRadius: Radii.md, paddingVertical: 8, paddingHorizontal: 10 }}>
+          <Feather name="wifi-off" size={13} color={colors.status.warning} />
+          <Text style={{ flex: 1, fontSize: Typography.size.xs, color: colors.text.secondary }}>{copyNotice}</Text>
+        </View>
+      )}
       <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск по имени, адресу, району…" autoFocus />
       {/* City quick filter */}
       {cities.length > 1 && (
@@ -316,7 +339,13 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [onlyInStock, setOnlyInStock] = useState(true);
-  const { data: products, isLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
+  // Тот же запасной путь, что у магазинов: см. ShopPicker.
+  const { data: liveProducts, isLoading: liveLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
+  const { data: products, fromCopy, savedAt } = useOfflineCopy<typeof liveProducts>("products", liveProducts);
+  const isLoading = liveLoading && !products;
+  const copyNotice = fromCopy && savedAt
+    ? `Каталог сохранён ${new Date(savedAt).toLocaleDateString("ru")} — связи нет, остатки и цены могли измениться`
+    : null;
 
   const filtered = useMemo(() => {
     let list = (products ?? []).filter(p => !debouncedSearch || p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || (p.code ?? "").toLowerCase().includes(debouncedSearch.toLowerCase()));
@@ -360,6 +389,12 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
               </TouchableOpacity>
             )}
           </View>
+          {copyNotice && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.status.warningDim, borderRadius: Radii.md, paddingVertical: 8, paddingHorizontal: 10 }}>
+              <Feather name="wifi-off" size={13} color={colors.status.warning} />
+              <Text style={{ flex: 1, fontSize: Typography.size.xs, color: colors.text.secondary }}>{copyNotice}</Text>
+            </View>
+          )}
           {/* Stock filter */}
           <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
             <View style={{ width: 20, height: 20, borderRadius: 4, ...(onlyInStock ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>

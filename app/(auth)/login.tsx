@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressableScale } from "../../src/components/Animated";
 import { SecureImage } from "../../src/components/SecureImage";
 import { useBiometricAuth } from "../../src/hooks/useBiometricAuth";
+import Constants from "expo-constants";
 
 export default function LoginScreen() {
   const colors = useThemeColors();
@@ -313,7 +314,7 @@ export default function LoginScreen() {
                 {/* Зелёный берётся из темы: вписанный числом он не менялся бы
                     вместе с ней и в тёмной выглядел бы ядовитым. */}
                 <View style={{ width: 6, height: 6, borderRadius: Radii.full, backgroundColor: colors.status.success }} />
-                <Text style={{ fontSize: Typography.size.xs + 1, fontFamily: Typography.fontRegular, color: C.textMuted }}>v2.5.0</Text>
+                <Text style={{ fontSize: Typography.size.xs + 1, fontFamily: Typography.fontRegular, color: C.textMuted }}>v{Constants.expoConfig?.version ?? "?"}</Text>
               </View>
             </View>
           </View>

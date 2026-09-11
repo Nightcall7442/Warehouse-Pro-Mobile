@@ -126,7 +126,7 @@ export async function clearUserScopedCaches(): Promise<void> {
  * на того, кто вошёл сейчас. Незакрытого долга здесь нет, в отличие от заказа,
  * который магазин уже ждёт.
  */
-async function stopTrackingOnSignOut(): Promise<void> {
+export async function stopTrackingOnSignOut(): Promise<void> {
   try {
     // Загружается по требованию: модуль тянет нативные expo-task-manager,
     // expo-location и expo-battery, а этот файл импортируется отовсюду.
@@ -148,6 +148,27 @@ async function stopTrackingOnSignOut(): Promise<void> {
   // Иначе экран GPS у следующего вошедшего сам включит трекинг по чужому
   // флагу, ничего не спросив.
   await AsyncStorage.removeItem("gps_auto_track").catch(() => {});
+}
+
+/**
+ * Сессию отозвал сервер (401/403): стереть всё, что принадлежало человеку.
+ *
+ * Пути отзыва три — перехватчик 401 в api.ts, hydrate() и вход по
+ * биометрии, — и до этого только logout() останавливал фоновый GPS. После
+ * 401 задача продолжала снимать точки, получала 401, считала его временным
+ * отказом и копила до 200 точек в pending_locations; следующий вошедший на
+ * том же сменном телефоне первой же удачной отправкой заливал чужой след под
+ * своим токеном — сервер берёт автора из сессии, а время съёмки приходит
+ * честное. Карта супервайзера и антифрод строились на чужих точках.
+ *
+ * Очереди заказов и отметок не трогаются: там несделанная работа, помеченная
+ * автором.
+ */
+export async function endSessionLocally(): Promise<void> {
+  await SecureStore.deleteItemAsync("session_token").catch(() => {});
+  await writeCachedUser(null);
+  await clearUserScopedCaches();
+  await stopTrackingOnSignOut();
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -199,8 +220,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         return;
       }
 
-      await SecureStore.deleteItemAsync("session_token").catch((err: unknown) => { if (__DEV__) console.warn("Failed to clear invalid token:", err); });
-      await writeCachedUser(null);
+      await endSessionLocally();
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },
@@ -216,6 +236,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     // запроса: даже если сеть отвалится посередине, чужого на телефоне уже
     // нет.
     await clearUserScopedCaches();
+    // И фоновый GPS предыдущего человека: если его сессия кончилась не через
+    // logout(), задача всё ещё копит точки, и первая же удачная отправка
+    // нового вошедшего залила бы их под его именем.
+    await stopTrackingOnSignOut();
 
     const result = await apiLogin(email, password, tenantId);
 
@@ -262,8 +286,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         return false;
       }
 
-      await SecureStore.deleteItemAsync("session_token").catch((err: unknown) => { if (__DEV__) console.warn("Failed to clear invalid token:", err); });
-      await writeCachedUser(null);
+      await endSessionLocally();
       return false;
     }
   },

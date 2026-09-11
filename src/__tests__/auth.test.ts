@@ -103,3 +103,68 @@ describe("session survives a lost connection", () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
 });
+
+/*
+  Фоновый GPS не переживает отзыв сессии и смену человека.
+
+  До этого только logout() останавливал трекинг. Токен же чаще «кончается»
+  ответом 401 (учётку переиздали, пароль сменили, 30 дней истекли): задача
+  продолжала снимать точки, копила их в pending_locations, и следующий
+  вошедший на сменном телефоне первой же отправкой заливал чужой след под
+  своим именем. Здесь закреплено: отказ сервера в hydrate() и вход другого
+  человека останавливают задачу и стирают буфер.
+
+  Нарочная поломка: убери stopTrackingOnSignOut() из login() — третья
+  проверка падает.
+*/
+jest.mock("../backgroundLocation", () => ({
+  stopBackgroundTracking: jest.fn(async () => {}),
+}));
+
+describe("отзыв сессии останавливает фоновый GPS", () => {
+  const { SecureStore } = require("../storage");
+  const { stopBackgroundTracking } = require("../backgroundLocation");
+  const AsyncStorageMod = require("@react-native-async-storage/async-storage");
+  const AsyncStorage = AsyncStorageMod.default ?? AsyncStorageMod;
+  const { login: apiLogin } = require("../api");
+
+  beforeEach(async () => {
+    SecureStore.setItemAsync.mockResolvedValue(undefined);
+    SecureStore.deleteItemAsync.mockResolvedValue(undefined);
+    await AsyncStorage.setItem("pending_locations", JSON.stringify([{ lat: 41.3, lng: 69.2 }]));
+    await AsyncStorage.setItem("gps_auto_track", "1");
+  });
+
+  it("сервер отверг сессию в hydrate — задача остановлена, буфер стёрт", async () => {
+    SecureStore.getItemAsync.mockImplementation(async (key: string) => (key === "session_token" ? "tok" : null));
+    getMe.mockRejectedValue(Object.assign(new Error("Unauthorized"), { response: { status: 401 } }));
+
+    await useAuthStore.getState().hydrate();
+
+    expect(stopBackgroundTracking).toHaveBeenCalled();
+    expect(await AsyncStorage.getItem("pending_locations")).toBeNull();
+    expect(await AsyncStorage.getItem("gps_auto_track")).toBeNull();
+  });
+
+  it("сеть просто не дошла — трекинг НЕ трогаем", async () => {
+    SecureStore.getItemAsync.mockImplementation(async (key: string) =>
+      key === "session_token" ? "tok" :
+      key === "cached_user" ? JSON.stringify({ id: 7, name: "Агент", role: "agent" }) : null);
+    getMe.mockRejectedValue(new Error("Network Error"));
+
+    await useAuthStore.getState().hydrate();
+
+    expect(stopBackgroundTracking).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem("pending_locations")).not.toBeNull();
+  });
+
+  it("вход другого человека не наследует чужой след", async () => {
+    apiLogin.mockResolvedValue({ user: { id: 8, name: "Сменщик", role: "agent" } });
+
+    await useAuthStore.getState().login("b@test.local", "pw");
+
+    expect(stopBackgroundTracking).toHaveBeenCalled();
+    expect(await AsyncStorage.getItem("pending_locations")).toBeNull();
+    expect(useAuthStore.getState().user?.id).toBe(8);
+  });
+});
