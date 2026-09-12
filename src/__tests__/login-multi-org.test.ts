@@ -55,7 +55,8 @@ describe("выбор организации на входе", () => {
 
   it("tenantId доходит до входа, а не теряется по дороге", () => {
     expect(screen).toMatch(/handleLogin\s*=\s*async\s*\(tenantId/);
-    expect(screen).toMatch(/login\(email\.trim\(\)\.toLowerCase\(\),\s*password,\s*tenantId\)/);
+    // четвёртым доводом — код второго фактора (пусто, пока сервер его не попросил)
+    expect(screen).toMatch(/login\(email\.trim\(\)\.toLowerCase\(\),\s*password,\s*tenantId,\s*code/);
   });
 
   it("обработчики не подсовывают событие вместо tenantId", () => {

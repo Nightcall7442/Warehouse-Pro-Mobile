@@ -73,6 +73,11 @@ jest.mock("expo-haptics", () => ({
 
 jest.mock("@expo/vector-icons", () => ({ Feather: "Feather" }));
 jest.mock("expo-linear-gradient", () => ({ LinearGradient: "LinearGradient" }));
+// Камера в выборе товара (скан прибавляет единицу) — нативного модуля в jest нет.
+jest.mock("expo-camera", () => ({
+  CameraView: "CameraView",
+  useCameraPermissions: () => [{ granted: true }, jest.fn(async () => ({ granted: true }))],
+}));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));

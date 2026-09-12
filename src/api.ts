@@ -330,6 +330,8 @@ export interface Product {
   id: number;
   name: string;
   code?: string;
+  /** Штрих-код поставщика — по нему сканер в корзине находит товар без сети. */
+  barcode?: string | null;
   category?: string;
   unitPrice: string;
   available: string;

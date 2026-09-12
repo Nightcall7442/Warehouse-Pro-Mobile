@@ -17,6 +17,8 @@ import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding, soft } from
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card, SearchInput, Skeleton } from "../../src/components/ui";
 import { PressableScale } from "../../src/components/Animated";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { bumpLine, findScanned, cartSummary } from "../../src/lib/cart";
 
 interface OrderLine {
   productId: number;
@@ -331,12 +333,25 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
   );
 }
 
+/*
+  Корзина внутри выбора товара.
+
+  Было: нажатие на товар клало его в заказ с количеством 1 и помечало «В
+  корзине» — а количество правилось только на шаге с составом, после
+  закрытия окна. Агент с двадцатью позициями открывал окно двадцать раз.
+  Теперь: у добавленного товара стоит «− n +» прямо в списке, внизу окна
+  итог по корзине и «Готово», а рядом с поиском — камера: скан штрих-кода
+  или кода товара прибавляет единицу.
+*/
 // ── Product Picker Modal ─────────────────────────────────────────────────────
 function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   visible: boolean; onClose: () => void; lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors;
 }) {
   const { isDark } = useThemeStore();
   const [search, setSearch] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const debouncedSearch = useDebounce(search, 300);
   const [onlyInStock, setOnlyInStock] = useState(true);
   // Тот же запасной путь, что у магазинов: см. ShopPicker.
@@ -353,7 +368,31 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
     return list.sort((a, b) => (a.category ?? "").localeCompare(b.category ?? "") || a.name.localeCompare(b.name));
   }, [products, debouncedSearch, onlyInStock]);
 
-  const already = useMemo(() => new Set(lines.map(l => l.productId)), [lines]);
+  const qtyOf = useMemo(() => new Map(lines.map(l => [l.productId, Number(l.quantity || 0)])), [lines]);
+  const summary = cartSummary(lines);
+
+  const onScanned = ({ data }: { data: string }) => {
+    // Одна коробка в кадре — один плюс: тот же код принимается снова через паузу.
+    const now = Date.now();
+    if (data === lastScan.current.code && now - lastScan.current.at < 1500) return;
+    lastScan.current = { code: data, at: now };
+    const p = findScanned(products ?? [], data);
+    if (!p) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      notify.error(`Товар со штрих-кодом ${data} не найден`);
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onChange(bumpLine(lines, p, 1));
+  };
+
+  const openScanner = async () => {
+    if (!permission?.granted) {
+      const r = await requestPermission();
+      if (!r.granted) { notify.error("Нет доступа к камере"); return; }
+    }
+    setScanning(true);
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -388,7 +427,26 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                 <Feather name="x-circle" size={16} color={colors.text.muted} />
               </TouchableOpacity>
             )}
+            <TouchableOpacity testID="picker-scan" onPress={openScanner} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Feather name="camera" size={18} color={colors.accent.primary} />
+            </TouchableOpacity>
           </View>
+          {scanning && (
+            <View style={{ marginHorizontal: Spacing.base, marginBottom: Spacing.sm, height: 180, borderRadius: Radii.lg, overflow: "hidden", backgroundColor: "#000" }}>
+              <CameraView
+                style={{ flex: 1 }}
+                onBarcodeScanned={onScanned}
+                barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39"] }}
+              />
+              <TouchableOpacity testID="picker-scan-close" onPress={() => setScanning(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ position: "absolute", top: 8, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="x" size={16} color="#fff" />
+              </TouchableOpacity>
+              <Text style={{ position: "absolute", bottom: 8, left: 0, right: 0, textAlign: "center", color: "#fff", fontSize: Typography.size.xs }}>
+                Каждый скан — плюс единица
+              </Text>
+            </View>
+          )}
           {copyNotice && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.status.warningDim, borderRadius: Radii.md, paddingVertical: 8, paddingHorizontal: 10 }}>
               <Feather name="wifi-off" size={13} color={colors.status.warning} />
@@ -410,11 +468,12 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
             <FlatList data={filtered} keyExtractor={p => String(p.id)} contentContainerStyle={{ padding: Spacing.base, gap: 8 }} keyboardShouldPersistTaps="handled"
               ListEmptyComponent={<View style={{ alignItems: "center", paddingVertical: 40 }}><Feather name="search" size={28} color={colors.text.muted} /><Text style={{ fontSize: Typography.size.base, color: colors.text.secondary, marginTop: Spacing.md }}>Товар не найден</Text></View>}
               renderItem={({ item: p }) => {
-                const added = already.has(p.id);
+                const qty = qtyOf.get(p.id) ?? 0;
+                const added = qty > 0;
                 return (
                   <PressableScale onPress={() => {
                     if (added) return;
-                    onChange([...lines, { productId: p.id, name: p.name, unitPrice: Number(p.unitPrice), quantity: "1", discount: "0", available: parseStock(p.available), unit: p.unit }]);
+                    onChange(bumpLine(lines, p, 1));
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }} haptic="light">
                     <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 4, ...(added ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: added ? colors.status.success + "0D" : colors.bg.card }}>
@@ -429,7 +488,17 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                         </View>
                       </View>
                       {added ? (
-                        <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontSemibold }}>В корзине</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }} testID={`stepper-${p.id}`}>
+                          <TouchableOpacity testID={`stepper-minus-${p.id}`} onPress={() => onChange(bumpLine(lines, p, -1))} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                            style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+                            <Feather name="minus" size={14} color={colors.text.primary} />
+                          </TouchableOpacity>
+                          <Text style={{ minWidth: 22, textAlign: "center", fontSize: Typography.size.sm, fontFamily: Typography.fontBold, color: colors.text.primary }}>{qty}</Text>
+                          <TouchableOpacity testID={`stepper-plus-${p.id}`} onPress={() => onChange(bumpLine(lines, p, 1))} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                            style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                            <Feather name="plus" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
                       ) : (
                         <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
                           <Feather name="plus" size={14} color="#fff" />
@@ -441,6 +510,20 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
               }}
             />
           )}
+          {/* Итог корзины и «Готово» — чтобы набрать весь заказ, не закрывая окно. */}
+          <View testID="picker-summary" style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: Spacing.base, paddingVertical: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>
+                {summary.count === 0 ? "Корзина пуста" : `${summary.count} ${summary.count === 1 ? "товар" : summary.count < 5 ? "товара" : "товаров"}`}
+              </Text>
+              <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary }}>{summary.total.toLocaleString("ru")} сум</Text>
+            </View>
+            <PressableScale onPress={onClose} haptic="medium">
+              <View testID="picker-done" style={{ paddingHorizontal: 22, paddingVertical: 12, borderRadius: Radii.lg, backgroundColor: colors.accent.primary }}>
+                <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.base }}>Готово</Text>
+              </View>
+            </PressableScale>
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
