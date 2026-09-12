@@ -49,6 +49,28 @@ jobs:
       - name: Разбор app.json
         run: bash scripts/ci-run.sh "Разбор app.json" npx expo config --type public
 
+  # Контракт с сервером: типы ответов и входов роутера Warehouse-Pro против
+  # src/api.ts. Скрипт живёт в серверном репозитории (scripts/mobile-contract.mjs)
+  # и из api.ts берёт только типы и подписи функций — node_modules мобилки ему
+  # не нужны, а серверные ставятся здесь. Падает, если сервер переименовал
+  # поле, убрал ручку или сменил query на mutation — до сборки APK, а не после.
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: Nightcall7442/Warehouse-Pro
+          ref: ${{ vars.SERVER_REF || 'main' }}
+          path: server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --legacy-peer-deps
+        working-directory: server
+      - name: Контракт с сервером
+        run: bash scripts/ci-run.sh "Контракт с сервером" node server/scripts/mobile-contract.mjs --mobile .
+
 # ── Чего здесь намеренно нет ─────────────────────────────────────────────────
 #
 # expo-doctor. Он сверяет версии пакетов с требуемыми для SDK и на первый взгляд

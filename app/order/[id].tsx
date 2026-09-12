@@ -67,7 +67,7 @@ export default function OrderDetailScreen() {
   // Агент на слабой связи открывал свой же заказ и читал, что заказа нет, а
   // ниже — что его, возможно, удалили или лишили прав. Он звонил в офис вместо
   // того, чтобы просто повторить.
-  const { data: order, isLoading, isError, error, refetch, isFetching } = useQuery<OrderDetail>({
+  const { data: order, isLoading, isError, error, refetch, isFetching } = useQuery<OrderDetail | null>({
     queryKey: ["order", id],
     queryFn: () => getOrderById(Number(id)),
     enabled: !!id,
@@ -365,7 +365,9 @@ export default function OrderDetailScreen() {
           productId: item.productId,
           productName: item.productName,
           productCode: item.productCode,
-          quantity: item.quantity,
+          // С сервера «2.00» строкой; в окне правки сравнивается числом —
+          // иначе нетронутая строка считалась изменённой, а поле показывало «2.00».
+          quantity: Number(item.quantity),
           unitPrice: Number(item.unitPrice) || 0,
           unit: item.unit,
         }))}

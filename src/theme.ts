@@ -577,8 +577,6 @@ export const OrderStatusGradients: Record<string, readonly [string, string]> = {
   delivered: ["#34c473", "#2ec4b0"],
   cancelled: ["#e85050", "#f06895"],
   returned: ["#e85050", "#c0392b"],
-  partially_returned: ["#f09050", "#e8a830"],
-  partial_return_kept: ["#d4973a", "#f09858"],
 };
 
 // ── KPI Colors ────────────────────────────────────────────────────────────────

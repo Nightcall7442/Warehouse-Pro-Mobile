@@ -216,7 +216,7 @@ export interface User {
   name: string;
   email: string;
   avatar?: string | null;
-  role: "agent" | "operator" | "supervisor" | "ceo" | "merchandiser" | "courier";
+  role: "agent" | "operator" | "supervisor" | "ceo" | "merchandiser" | "courier" | "superadmin";
   tenant: { id: number; name: string; slug: string };
 }
 
@@ -342,7 +342,7 @@ export interface Product {
   barcode?: string | null;
   category?: string;
   unitPrice: string;
-  available: string;
+  available: string | null;
   unit?: string;
   photoUrl?: string | null;
 }
@@ -376,7 +376,7 @@ export interface Order {
   orderNumber: string;
   shopName?: string;
   total: string;
-  status: "new" | "processing" | "shipped" | "pending" | "delivered" | "cancelled" | "returned" | "partially_returned" | "partial_return_kept";
+  status: "new" | "processing" | "shipped" | "pending" | "delivered" | "cancelled" | "returned";
   createdAt: string;
 }
 
@@ -391,16 +391,17 @@ export interface OrderDetail extends Order {
     productId: number;
     productName: string;
     productCode?: string;
-    quantity: number;
-    unitPrice: number;
-    discount?: number;
-    subtotal: number;
+    /** Decimal-колонки приходят строками («2.00»), как и total у заказа. */
+    quantity: string;
+    unitPrice: string;
+    subtotal: string;
     unit?: string;
-    deliveredQuantity?: number | null;
+    deliveredQuantity?: string | null;
     returnReason?: string | null;
   }>;
   notes?: string;
-  discount?: number;
+  /** Сумма скидки деньгами, строкой — как и total; процент считается на экране. */
+  discount?: string;
   subtotal: string;
   shop?: { id: number; name: string; address?: string; city?: string; phone?: string; debt?: string; ownerName?: string } | null;
   agent?: { id: number; name: string } | null;
@@ -584,7 +585,7 @@ export async function saveVisitPhoto(
 
 // ── Barcode Lookup ───────────────────────────────────────────────────────────
 export async function findByBarcode(barcode: string): Promise<{
-  id: number; code: string; name: string; unitPrice: string; unit: string; available: string;
+  id: number; code: string; name: string; unitPrice: string; unit: string; available: string | null;
 } | null> {
   return trpcQuery("product.findByBarcode", { barcode });
 }
@@ -602,7 +603,7 @@ export interface AgentLocation {
 }
 
 export async function getAgentLocations(): Promise<AgentLocation[]> {
-  return trpcQuery<AgentLocation[]>("agent.getLocations", {});
+  return trpcQuery<AgentLocation[]>("agent.getLocations");
 }
 
 // ── Supervisor: create a visit plan for an agent ─────────────────────────────
@@ -890,8 +891,8 @@ export async function getMyOrders(): Promise<Order[]> {
   return result.data ?? [];
 }
 
-export async function getOrderById(id: number): Promise<OrderDetail> {
-  return trpcQuery<OrderDetail>("order.getById", { id });
+export async function getOrderById(id: number): Promise<OrderDetail | null> {
+  return trpcQuery<OrderDetail | null>("order.getById", { id });
 }
 
 export async function cancelOrder(id: number): Promise<void> {
@@ -942,13 +943,13 @@ export async function setPromisedDelivery(orderId: number, promisedDeliveryAt: s
   return trpcMutation<void>("order.setPromisedDelivery", { orderId, promisedDeliveryAt });
 }
 
-export async function listAllOrders(params?: { page?: number; pageSize?: number; status?: string; showDeleted?: boolean }): Promise<{ data: Order[]; total: number }> {
+export async function listAllOrders(params?: { page?: number; pageSize?: number; status?: Order["status"]; showDeleted?: boolean }): Promise<{ data: Order[]; total: number }> {
   return trpcQuery<{ data: Order[]; total: number }>("order.list", params ?? {});
 }
 
 export async function getShop(id: number): Promise<Shop | null> {
   try {
-    return await trpcQuery<Shop>("agent.getShopById", { id });
+    return await trpcQuery<Shop | null>("agent.getShopById", { id });
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("empty json payload")) return null;
     throw e;
@@ -957,7 +958,7 @@ export async function getShop(id: number): Promise<Shop | null> {
 
 export async function getShopForSupervisor(id: number): Promise<Shop | null> {
   try {
-    return await trpcQuery<Shop>("agent.getShopByIdSupervisor", { id });
+    return await trpcQuery<Shop | null>("agent.getShopByIdSupervisor", { id });
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("empty json payload")) return null;
     throw e;
@@ -1043,15 +1044,11 @@ export interface TenantBranding {
   currencySymbol: string;
 }
 
-export async function getBranding(): Promise<TenantBranding> {
-  return trpcQuery<TenantBranding>("settings.branding");
-}
-
 /** Оформление арендатора — branding.get. */
 export interface TenantBrandingResponse {
   primaryColor: string | null;
   secondaryColor: string | null;
-  accentColor: string | null;
+  accentColor?: string | null;
   logoUrl: string | null;
   faviconUrl: string | null;
   appName: string | null;
@@ -1154,8 +1151,9 @@ export interface VisitReport {
   shopId: number;
   userId: number;
   planId: number;
-  photos: string[];
-  checklist: Array<{
+  photos?: string[];
+  /** null — отчёт без чек-листа (json-колонка); экраны его не читают. */
+  checklist: null | Array<{
     productId: number;
     productName: string;
     present: boolean;
@@ -1200,14 +1198,14 @@ export async function registerPushToken(pushToken: string): Promise<{ success: b
 }
 
 export async function removePushToken(): Promise<{ success: boolean }> {
-  return trpcMutation<{ success: boolean }>("user.removePushToken", {});
+  return trpcMutation<{ success: boolean }>("user.removePushToken", undefined);
 }
 
 // ── Sales targets ─────────────────────────────────────────────────────────────
 export interface SalesTarget {
   id: number;
   userId: number;
-  userName: string;
+  userName: string | null;
   shopId?: number;
   periodType: "daily" | "weekly" | "monthly";
   periodStart: string;
@@ -1217,16 +1215,16 @@ export interface SalesTarget {
   notes?: string;
 }
 
-export async function getSalesTargets(filters?: { periodType?: string; userId?: number }): Promise<SalesTarget[]> {
+export async function getSalesTargets(filters?: { periodType?: "daily" | "weekly" | "monthly"; userId?: number }): Promise<SalesTarget[]> {
   return trpcQuery<SalesTarget[]>("salesTarget.list", filters);
 }
 
 export async function getSalesTargetSummary(): Promise<Array<{
   userId: number;
-  userName: string;
+  userName: string | null;
   targetAmount: string;
   actualAmount: string;
-  completion: number;
+  revenueCompletion: number;
 }>> {
   return trpcQuery("salesTarget.summary");
 }
@@ -1235,7 +1233,7 @@ export async function getSalesTargetSummary(): Promise<Array<{
 export interface Commission {
   id: number;
   userId: number;
-  userName: string;
+  userName: string | null;
   commissionRate: string;
   periodType: "monthly" | "quarterly";
   periodStart: string;
@@ -1245,7 +1243,7 @@ export interface Commission {
   status: "pending" | "approved" | "paid";
 }
 
-export async function getCommissions(filters?: { periodType?: string; userId?: number; status?: string }): Promise<Commission[]> {
+export async function getCommissions(filters?: { periodType?: "monthly" | "quarterly"; userId?: number; status?: "pending" | "approved" | "paid" }): Promise<Commission[]> {
   return trpcQuery<Commission[]>("commission.list", filters);
 }
 
@@ -1290,7 +1288,7 @@ export async function bulkCreateSalesTargets(periodStart: string, periodEnd: str
 // ── Agent KPI ────────────────────────────────────────────────────────────────
 export interface AgentKpiData {
   kpiScore: number;
-  grade: string;
+  kpiGrade: "A" | "B" | "C" | "D" | "F";
   totalPlans: number;
   visitedPlans: number;
   skippedPlans: number;
@@ -1308,7 +1306,7 @@ export interface AgentKpiData {
   salary?: { base: number; commission: number; total: number };
 }
 
-export async function getAgentKpi(period: string): Promise<AgentKpiData> {
+export async function getAgentKpi(period: "week" | "month" | "quarter"): Promise<AgentKpiData> {
   return trpcQuery<AgentKpiData>("kpi.agentKpi", { period });
 }
 
@@ -1417,7 +1415,7 @@ export interface ReturnItem {
   condition?: string;
 }
 
-export async function getReturns(filters?: { status?: string; shopId?: number }): Promise<{ data: Return[]; total: number }> {
+export async function getReturns(filters?: { status?: Return["status"]; shopId?: number }): Promise<{ data: Return[]; total: number }> {
   return trpcQuery("returns.list", filters);
 }
 
@@ -1484,7 +1482,7 @@ export async function getPriceLists(): Promise<PriceList[]> {
   return trpcQuery<PriceList[]>("priceList.list");
 }
 
-export async function getPriceListById(id: number): Promise<(PriceList & { items: PriceListItem[]; assignments: Array<{ id: number; shopId: number; shopName?: string }> }) | null> {
+export async function getPriceListById(id: number): Promise<(Omit<PriceList, "itemCount" | "shopCount"> & { items: PriceListItem[]; assignments: Array<{ id: number; shopId: number; shopName?: string }> }) | null> {
   return trpcQuery("priceList.getById", { id });
 }
 

@@ -447,14 +447,14 @@ export default function DeliveryScreen() {
                         </Text>
                       </View>
                       <TouchableOpacity
-                        onPress={() => setItemReturnedQty(item.id, item.quantity, String(qty - 1))}
+                        onPress={() => setItemReturnedQty(item.id, Number(item.quantity), String(qty - 1))}
                         style={{ width: 32, height: 32, borderRadius: Radii.md, backgroundColor: colors.bg.input, alignItems: "center", justifyContent: "center" }}
                       >
                         <Feather name="minus" size={14} color={colors.text.primary} />
                       </TouchableOpacity>
                       <TextInput
                         value={returnedQty[item.id] ?? "0"}
-                        onChangeText={(v) => setItemReturnedQty(item.id, item.quantity, v)}
+                        onChangeText={(v) => setItemReturnedQty(item.id, Number(item.quantity), v)}
                         keyboardType="numeric"
                         style={{
                           width: 48, textAlign: "center", paddingVertical: 6,
@@ -465,7 +465,7 @@ export default function DeliveryScreen() {
                         }}
                       />
                       <TouchableOpacity
-                        onPress={() => setItemReturnedQty(item.id, item.quantity, String(qty + 1))}
+                        onPress={() => setItemReturnedQty(item.id, Number(item.quantity), String(qty + 1))}
                         style={{ width: 32, height: 32, borderRadius: Radii.md, backgroundColor: colors.bg.input, alignItems: "center", justifyContent: "center" }}
                       >
                         <Feather name="plus" size={14} color={colors.text.primary} />

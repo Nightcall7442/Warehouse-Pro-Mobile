@@ -175,7 +175,7 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
   if (!kpi) return null;
 
   const GRADE_COLORS: Record<string, string> = { A: colors.status.success, B: colors.status.info, C: colors.status.warning, D: colors.status.danger, F: colors.status.danger };
-  const gradeColor = GRADE_COLORS[kpi.grade] ?? colors.text.muted;
+  const gradeColor = GRADE_COLORS[kpi.kpiGrade] ?? colors.text.muted;
 
   return (
     <Card style={{ marginBottom: Spacing.base }}>
@@ -183,7 +183,7 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
         <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>ПОКАЗАТЕЛИ</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View style={{ width: 28, height: 28, borderRadius: Radii.sm, backgroundColor: gradeColor + "20", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 14, color: gradeColor }}>{kpi.grade}</Text>
+            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 14, color: gradeColor }}>{kpi.kpiGrade}</Text>
           </View>
           <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.primary }}>{kpi.kpiScore}/100</Text>
         </View>

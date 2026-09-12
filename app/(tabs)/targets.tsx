@@ -80,7 +80,7 @@ export default function TargetsScreen() {
   // Summary stats
   const totalTarget = (summary ?? []).reduce((s, a) => s + Number(a.targetAmount), 0);
   const totalActual = (summary ?? []).reduce((s, a) => s + Number(a.actualAmount), 0);
-  const avgCompletion = summary && summary.length > 0 ? Math.round(summary.reduce((s, a) => s + a.completion, 0) / summary.length) : 0;
+  const avgCompletion = summary && summary.length > 0 ? Math.round(summary.reduce((s, a) => s + a.revenueCompletion, 0) / summary.length) : 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
@@ -170,14 +170,14 @@ export default function TargetsScreen() {
             </View>
           )}
           renderItem={({ item, index }) => {
-            const revPct = Math.min(100, item.completion);
+            const revPct = Math.min(100, item.revenueCompletion);
             const color = revPct >= 100 ? colors.status.success : revPct >= 60 ? colors.status.warning : colors.status.danger;
             return (
               <FadeInItem delay={index * 40}>
                 <Card style={{ padding: 16 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 }}>
                     <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.brand.primary }}>{item.userName.charAt(0)}</Text>
+                      <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.brand.primary }}>{(item.userName ?? "—").charAt(0)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{item.userName}</Text>
