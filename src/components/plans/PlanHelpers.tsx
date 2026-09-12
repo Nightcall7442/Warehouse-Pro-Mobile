@@ -113,6 +113,7 @@ export function BottomSheet({
             </Text>
             <TouchableOpacity
               onPress={onClose}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={{
                 width: 32,
                 height: 32,

@@ -297,12 +297,27 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
             </View>
             {/* Inputs */}
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <View style={{ flex: 1, gap: 4 }}>
+              <View style={{ flex: 1.4, gap: 4 }}>
                 <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>КОЛ-ВО</Text>
-                <TextInput value={line.quantity} onChangeText={v => {
-                  const next = [...lines]; next[idx] = { ...next[idx], quantity: v.replace(",", ".") }; onChange(next);
-                }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
-                  style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
+                {/* «− поле +»: цифры набирать в перчатках неудобно, а плюс-минус
+                    на единицу — самая частая правка. Поле остаётся для дробных
+                    и больших чисел. Кнопки 36 точек с hitSlop — до нормы 44. */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <TouchableOpacity testID={`line-minus-${line.productId}`} hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
+                    onPress={() => { const q = Math.max(1, Math.ceil(Number(line.quantity || 0)) - 1); const next = [...lines]; next[idx] = { ...next[idx], quantity: String(q) }; onChange(next); }}
+                    style={{ width: 36, height: 40, borderRadius: Radii.md, backgroundColor: colors.bg.elevated, ...soft(isDark).raisedSm, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="minus" size={14} color={colors.text.primary} />
+                  </TouchableOpacity>
+                  <TextInput value={line.quantity} onChangeText={v => {
+                    const next = [...lines]; next[idx] = { ...next[idx], quantity: v.replace(",", ".") }; onChange(next);
+                  }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
+                    style={{ flex: 1, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, paddingVertical: 10, paddingHorizontal: 4, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
+                  <TouchableOpacity testID={`line-plus-${line.productId}`} hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
+                    onPress={() => { const q = Math.floor(Number(line.quantity || 0)) + 1; const next = [...lines]; next[idx] = { ...next[idx], quantity: String(q) }; onChange(next); }}
+                    style={{ width: 36, height: 40, borderRadius: Radii.md, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="plus" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>СКИДКА (%)</Text>

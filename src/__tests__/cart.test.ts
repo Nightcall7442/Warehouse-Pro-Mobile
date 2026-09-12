@@ -65,3 +65,30 @@ describe("экран выбора товара", () => {
     expect(src).toContain("now - lastScan.current.at < 1500");
   });
 });
+
+describe("цели касания", () => {
+  it("на шаге состава у количества есть «−» и «+»", () => {
+    const src = readFileSync("app/order/new.tsx", "utf-8");
+    expect(src).toContain("testID={`line-minus-${line.productId}`}");
+    expect(src).toContain("testID={`line-plus-${line.productId}`}");
+    // минус не уводит ниже единицы — убрать строку есть крестик
+    expect(src).toContain("Math.max(1, Math.ceil(Number(line.quantity || 0)) - 1)");
+  });
+
+  it("ни одной кнопки меньше 40 точек без hitSlop", () => {
+    const glob = require("glob") as typeof import("glob");
+    const files = [...glob.sync("app/**/*.tsx"), ...glob.sync("src/**/*.tsx")].filter(f => !f.includes("__tests__"));
+    const offenders: string[] = [];
+    for (const f of files) {
+      const s = readFileSync(f, "utf-8");
+      for (const m of s.matchAll(/<(TouchableOpacity|Pressable|PressableScale)\b/g)) {
+        const at = m.index ?? 0;
+        const tag = s.slice(at, s.indexOf(">", at + 1));
+        const w = /width:\s*(\d+)/.exec(tag); const h = /height:\s*(\d+)/.exec(tag);
+        const small = (w && Number(w[1]) < 40) || (h && Number(h[1]) < 40);
+        if (small && !tag.includes("hitSlop")) offenders.push(`${f}:${s.slice(0, at).split("\n").length}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
