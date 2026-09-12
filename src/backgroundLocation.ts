@@ -230,7 +230,18 @@ export async function startBackgroundTracking(): Promise<{ success: boolean; rea
     void flushPending();
     return { success: true };
   } catch (e) {
-    if (__DEV__) console.error("Failed to start background tracking:", e);
+    /*
+      Expo Go на iPhone: фоновой геолокации в чужом приложении Apple не даёт
+      (ERR_LOCATION_INFO_PLIST — записей в Info.plist самого Expo Go нет).
+      Это ожидаемо, а не поломка: в собранном приложении всё работает.
+      console.error здесь выбрасывал красную плашку прямо на показе.
+    */
+    const code = (e as { code?: string })?.code ?? String(e);
+    if (typeof code === "string" && code.includes("ERR_LOCATION_INFO_PLIST")) {
+      if (__DEV__) console.log("Background tracking unavailable in Expo Go on iOS — foreground fallback");
+      return { success: false, reason: "background_unavailable_in_expo_go" };
+    }
+    if (__DEV__) console.warn("Failed to start background tracking:", e);
     return { success: false, reason: "unknown_error" };
   }
 }

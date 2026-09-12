@@ -52,6 +52,8 @@ export default function GpsScreen() {
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [error, setError] = useState("");
   const [autoTrack, setAutoTrack] = useState(false);
+  // Фоновое слежение не дали — почему: показывается под переключателем.
+  const [trackNotice, setTrackNotice] = useState("");
   const [askConsent, setAskConsent] = useState(false);
   const [lastSent, setLastSent] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -194,10 +196,18 @@ export default function GpsScreen() {
     // работает, а не ждать первого шага или пяти минут.
     void locate();
 
+    setTrackNotice("");
     startBackgroundTracking().then(result => {
       if (cancelled) return;
       if (result.success) return;
-      if (__DEV__) console.warn("Background location permission not granted:", result.reason);
+      if (__DEV__) console.log("Background location not started:", result.reason);
+      setTrackNotice(
+        result.reason === "background_unavailable_in_expo_go"
+          ? "В Expo Go на iPhone фоновое слежение недоступно — точки уходят, пока экран открыт. В установленном приложении работает в фоне."
+          : result.reason === "background_permission_denied"
+            ? "Фоновая геолокация не разрешена — точки уходят, пока экран открыт. Разрешите «Всегда» в настройках."
+            : "Фоновое слежение не запустилось — точки уходят, пока экран открыт.",
+      );
       // Запасной ход — только когда система следить отказалась.
       intervalRef.current = setInterval(locate, FALLBACK_TRACK_MS);
     });
@@ -310,8 +320,13 @@ export default function GpsScreen() {
             />
           </View>
           {autoTrack && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
-              <Badge variant="success">Авто-слежение активно</Badge>
+            <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle, gap: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Badge variant={trackNotice ? "warning" : "success"}>{trackNotice ? "Слежение только на экране" : "Авто-слежение активно"}</Badge>
+              </View>
+              {trackNotice ? (
+                <Text testID="track-notice" style={{ fontSize: Typography.size.xs, color: colors.text.secondary, lineHeight: 16 }}>{trackNotice}</Text>
+              ) : null}
             </View>
           )}
         </Card>
