@@ -55,3 +55,12 @@ describe("API Functions", () => {
     expect(api.removePushToken).toBeDefined();
   });
 });
+
+describe("версия сборки в каждом запросе", () => {
+  it("заголовок x-client-version вида mobile/<версия>", async () => {
+    const { CLIENT_VERSION } = await import("../api");
+    expect(CLIENT_VERSION).toMatch(/^mobile\/[0-9A-Za-z.+-]+$/);
+    const src = require("fs").readFileSync("src/api.ts", "utf-8");
+    expect(src).toContain('"x-client-version": CLIENT_VERSION');
+  });
+});

@@ -1,14 +1,22 @@
 import axios from "axios";
+import Constants from "expo-constants";
 import { SecureStore } from "./storage";
 
 export const API_BASE = (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim())
   ? process.env.EXPO_PUBLIC_API_URL
   : "https://www.warehouse-pro.uz";
 
+/**
+ * Версия сборки — в каждом запросе. По ней сервер считает, сколько телефонов
+ * на какой сборке (client_requests_total): до этого «у агента не работает» не
+ * привязывалось к версии, и обновились ли все — не знал никто.
+ */
+export const CLIENT_VERSION = `mobile/${Constants.expoConfig?.version ?? "dev"}`;
+
 const api = axios.create({
   baseURL: `${API_BASE}/api/trpc`,
   timeout: 15_000,
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", "x-client-version": CLIENT_VERSION },
 });
 
 api.interceptors.request.use(async (config) => {
