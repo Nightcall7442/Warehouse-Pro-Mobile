@@ -26,7 +26,7 @@ export function OrderActions({ canCancel, canDelete, cancelPending, deletePendin
       <View style={{ gap: 12, marginTop: 8 }}>
         <View style={{ flexDirection: "row", gap: 12 }}>
           <PressableScale onPress={onEdit} haptic="light" style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden" }}>
-            <Card style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default }}>
+            <Card style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: colors.bg.elevated }}>
               <Feather name="edit-2" size={18} color={colors.text.primary} />
               <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Изменить</Text>
             </Card>

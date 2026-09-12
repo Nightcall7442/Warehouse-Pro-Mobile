@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useThemeStore } from "../../store/theme";
 import { View, Text, ScrollView } from "react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
@@ -7,6 +8,7 @@ import {
   Spacing,
   Radii,
   ThemeColors,
+  soft,
 } from "../../theme";
 import { Card, IconCircle, Badge } from "../ui";
 import { FadeInItem } from "../Animated";
@@ -67,6 +69,7 @@ export function LoadingState({ colors }: { colors: ThemeColors }) {
 
 /** Pipeline tracker — shows progress or cancelled */
 export function PipelineBanner({ status, colors }: { status: string; colors: ThemeColors }) {
+  const { isDark } = useThemeStore();
   // Незнакомое состояние не выдаётся за «Новый»: пропуск виден, неправда нет.
   const cfg = STATUS_CONFIG[status] ?? { ...STATUS_CONFIG.new, label: status, step: 0 };
   if (status === "cancelled") {
@@ -99,7 +102,7 @@ export function PipelineBanner({ status, colors }: { status: string; colors: The
                   width: 18, height: 18, borderRadius: Radii.full,
                   backgroundColor: done ? colors.accent.primary : colors.border.subtle,
                   alignItems: "center", justifyContent: "center",
-                  borderWidth: active ? 2 : 0, borderColor: active ? colors.accent.primary : "transparent",
+                  ...(active ? soft(isDark).raisedSm : soft(isDark).inset),
                 }}>
                   {done && !active && <Feather name="check" size={9} color="#fff" />}
                   {active && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent.primary + "40" }} />}

@@ -71,13 +71,12 @@ export function OrderItemsList({ order, colors }: { order: OrderDetail; colors: 
               <ItemRow
                 name={item.productName}
                 code={item.productCode}
-                qty={item.quantity}
+                qty={Number(item.quantity)}
                 price={Number(item.unitPrice) || 0}
-                discount={item.discount}
                 total={Number(item.subtotal) || 0}
                 colors={colors}
                 unit={item.unit}
-                deliveredQty={item.deliveredQuantity}
+                deliveredQty={item.deliveredQuantity == null ? item.deliveredQuantity : Number(item.deliveredQuantity)}
                 returnReason={item.returnReason}
               />
               {idx < order.items.length - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />}

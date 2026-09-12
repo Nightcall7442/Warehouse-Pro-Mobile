@@ -2,15 +2,19 @@ import React, { useState, useEffect, useRef } from "react";
 import { clampDiscountText } from "../../lib/discount";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable, ScrollView, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useThemeStore } from "../../store/theme";
 import {
   Typography,
   Spacing,
   Radii,
+  Sizes,
   ThemeColors,
+  soft,
 } from "../../theme";
 
 interface OrderItem {
   id: number;
+  productId: number;
   productName: string;
   productCode?: string;
   quantity: number;
@@ -19,6 +23,13 @@ interface OrderItem {
 }
 
 interface EditableItem extends OrderItem {
+  /*
+    Товар — чтобы добавленную строку было чем отправить: сервер различает
+    правку существующей позиции (itemId) и вставку новой (productId).
+  */
+  productId: number;
+  /** Строка добавлена здесь и на сервере ещё не существует. */
+  isNew?: boolean;
   newQuantity: number;
   /**
    * Набранное в поле, как есть.
@@ -38,7 +49,17 @@ interface OrderEditModalProps {
   saving: boolean;
   onNotesChange: (v: string) => void;
   onDiscountChange: (v: string) => void;
-  onSaveItems: (items: Array<{ itemId: number; quantity: number }>) => void;
+  /*
+    Три действия одним списком, как их понимает сервер:
+      • изменить количество — { itemId, quantity };
+      • убрать позицию      — { itemId, quantity: 0 };
+      • добавить товар      — { productId, quantity, unitPrice }.
+  */
+  onSaveItems: (items: Array<{ itemId?: number; productId?: number; quantity: number; unitPrice?: string }>) => void;
+  /** Каталог для добавления товара. Пусто — кнопка «Добавить» просто ждёт. */
+  catalog?: Array<{ id: number; name: string; code?: string; unit?: string; unitPrice?: number | string }>;
+  /** Экран узнаёт, что каталог понадобился, и грузит его. */
+  onNeedCatalog?: () => void;
   onSave: () => void;
   onClose: () => void;
   colors: ThemeColors;
@@ -49,11 +70,29 @@ const UNIT_LABELS: Record<string, string> = {
 };
 
 export function OrderEditModal({
-  visible, notes, discount, items, saving,
+  visible, notes, discount, items, saving, catalog, onNeedCatalog,
   onNotesChange, onDiscountChange, onSaveItems, onSave, onClose, colors,
 }: OrderEditModalProps) {
+  const { isDark } = useThemeStore();
   const [editItems, setEditItems] = useState<EditableItem[]>([]);
   const [activeTab, setActiveTab] = useState<"items" | "details">("items");
+  /*
+    Каталог приходит СВЕРХУ, а не тянется здесь.
+
+    Окно осталось только разметкой: данные берёт экран, который его открывает.
+    Так его и проверяют в наборе — рисуют без провайдера запросов, и свой
+    useQuery внутри ронял бы пять существующих проверок про количество.
+
+    Открывается по кнопке, и экран грузит каталог только тогда: у организации
+    это сотни позиций, а окно открывают ради количества гораздо чаще, чем ради
+    нового товара.
+  */
+  const [picking, setPicking] = useState(false);
+  const [search, setSearch] = useState("");
+  const found = (catalog ?? []).filter(p =>
+    !search.trim() ||
+    p.name?.toLowerCase().includes(search.trim().toLowerCase()) ||
+    (p.code ?? "").toLowerCase().includes(search.trim().toLowerCase()));
 
   // Количества заполняются ОДИН раз — при открытии окна.
   //
@@ -73,6 +112,8 @@ export function OrderEditModal({
         newQuantity: item.quantity,
         qtyText: String(item.quantity),
       })));
+      setPicking(false);
+      setSearch("");
     }
     wasVisible.current = visible;
   }, [visible, items]);
@@ -110,14 +151,70 @@ export function OrderEditModal({
     }));
   }
 
+  /** Убрать позицию — это количество ноль, а не «не прислать её». */
+  function removeItem(idx: number) {
+    setEditItems(prev => prev.map((it, i) =>
+      i !== idx ? it : { ...it, newQuantity: 0, qtyText: "0" }));
+  }
+
+  function restoreItem(idx: number) {
+    setEditItems(prev => prev.map((it, i) =>
+      i !== idx ? it : { ...it, newQuantity: it.quantity, qtyText: String(it.quantity) }));
+  }
+
+  /** Добавить товар из каталога отдельной строкой. */
+  function addProduct(p: { id: number; name: string; code?: string; unit?: string; unitPrice?: number | string }) {
+    /*
+      Тот же товар второй строкой сервер отвергает: резерв по заказу собирается
+      одним UPDATE с `CASE WHEN product_id = ...`, и MySQL берёт первый
+      совпавший — вторая строка молча не резервировалась бы. Вместо отказа
+      после сохранения просто увеличиваем количество той, что уже есть.
+    */
+    const at = editItems.findIndex(it => it.productId === p.id);
+    if (at >= 0) {
+      stepQuantity(at, 1);
+      setPicking(false);
+      setSearch("");
+      return;
+    }
+    setEditItems(prev => [...prev, {
+      // Отрицательный ключ: настоящего идентификатора позиции ещё нет, а
+      // столкнуться с существующим нельзя.
+      id: -(prev.length + 1),
+      productId: p.id,
+      productName: p.name,
+      productCode: p.code,
+      unit: p.unit,
+      unitPrice: Number(p.unitPrice ?? 0),
+      quantity: 0,
+      isNew: true,
+      newQuantity: 1,
+      qtyText: "1",
+    }]);
+    setPicking(false);
+    setSearch("");
+  }
+
   function handleSaveItems() {
+    /*
+      В заказе должна остаться хотя бы одна позиция — это же правило стоит и на
+      сервере. Сказать здесь дешевле, чем получить отказ после сохранения.
+    */
+    const left = editItems.filter(it => it.newQuantity > 0);
+    if (left.length === 0) {
+      Alert.alert("Пустой заказ", "В заказе должна остаться хотя бы одна позиция. Если заказ не нужен — отмените его целиком.");
+      return;
+    }
+
     const changed = editItems
-      .filter(it => it.newQuantity !== it.quantity)
-      .map(it => ({ itemId: it.id, quantity: it.newQuantity }));
+      .filter(it => it.isNew ? it.newQuantity > 0 : it.newQuantity !== it.quantity)
+      .map(it => it.isNew
+        ? { productId: it.productId, quantity: it.newQuantity, unitPrice: String(it.unitPrice) }
+        : { itemId: it.id, quantity: it.newQuantity });
     onSaveItems(changed);
   }
 
-  const hasChanges = editItems.some(it => it.newQuantity !== it.quantity);
+  const hasChanges = editItems.some(it => it.isNew ? it.newQuantity > 0 : it.newQuantity !== it.quantity);
 
   /**
    * Выход из окна.
@@ -204,12 +301,16 @@ export function OrderEditModal({
               <View style={{ gap: 12 }}>
                 {editItems.map((item, idx) => {
                   const unitLabel = UNIT_LABELS[item.unit ?? "pcs"] ?? "шт";
-                  const changed = item.newQuantity !== item.quantity;
+                  const removed = !item.isNew && item.newQuantity === 0;
+                  const changed = item.isNew || item.newQuantity !== item.quantity;
                   return (
                     <View key={item.id} style={{
                       backgroundColor: colors.bg.card, borderRadius: Radii.lg,
-                      borderWidth: 1, borderColor: changed ? colors.accent.primary + "40" : colors.border.subtle,
+                      ...(changed ? soft(isDark).raisedSm : soft(isDark).inset),
                       padding: 14,
+                      // Убранное гаснет: строка на месте, но видно, что её
+                      // больше нет в заказе.
+                      opacity: removed ? 0.45 : 1,
                     }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                         <View style={{ flex: 1, marginRight: 10 }}>
@@ -225,11 +326,34 @@ export function OrderEditModal({
                             {item.quantity} {unitLabel} × {item.unitPrice.toLocaleString("ru")} сум
                           </Text>
                         </View>
-                        {changed && (
-                          <View style={{ backgroundColor: colors.accent.primary + "15", paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.sm }}>
-                            <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontSemibold }}>Изменено</Text>
-                          </View>
-                        )}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          {changed && (
+                            <View style={{ backgroundColor: colors.accent.primary + "15", paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.sm }}>
+                              <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontSemibold }}>
+                                {item.isNew ? "Добавлено" : removed ? "Убрано" : "Изменено"}
+                              </Text>
+                            </View>
+                          )}
+                          {/*
+                            Убранная строка не исчезает, а гаснет с кнопкой
+                            «вернуть»: пропади она совсем — человек, нажавший
+                            мимо, не понял бы, что произошло, и не смог бы это
+                            отменить.
+                          */}
+                          <TouchableOpacity
+                            onPress={() => (removed ? restoreItem(idx) : removeItem(idx))}
+                            accessibilityRole="button"
+                            accessibilityLabel={removed ? `Вернуть ${item.productName}` : `Убрать ${item.productName}`}
+                            hitSlop={8}
+                            style={{ width: 32, height: 32, alignItems: "center", justifyContent: "center" }}
+                          >
+                            <Feather
+                              name={removed ? "rotate-ccw" : "trash-2"}
+                              size={16}
+                              color={removed ? colors.text.secondary : colors.status.danger}
+                            />
+                          </TouchableOpacity>
+                        </View>
                       </View>
 
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -247,9 +371,12 @@ export function OrderEditModal({
                           onChangeText={(v) => updateQuantity(idx, v)}
                           keyboardType="decimal-pad"
                           style={{
-                            flex: 1, textAlign: "center", backgroundColor: colors.bg.input,
-                            borderRadius: Radii.md, borderWidth: 1,
-                            borderColor: changed ? colors.accent.primary : colors.border.default,
+                            flex: 1, textAlign: "center",
+                            // Правленое количество отмечается заливкой, а не
+                            // обводкой: поле остаётся утопленным в холст, иначе
+                            // оно перестало бы читаться как поле.
+                            backgroundColor: changed ? colors.accent.primary + "18" : colors.bg.input,
+                            borderRadius: Radii.md, ...soft(isDark).inset,
                             padding: 10, color: colors.text.primary,
                             fontSize: Typography.size.md, fontFamily: Typography.fontBold,
                           }}
@@ -280,12 +407,75 @@ export function OrderEditModal({
                   );
                 })}
 
+                {/* ── Добавить товар ─────────────────────────────────── */}
+                {picking ? (
+                  <View style={{ gap: 8 }}>
+                    <TextInput
+                      value={search}
+                      onChangeText={setSearch}
+                      placeholder="Название или код товара"
+                      placeholderTextColor={colors.text.muted}
+                      autoFocus
+                      style={{
+                        backgroundColor: colors.bg.card, borderRadius: Radii.md, ...soft(isDark).inset,
+                        padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base,
+                      }}
+                    />
+                    {(catalog ?? []).length === 0 ? (
+                      <ActivityIndicator size="small" color={colors.accent.primary} />
+                    ) : found.length === 0 ? (
+                      <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm }}>Ничего не нашлось</Text>
+                    ) : (
+                      found.slice(0, 30).map(p => (
+                        <TouchableOpacity
+                          key={p.id}
+                          onPress={() => addProduct(p as { id: number; name: string; code?: string; unit?: string; unitPrice?: number | string })}
+                          style={{
+                            backgroundColor: colors.bg.card, borderRadius: Radii.md,
+                            padding: 12, minHeight: Sizes.touchTarget, justifyContent: "center",
+                          }}
+                        >
+                          <Text style={{ color: colors.text.primary, fontSize: Typography.size.sm, fontFamily: Typography.fontMedium }} numberOfLines={1}>
+                            {p.name}
+                          </Text>
+                          <Text style={{ color: colors.text.muted, fontSize: Typography.size.xs, marginTop: 2 }}>
+                            {p.code ? `${p.code} · ` : ""}{Number(p.unitPrice ?? 0).toLocaleString("ru")} сум
+                          </Text>
+                        </TouchableOpacity>
+                      ))
+                    )}
+                    <TouchableOpacity
+                      onPress={() => { setPicking(false); setSearch(""); }}
+                      style={{ padding: 12, alignItems: "center", minHeight: Sizes.touchTarget, justifyContent: "center" }}
+                    >
+                      <Text style={{ color: colors.text.secondary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }}>Отмена</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => { setPicking(true); onNeedCatalog?.(); }}
+                    style={{
+                      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+                      backgroundColor: colors.bg.card, borderRadius: Radii.md, ...soft(isDark).raisedSm,
+                      minHeight: Sizes.touchTarget, padding: 12,
+                    }}
+                  >
+                    <Feather name="plus" size={16} color={colors.text.secondary} />
+                    <Text style={{ color: colors.text.secondary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }}>
+                      Добавить товар
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 {hasChanges && (
                   <TouchableOpacity onPress={handleSaveItems} disabled={saving}
                     style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
                     {saving
                       ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Сохранить количество</Text>
+                      /* Было «Сохранить количество» — теперь меняется и состав:
+                         подпись, называющая треть действия, вводит в
+                         заблуждение ровно там, где двигается склад. */
+                      : <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Сохранить состав</Text>
                     }
                   </TouchableOpacity>
                 )}
@@ -296,13 +486,13 @@ export function OrderEditModal({
                   <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>Заметки</Text>
                   <TextInput value={notes} onChangeText={onNotesChange} placeholder="Заметки к заказу..."
                     placeholderTextColor={colors.text.muted}
-                    style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base, minHeight: 60, textAlignVertical: "top" }} multiline />
+                    style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base, minHeight: 60, textAlignVertical: "top" }} multiline />
                 </View>
                 <View>
                   <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>Скидка (%)</Text>
                   <TextInput value={discount} onChangeText={v => onDiscountChange(clampDiscountText(v))} placeholder="0" keyboardType="decimal-pad"
                     placeholderTextColor={colors.text.muted}
-                    style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base }} />
+                    style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base }} />
                 </View>
                 <TouchableOpacity onPress={onSave} disabled={saving}
                   style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center", opacity: saving ? 0.6 : 1 }}>

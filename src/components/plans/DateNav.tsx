@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { View, Text } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { Typography, Spacing, Radii, ThemeColors } from "../../theme";
+import { Typography, Spacing, Radii, ThemeColors, soft } from "../../theme";
 import { PressableScale } from "../Animated";
+import { useThemeStore } from "../../store/theme";
 
 export function DateNav({
   date,
@@ -17,6 +18,7 @@ export function DateNav({
   onPrev: () => void;
   onNext: () => void;
 }) {
+  const { isDark } = useThemeStore();
   const days = useMemo(() => {
     const result = [];
     for (let i = -2; i <= 2; i++) {
@@ -28,7 +30,7 @@ export function DateNav({
   }, [date]);
 
   return (
-    <View style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, padding: Spacing.md, borderWidth: 1, borderColor: colors.border.default }}>
+    <View style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, padding: Spacing.md, ...soft(isDark).raised}}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.sm }}>
         <PressableScale onPress={onPrev} haptic="light">
           <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
@@ -64,8 +66,7 @@ export function DateNav({
               height: d.isCurrent ? 36 : 28,
               borderRadius: d.isCurrent ? 18 : 14,
               backgroundColor: d.isCurrent ? colors.brand.primary : "transparent",
-              borderWidth: d.isCurrent ? 0 : 1.5,
-              borderColor: d.isCurrent ? "transparent" : colors.border.default,
+              ...(d.isCurrent ? soft(isDark).raisedSm : soft(isDark).inset),
               alignItems: "center",
               justifyContent: "center",
             }}>

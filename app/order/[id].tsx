@@ -24,6 +24,8 @@ import {
   deleteOrder,
   updateOrder,
   updateOrderItems,
+  setPromisedDelivery,
+  getProducts,
   type OrderDetail,
 } from "../../src/api";
 import {
@@ -44,6 +46,12 @@ import { OrderInfoCard } from "../../src/components/order/OrderInfo";
 import { OrderItemsList, OrderFinancialSummary } from "../../src/components/order/OrderItems";
 import { OrderActions } from "../../src/components/order/OrderActions";
 import { OrderEditModal } from "../../src/components/order/OrderEditModal";
+import { OrderComments } from "../../src/components/order/OrderComments";
+import { PromisedDelivery } from "../../src/components/order/PromisedDelivery";
+import { canMovePromise } from "../../src/lib/promised-delivery";
+import { Card } from "../../src/components/ui";
+import { Spacing } from "../../src/theme";
+import { errorText } from "../../src/lib/error-text";
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -59,7 +67,7 @@ export default function OrderDetailScreen() {
   // Агент на слабой связи открывал свой же заказ и читал, что заказа нет, а
   // ниже — что его, возможно, удалили или лишили прав. Он звонил в офис вместо
   // того, чтобы просто повторить.
-  const { data: order, isLoading, isError, error, refetch, isFetching } = useQuery<OrderDetail>({
+  const { data: order, isLoading, isError, error, refetch, isFetching } = useQuery<OrderDetail | null>({
     queryKey: ["order", id],
     queryFn: () => getOrderById(Number(id)),
     enabled: !!id,
@@ -112,8 +120,30 @@ export default function OrderDetailScreen() {
     },
   });
 
+  /*
+    Каталог для добавления товара.
+
+    Грузится только когда его попросили: окно правки открывают ради количества
+    гораздо чаще, чем ради нового товара, а позиций у организации сотни.
+    Отказ гасится в пустой список — тогда в окне просто нечего выбрать, но
+    количество правится как раньше.
+  */
+  const [needCatalog, setNeedCatalog] = useState(false);
+  const { data: catalog } = useQuery({
+    queryKey: ["catalog", "orderEdit"],
+    queryFn: () => getProducts().catch(() => []),
+    enabled: needCatalog,
+    retry: false,
+  });
+
   const updateItemsMutation = useMutation({
-    mutationFn: (items: Array<{ itemId: number; quantity: number }>) => updateOrderItems(Number(id), items),
+    /*
+      Три действия одним списком: изменить количество ({itemId, quantity}),
+      убрать позицию ({itemId, quantity: 0}) и добавить товар
+      ({productId, quantity, unitPrice}). Так их и понимает сервер.
+    */
+    mutationFn: (items: Array<{ itemId?: number; productId?: number; quantity: number; unitPrice?: string }>) =>
+      updateOrderItems(Number(id), items),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       notify.success("Количество товаров обновлено");
@@ -123,6 +153,30 @@ export default function OrderDetailScreen() {
     onError: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       notify.error("Не удалось обновить количество");
+    },
+  });
+
+  /*
+    Перенести обещанный срок.
+
+    Ровно та возможность, ради которой магазин звонит агенту: «сегодня не
+    успеваем — привезём в понедельник». Через правку заказа этого было бы
+    не сделать: она открыта только офису.
+
+    Отказ показываем словами сервера: по закрытому заказу он объясняет,
+    почему нельзя, и своя выдумка на этом месте была бы хуже.
+  */
+  const promiseMutation = useMutation({
+    mutationFn: (v: string | null) => setPromisedDelivery(Number(id), v),
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notify.success("Срок сохранён");
+      queryClient.invalidateQueries({ queryKey: ["order", id] });
+      queryClient.invalidateQueries({ queryKey: ["myOrders"] });
+    },
+    onError: (e) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      notify.error(errorText(e));
     },
   });
 
@@ -263,6 +317,20 @@ export default function OrderDetailScreen() {
         >
         <PipelineBanner status={order.status} colors={colors} />
         <OrderInfoCard order={order} colors={colors} />
+        {/*
+          Обещанный срок — сразу под сведениями о заказе: агент, открывший
+          карточку по звонку «где мой товар», ищет здесь именно его.
+        */}
+        <Card style={{ marginTop: Spacing.md }}>
+          <PromisedDelivery
+            value={order.promisedDeliveryAt ?? null}
+            onChange={(v) => promiseMutation.mutate(v)}
+            status={order.status}
+            deliveredAt={order.deliveredAt ?? null}
+            editable={canMovePromise(order.status)}
+            disabled={promiseMutation.isPending}
+          />
+        </Card>
         <OrderItemsList order={order} colors={colors} />
         <OrderFinancialSummary order={order} subtotal={subtotal} discount={discount} colors={colors} />
         <OrderActions
@@ -275,6 +343,13 @@ export default function OrderDetailScreen() {
           onDelete={handleDelete}
           colors={colors}
         />
+        {/*
+          Переписка — под действиями, а не над ними: сперва то, что с заказом
+          делают, потом то, что о нём говорят. Обе ручки открыты агенту и не
+          вызывались из приложения ниоткуда — переписка велась в вебе, а
+          агент, которого она касается, её не видел.
+        */}
+        <OrderComments orderId={Number(id)} />
         <View style={{ height: 32 }} />
         </ScrollView>
       </Animated.View>
@@ -285,15 +360,22 @@ export default function OrderDetailScreen() {
         discount={editDiscount}
         items={(order?.items ?? []).map(item => ({
           id: item.id,
+          // Товар нужен, чтобы добавленную строку было чем отправить: сервер
+          // различает правку позиции (itemId) и вставку новой (productId).
+          productId: item.productId,
           productName: item.productName,
           productCode: item.productCode,
-          quantity: item.quantity,
+          // С сервера «2.00» строкой; в окне правки сравнивается числом —
+          // иначе нетронутая строка считалась изменённой, а поле показывало «2.00».
+          quantity: Number(item.quantity),
           unitPrice: Number(item.unitPrice) || 0,
           unit: item.unit,
         }))}
         saving={updateMutation.isPending || updateItemsMutation.isPending}
         onNotesChange={setEditNotes}
         onDiscountChange={setEditDiscount}
+        catalog={catalog}
+        onNeedCatalog={() => setNeedCatalog(true)}
         onSaveItems={(items) => updateItemsMutation.mutate(items)}
         onSave={() => updateMutation.mutate()}
         onClose={() => setShowEditModal(false)}

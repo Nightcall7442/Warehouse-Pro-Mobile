@@ -13,12 +13,13 @@ import { SecureImage } from "../../src/components/SecureImage";
 import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { MonthlyPlanCard } from "../../src/components/MonthlyPlanCard";
-import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT } from "../../src/theme";
+import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT, soft } from "../../src/theme";
 import { Card, Badge } from "../../src/components/ui";
 // То же число, что и на других вкладках: высота плавающей панели. Голое 100
 // в отступе не говорило, откуда оно, и переживало правку панели лишь наполовину.
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
 import Constants from "expo-constants";
+import { useRouter } from "expo-router";
 
 type IconName = keyof typeof Feather.glyphMap;
 
@@ -56,7 +57,9 @@ export default function ProfileScreen() {
   useEffect(() => { if (user?.name) setNewName(user.name); }, [user?.name]);
 
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
+  const router = useRouter();
   const isAgent = user?.role === "agent";
+  const isCourier = user?.role === "courier";
   // Monthly quotas are set against field staff. A CEO has no personal plan, so
   // showing them a permanent "норма не назначена" card would be noise.
   const isFieldRole = user?.role === "agent" || user?.role === "merchandiser";
@@ -142,7 +145,7 @@ export default function ProfileScreen() {
             {/* Avatar row */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.lg, marginBottom: Spacing.xl }}>
               <PressableScale onPress={handleAvatarPress} haptic="light">
-                <View style={{ width: 64, height: 64, borderRadius: Radii.lg, overflow: "hidden", backgroundColor: colors.brand.primaryDim, borderWidth: 2, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
+                <View style={{ width: 64, height: 64, borderRadius: Radii.lg, overflow: "hidden", backgroundColor: colors.brand.primaryDim, ...soft(isDark).insetSm, alignItems: "center", justifyContent: "center" }}>
                   {user?.avatar ? (
                     <Image source={{ uri: user.avatar }} style={{ width: 64, height: 64 }} />
                   ) : (
@@ -210,13 +213,81 @@ export default function ProfileScreen() {
               disabled={pwdMutation.isPending || !currentPwd || !newPwd}
               haptic="medium"
             >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20, borderWidth: 1, borderColor: colors.border.default, opacity: pwdMutation.isPending || !currentPwd || !newPwd ? 0.4 : 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20, ...soft(isDark).raised, opacity: pwdMutation.isPending || !currentPwd || !newPwd ? 0.4 : 1 }}>
                 {pwdMutation.isPending ? <ActivityIndicator color={colors.text.primary} size="small" /> : <Feather name="lock" size={14} color={colors.text.secondary} />}
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>Изменить пароль</Text>
               </View>
             </PressableScale>
           </Card>
         </FadeInItem>
+
+        {/*
+          Моя зарплата.
+
+          Зарплату получают агенты и курьеры — те, у кого веба нет вовсе, — а
+          посмотреть её на телефоне было негде: число существовало только на
+          экране начальника. Здесь же и подтверждают получение выданного.
+
+          Начальству ссылки нет: у директора и супервайзера для этого есть
+          ведомость всей команды, а собственная строка в ней и так видна.
+        */}
+        {(isAgent || isCourier) && (
+          <FadeInItem delay={70}>
+            <PressableScale onPress={() => router.push("/salary")} haptic="light">
+              <Card style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.lg, marginTop: Spacing.base }}>
+                <View style={{
+                  width: 38, height: 38, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center",
+                  backgroundColor: colors.accent.primary + "18",
+                }}>
+                  <Feather name="dollar-sign" size={18} color={colors.accent.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
+                    Моя зарплата
+                  </Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }}>
+                    Начислено, выдано и подтверждение получения
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
+              </Card>
+            </PressableScale>
+          </FadeInItem>
+        )}
+
+        {/*
+          Долги по моим заказам.
+
+          Долг агент видел только в карточке магазина — по одному, и лишь если
+          помнил, к кому зайти. Вопрос «кому идти собирать» задают каждый день,
+          и отвечать на него перебором точек нельзя.
+
+          Только агенту: у курьера своих заказов нет, а начальник смотрит долги
+          по всей организации отдельным отчётом.
+        */}
+        {isAgent && (
+          <FadeInItem delay={75}>
+            <PressableScale onPress={() => router.push("/debts")} haptic="light">
+              <Card style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.lg, marginTop: Spacing.base }}>
+                <View style={{
+                  width: 38, height: 38, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center",
+                  backgroundColor: colors.status.danger + "18",
+                }}>
+                  <Feather name="alert-circle" size={18} color={colors.status.danger} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
+                    Мои долги
+                  </Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }}>
+                    Кому идти собирать деньги
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
+              </Card>
+            </PressableScale>
+          </FadeInItem>
+        )}
 
         {/* ── Appearance Card ── */}
         <FadeInItem delay={80}>
@@ -227,7 +298,7 @@ export default function ProfileScreen() {
                 <View style={{
                   paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
                   backgroundColor: !isDark ? colors.accent.primary : colors.bg.elevated,
-                  borderWidth: 1.5, borderColor: !isDark ? colors.accent.primary : colors.border.default,
+                  ...((!isDark) ? soft(isDark).raisedSm : soft(isDark).inset),
                 }}>
                   <Feather name="sun" size={18} color={!isDark ? "#fff" : colors.text.secondary} />
                   <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: !isDark ? "#fff" : colors.text.secondary }}>Светлая</Text>
@@ -237,7 +308,7 @@ export default function ProfileScreen() {
                 <View style={{
                   paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
                   backgroundColor: isDark ? colors.accent.primary : colors.bg.elevated,
-                  borderWidth: 1.5, borderColor: isDark ? colors.accent.primary : colors.border.default,
+                  ...(isDark ? soft(isDark).raisedSm : soft(isDark).inset),
                 }}>
                   <Feather name="moon" size={18} color={isDark ? "#fff" : colors.text.secondary} />
                   <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: isDark ? "#fff" : colors.text.secondary }}>Тёмная</Text>

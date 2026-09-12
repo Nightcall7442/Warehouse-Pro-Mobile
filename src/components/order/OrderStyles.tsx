@@ -39,8 +39,6 @@ export const STATUS_CONFIG: Record<
   delivered:            { label: ORDER_STATUSES.delivered.label,           gradient: OrderStatusGradients.delivered,           icon: "check-circle", badgeVariant: "success", step: 3 },
   cancelled:            { label: ORDER_STATUSES.cancelled.label,           gradient: OrderStatusGradients.cancelled,           icon: "x-circle",     badgeVariant: "danger",  step: -1 },
   returned:             { label: ORDER_STATUSES.returned.label,            gradient: OrderStatusGradients.returned,            icon: "rotate-ccw",   badgeVariant: "danger",  step: -1 },
-  partially_returned:   { label: ORDER_STATUSES.partially_returned.label,  gradient: OrderStatusGradients.partially_returned,  icon: "rotate-ccw",   badgeVariant: "warning", step: 2 },
-  partial_return_kept:  { label: ORDER_STATUSES.partial_return_kept.label, gradient: OrderStatusGradients.partial_return_kept, icon: "package",      badgeVariant: "warning", step: 2 },
 };
 
 // Шаги диаграммы — те же слова, что и у статусов: «Отгружён» через ё здесь и

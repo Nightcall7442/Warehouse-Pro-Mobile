@@ -13,7 +13,7 @@ import { uuidv4 } from "../../src/store/offline";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { notify } from "../../src/store/toast";
-import { Typography, Spacing, Radii, ThemeColors, modalBottomPadding } from "../../src/theme";
+import { Typography, Spacing, Radii, ThemeColors, modalBottomPadding, soft } from "../../src/theme";
 import { SearchInput, Card, Button } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
 import { useDebounce } from "../../src/hooks/useDebounce";
@@ -33,7 +33,8 @@ import { unitShort, formatQty } from "../../src/lib/units";
 import { PAYMENT_METHODS } from "../../src/lib/order-status";
 
 // ── Hero Product Card ────────────────────────────────────────────────────────
-function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, cardWidth }: {
+function ProductCard({
+  product, colors, isDark, onPress, onAdd, fmt, cardWidth }: {
   product: Product; colors: ThemeColors; isDark: boolean; onPress: () => void; onAdd: () => void;
   fmt: (v: number | string | null | undefined) => string; cardWidth: number;
 }) {
@@ -54,7 +55,7 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
             </View>
           )}
           {/* Stock badge */}
-          <View style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, backgroundColor: inStock ? colors.status.successDim : colors.status.dangerDim, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: inStock ? colors.status.success + "30" : colors.status.danger + "30" }}>
+          <View style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, backgroundColor: inStock ? colors.status.successDim : colors.status.dangerDim, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 4, ...(inStock ? soft(isDark).raisedSm : soft(isDark).inset),}}>
             <Text style={{ color: inStock ? colors.status.success : colors.status.danger, fontSize: 11, fontFamily: Typography.fontSemibold }}>{inStock ? "В наличии" : "Нет"}</Text>
           </View>
           {/* Add button */}
@@ -82,7 +83,8 @@ function ProductCard({ product, colors, isDark: _isDark, onPress, onAdd, fmt, ca
 // ── Product Detail Modal ─────────────────────────────────────────────────────
 /* Экспортируется ради проверки: кнопку «Добавить в заказ» уже один раз
    обрезало нижним краем, и поймать это можно только отрисовкой. */
-export function ProductDetail({ product, visible, onClose, onAdd, colors, isDark: _isDark, fmt }: {
+export function ProductDetail({
+  product, visible, onClose, onAdd, colors, isDark, fmt }: {
   product: Product | null; visible: boolean; onClose: () => void; onAdd: (qty: number) => void;
   colors: ThemeColors; isDark: boolean; fmt: (v: number | string | null | undefined) => string;
 }) {
@@ -138,11 +140,11 @@ export function ProductDetail({ product, visible, onClose, onAdd, colors, isDark
             {product.code && <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginBottom: 12 }}>Артикул: {product.code}</Text>}
             {/* Price + Stock row */}
             <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: 20 }}>
-              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
+              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, ...soft(isDark).raised, padding: Spacing.lg }}>
                 <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Цена за {unitShort(product.unit)}</Text>
                 <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: colors.accent.primary, marginTop: 4 }}>{fmt(product.unitPrice)}</Text>
               </View>
-              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.lg }}>
+              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, ...soft(isDark).raised, padding: Spacing.lg }}>
                 <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Остаток</Text>
                 <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: Number(product.available) > 0 ? colors.status.success : colors.status.danger, marginTop: 4 }}>
                   {formatQty(product.available)} {unitShort(product.unit)}
@@ -152,7 +154,7 @@ export function ProductDetail({ product, visible, onClose, onAdd, colors, isDark
             {/* Qty stepper */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24, marginBottom: 20 }}>
               <TouchableOpacity onPress={() => setQty(Math.max(1, qty - 1))}
-                style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
+                style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.elevated, ...soft(isDark).raised, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="minus" size={20} color={colors.text.primary} />
               </TouchableOpacity>
               <Text style={{ fontSize: 32, fontFamily: Typography.fontBold, color: colors.text.primary, minWidth: 50, textAlign: "center" }}>{qty}</Text>
@@ -188,6 +190,7 @@ export function ProductDetail({ product, visible, onClose, onAdd, colors, isDark
 function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
   visible: boolean; shops: Shop[]; onSelect: (shopId: number) => void; onClose: () => void; colors: ThemeColors;
 }) {
+  const { isDark } = useThemeStore();
   /*
     Лист приклеен к нижнему краю окна, а окно на Android заходит ПОД системную
     панель. Без этого отступа нижние 20–30 точек главной кнопки листа лежали в
@@ -230,11 +233,11 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
           <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск по имени, адресу…" />
           {cities.length > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: Spacing.sm, marginBottom: Spacing.sm }}>
-              <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: !cityFilter ? colors.accent.primary : colors.border.default }}>
+              <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, ...((!cityFilter) ? soft(isDark).raisedSm : soft(isDark).inset),}}>
                 <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>Все</Text>
               </TouchableOpacity>
               {cities.map(c => (
-                <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: cityFilter === c ? colors.accent.primary : colors.border.default }}>
+                <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, ...((cityFilter === c) ? soft(isDark).raisedSm : soft(isDark).inset),}}>
                   <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: cityFilter === c ? "#fff" : colors.text.secondary }}>{c}</Text>
                 </TouchableOpacity>
               ))}
@@ -244,7 +247,7 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
           <FlatList data={filtered} keyExtractor={s => String(s.id)} style={{ maxHeight: 300 }}
             renderItem={({ item: shop }) => (
               <TouchableOpacity onPress={() => setSelected(shop.id)}
-                style={{ flexDirection: "row", alignItems: "center", padding: Spacing.base, marginBottom: Spacing.sm, borderRadius: Radii.md, backgroundColor: selected === shop.id ? colors.accent.primary + "12" : colors.bg.card, borderWidth: 1.5, borderColor: selected === shop.id ? colors.accent.primary : colors.border.default }}>
+                style={{ flexDirection: "row", alignItems: "center", padding: Spacing.base, marginBottom: Spacing.sm, borderRadius: Radii.md, backgroundColor: selected === shop.id ? colors.accent.primary + "12" : colors.bg.card, ...((selected === shop.id) ? soft(isDark).raisedSm : soft(isDark).inset),}}>
                 <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: selected === shop.id ? colors.accent.primary : colors.bg.elevated, alignItems: "center", justifyContent: "center", marginRight: Spacing.md }}>
                   <Feather name="shopping-bag" size={16} color={selected === shop.id ? "#fff" : colors.text.muted} />
                 </View>
@@ -336,13 +339,13 @@ function PaymentPicker({ visible, onSelect, onClose, colors, submitting }: {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
+  const { isDark } = useThemeStore();
   // Вкладку не размонтируют при переключении, поэтому запрос уходит один раз
   // за запуск. Здесь данные этого экрана помечаются устаревшими при возврате
   // на него — подробности в самом хуке.
   useRefreshOnFocus([["products"], ["availableShops"], ["categories"]]);
   const { width: SCREEN_W } = useWindowDimensions();
   const CARD_W = useMemo(() => (SCREEN_W - Spacing.base * 2 - Spacing.md) / 2, [SCREEN_W]);
-  const { isDark } = useThemeStore();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -515,8 +518,8 @@ export default function CatalogScreen() {
             const active = selectedCat === cat.key;
             return (
               <TouchableOpacity key={cat.key} onPress={() => setSelectedCat(cat.key)}
-                style={{ backgroundColor: active ? colors.accent.primary : colors.bg.elevated, borderRadius: Radii.full, borderWidth: active ? 0 : 1, borderColor: colors.border.default, paddingHorizontal: 16, paddingVertical: 8, minHeight: 36, justifyContent: "center" }}>
-                <Text style={{ color: active ? "#fff" : colors.text.primary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, textAlign: "center" }}>{cat.label}</Text>
+                style={{ backgroundColor: active ? colors.accent.primary : colors.bg.elevated, borderRadius: Radii.full, ...(active ? soft(isDark).raisedSm : soft(isDark).inset), paddingHorizontal: 16, paddingVertical: 8, minHeight: 36, justifyContent: "center" }}>
+                <Text style={{ color: active ? colors.brand.ink : colors.text.secondary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, textAlign: "center" }}>{cat.label}</Text>
               </TouchableOpacity>
             );
           })}

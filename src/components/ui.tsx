@@ -38,15 +38,34 @@ export function Card({ children, style, onPress, variant = "default", haptic = t
   };
 
   /*
-    overflow больше не скрывается.
+    Обрезка содержимого не должна съедать тени карточки.
 
-    Он стоял ради полоски-блика, которую надо было обрезать по скруглению. Тени
-    рисуются ЗА границей элемента, и обрезка съедала бы их целиком — карточка
-    снова стала бы плоской.
+    Тени рисуются ЗА границей элемента, поэтому overflow: "hidden" на самой
+    карточке срезает их целиком — карточка становится плоской. Ровно это и
+    происходило: восемь мест передавали сюда `overflow: "hidden"`, чтобы
+    фотография не вылезала за скругление, и вместе с фотографией обрезался весь
+    объём. Карточки товаров в каталоге, строки заказа, шапка магазина стояли
+    плоскими, и со стороны это выглядело как «язык оформления сюда не дошёл».
+
+    Обрезка переносится внутрь: тень остаётся на внешней поверхности, а
+    содержимое обрезает вложенный слой с тем же скруглением. Места вызова при
+    этом не меняются — они как передавали overflow, так и передают.
   */
+  const merged: ViewStyle = Object.assign({}, cardStyle, ...(Array.isArray(style) ? style : [style ?? {}]));
+  const clips = merged.overflow === "hidden";
   const content = (
-    <View style={[cardStyle, style]}>
-      {children}
+    <View style={[cardStyle, style, clips ? { overflow: "visible" as const } : null]}>
+      {clips ? (
+        <View style={{
+          borderRadius: merged.borderRadius,
+          overflow: "hidden",
+          // Карточке с заданной высотой вложенный слой должен её занять
+          // целиком, иначе фотография внутри схлопнется в ноль.
+          ...(merged.height !== undefined ? { height: "100%" as const } : null),
+        }}>
+          {children}
+        </View>
+      ) : children}
     </View>
   );
 
@@ -162,8 +181,10 @@ export function Button({
   }
 
   const variantStyle: ViewStyle =
-    variant === "secondary" ? { backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default }
-    : variant === "danger" ? { backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "40" }
+    variant === "secondary" ? { backgroundColor: colors.bg.elevated, ...soft(isDark).raisedSm }
+    : variant === "danger" ? { backgroundColor: colors.status.dangerDim, ...soft(isDark).raisedSm }
+    // «Призрачная» кнопка остаётся плоской намеренно: у неё нет поверхности,
+    // и объём означал бы, что нажимать надо именно её.
     : variant === "ghost" ? { backgroundColor: "transparent" }
     : {};
 
@@ -193,7 +214,7 @@ export function Badge({ children, variant = "default", icon, style }: BadgeProps
   const BG: Record<string, string> = { default: colors.bg.elevated, success: colors.status.successDim, warning: colors.status.warningDim, danger: colors.status.dangerDim, info: colors.status.infoDim };
   const FG: Record<string, string> = { default: colors.text.secondary, success: colors.status.success, warning: colors.status.warning, danger: colors.status.danger, info: colors.status.info };
   return (
-    <View style={[{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radii.full, alignSelf: "flex-start", backgroundColor: BG[variant], borderWidth: 1, borderColor: FG[variant] + "25" }, style]}>
+    <View style={[{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radii.full, alignSelf: "flex-start", backgroundColor: BG[variant] }, style]}>
       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: FG[variant], marginRight: icon ? 5 : 6 }} />
       {icon && <Feather name={icon} size={11} color={FG[variant]} style={{ marginRight: 4 }} />}
       <Text style={{ fontSize: 11, fontFamily: Typography.fontSemibold, color: FG[variant] }}>{children}</Text>
@@ -241,8 +262,8 @@ export function SearchInput({ value, onChangeText, placeholder = "Поиск…"
       shadowOpacity: isDark ? 0.3 : 0.2,
       shadowRadius: 6,
       elevation: -1,
-      borderWidth: 0.5,
-      borderColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.5)",
+      // Волосяная обводка была имитацией блика — настоящий даёт вдавленный
+      // набор теней, которым поле и утоплено в холст.
     }}>
       <Feather name="search" size={16} color={colors.text.muted} />
       <TextInput

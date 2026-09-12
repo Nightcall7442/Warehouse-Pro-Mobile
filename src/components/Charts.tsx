@@ -193,8 +193,8 @@ export function NeumorphicProgressBar({ value, height = 8, color, style }: {
       shadowOpacity: isDark ? 0.35 : 0.22,
       shadowRadius: 5,
       elevation: -1,
-      borderWidth: 0.5,
-      borderColor: isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.4)",
+      // Волосяная светлая обводка была имитацией блика; настоящий блик даёт
+      // верхняя грань пары теней.
     }, style]}>
       <LinearGradient
         colors={[barColor + "cc", barColor]}

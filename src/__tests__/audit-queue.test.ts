@@ -73,6 +73,11 @@ jest.mock("expo-haptics", () => ({
 
 jest.mock("@expo/vector-icons", () => ({ Feather: "Feather" }));
 jest.mock("expo-linear-gradient", () => ({ LinearGradient: "LinearGradient" }));
+// Камера в выборе товара (скан прибавляет единицу) — нативного модуля в jest нет.
+jest.mock("expo-camera", () => ({
+  CameraView: "CameraView",
+  useCameraPermissions: () => [{ granted: true }, jest.fn(async () => ({ granted: true }))],
+}));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -224,6 +229,59 @@ describe("проход синхронизации не затирает то, ч
     const writes = storage.setItem.mock.calls.filter((c: any[]) => c[0] === "pending_delivery_actions");
     const lastWrite = JSON.parse(writes[writes.length - 1][1]);
     expect(lastWrite.map((a: any) => a.id)).toContain("a-queued-during");
+  });
+});
+
+// ── 2а. Очередь курьера: по одному и в порядке постановки ──────────────────
+describe("отметки курьера уходят по одной и по порядку", () => {
+  const at = (sec: number) => new Date(Date.UTC(2026, 8, 12, 10, 0, sec)).toISOString();
+
+  it("порядок — по createdAt, а не по положению в списке; «выехал» раньше «доставлен»", async () => {
+    const calls: string[] = [];
+    apiMock.markOutForDelivery.mockImplementation(async (id: number) => { calls.push(`out:${id}`); });
+    apiMock.markDelivered.mockImplementation(async (id: number) => { calls.push(`done:${id}`); });
+    useOfflineStore.setState({
+      deliveryActions: [
+        { id: "b", action: { type: "markDelivered", orderId: 7, cashAmount: "10" }, createdAt: at(5), synced: false },
+        { id: "a", action: { type: "markOutForDelivery", orderId: 7 }, createdAt: at(1), synced: false },
+      ],
+    });
+    const r = await useOfflineStore.getState().syncDeliveryActions();
+    expect(calls).toEqual(["out:7", "done:7"]);
+    expect(r).toEqual({ synced: 2, failed: 0 });
+  });
+
+  it("сеть упала на первом — остальные ждут следующего прохода, а не бьются в неё", async () => {
+    apiMock.markOutForDelivery.mockRejectedValue(new Error("Network Error"));
+    apiMock.markDelivered.mockResolvedValue(undefined);
+    useOfflineStore.setState({
+      deliveryActions: [
+        { id: "a", action: { type: "markOutForDelivery", orderId: 7 }, createdAt: at(1), synced: false },
+        { id: "b", action: { type: "markDelivered", orderId: 8, cashAmount: "10" }, createdAt: at(2), synced: false },
+      ],
+    });
+    const r = await useOfflineStore.getState().syncDeliveryActions();
+    expect(apiMock.markDelivered).not.toHaveBeenCalled();
+    expect(r).toEqual({ synced: 0, failed: 1 });
+    const byId = Object.fromEntries(useOfflineStore.getState().deliveryActions.map((a: any) => [a.id, a]));
+    expect(byId.a.status).toBe("failed");
+    expect(byId.a.retryable).toBe(true);
+    expect(byId.b.status).toBe("pending");
+    expect(byId.b.synced).toBe(false);
+  });
+
+  it("отказ по существу (заказ не ваш) не останавливает остальные", async () => {
+    apiMock.markOutForDelivery.mockRejectedValue(new Error("Заказ не найден или не назначен на вас"));
+    apiMock.markDelivered.mockResolvedValue(undefined);
+    useOfflineStore.setState({
+      deliveryActions: [
+        { id: "a", action: { type: "markOutForDelivery", orderId: 7 }, createdAt: at(1), synced: false },
+        { id: "b", action: { type: "markDelivered", orderId: 8, cashAmount: "10" }, createdAt: at(2), synced: false },
+      ],
+    });
+    const r = await useOfflineStore.getState().syncDeliveryActions();
+    expect(apiMock.markDelivered).toHaveBeenCalledTimes(1);
+    expect(r).toEqual({ synced: 1, failed: 1 });
   });
 });
 

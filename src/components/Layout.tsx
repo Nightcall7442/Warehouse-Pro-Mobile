@@ -101,15 +101,14 @@ export function PageHeader({ title, subtitle, showBack, onBack, right, noBorder 
           {showBack && onBack && (
             <TouchableOpacity
               onPress={onBack}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               style={{
                 width: 36,
                 height: 36,
                 borderRadius: Radii.full,
                 backgroundColor: colors.bg.elevated,
                 alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: colors.border.default,
+                justifyContent: "center", ...soft(isDark).raised,
               }}
             >
               <Feather name="arrow-left" size={18} color={colors.text.primary} />
@@ -210,16 +209,19 @@ interface IconActionProps {
 
 export function IconAction({ icon, onPress, badge, variant = "default", size = 36 }: IconActionProps) {
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const bg =
     variant === "primary" ? colors.accent.primary :
     variant === "ghost" ? "transparent" :
     colors.bg.elevated;
   const iconColor =
     variant === "primary" ? "#fff" : colors.text.primary;
-  const borderStyle =
-    variant === "default"
-      ? { borderWidth: 1, borderColor: colors.border.default }
-      : {};
+  /*
+    Кнопка-иконка приподнята, а не обведена. В прототипе это «выдавленный»
+    квадратик со скруглением — колокольчик, поиск, шестерёнка; линия вокруг
+    него из прежнего языка.
+  */
+  const borderStyle = variant === "default" ? soft(isDark).raisedSm : {};
 
   return (
     <TouchableOpacity

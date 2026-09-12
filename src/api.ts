@@ -1,14 +1,22 @@
 import axios from "axios";
+import Constants from "expo-constants";
 import { SecureStore } from "./storage";
 
 export const API_BASE = (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim())
   ? process.env.EXPO_PUBLIC_API_URL
   : "https://www.warehouse-pro.uz";
 
+/**
+ * Версия сборки — в каждом запросе. По ней сервер считает, сколько телефонов
+ * на какой сборке (client_requests_total): до этого «у агента не работает» не
+ * привязывалось к версии, и обновились ли все — не знал никто.
+ */
+export const CLIENT_VERSION = `mobile/${Constants.expoConfig?.version ?? "dev"}`;
+
 const api = axios.create({
   baseURL: `${API_BASE}/api/trpc`,
   timeout: 15_000,
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", "x-client-version": CLIENT_VERSION },
 });
 
 api.interceptors.request.use(async (config) => {
@@ -68,6 +76,13 @@ api.interceptors.response.use(
     }
     if (status === 401 && !isSelfInflicted401(url)) {
       await SecureStore.deleteItemAsync("session_token").catch(() => {});
+      // Фоновый GPS останавливается здесь же, а не только в logout():
+      // см. endSessionLocally в store/auth.ts.
+      {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { stopTrackingOnSignOut } = require("./store/auth");
+        await stopTrackingOnSignOut?.().catch?.(() => {});
+      }
       // Clearing the token alone isn't enough — without this, the auth
       // store still thinks the user is logged in (isAuthenticated stays
       // true) until the next manual hydrate(), so the UI silently shows
@@ -201,7 +216,7 @@ export interface User {
   name: string;
   email: string;
   avatar?: string | null;
-  role: "agent" | "operator" | "supervisor" | "ceo" | "merchandiser" | "courier";
+  role: "agent" | "operator" | "supervisor" | "ceo" | "merchandiser" | "courier" | "superadmin";
   tenant: { id: number; name: string; slug: string };
 }
 
@@ -323,9 +338,11 @@ export interface Product {
   id: number;
   name: string;
   code?: string;
+  /** Штрих-код поставщика — по нему сканер в корзине находит товар без сети. */
+  barcode?: string | null;
   category?: string;
   unitPrice: string;
-  available: string;
+  available: string | null;
   unit?: string;
   photoUrl?: string | null;
 }
@@ -344,6 +361,14 @@ export interface CreateOrderInput {
   discount?: number;
   paymentMethod?: "cash" | "card" | "transfer" | "debt";
   idempotencyKey?: string;
+  /*
+    Когда обещали привезти — ISO с поясом.
+
+    Ставит агент, стоя в магазине: это он говорит срок вслух. Не назвал —
+    поля нет, и это законно: «не обещали» и «обещали на сегодня» разные
+    вещи, а подставленный срок был бы его обещанием, которого он не давал.
+  */
+  promisedDeliveryAt?: string;
 }
 
 export interface Order {
@@ -351,30 +376,41 @@ export interface Order {
   orderNumber: string;
   shopName?: string;
   total: string;
-  status: "new" | "processing" | "shipped" | "pending" | "delivered" | "cancelled" | "returned" | "partially_returned" | "partial_return_kept";
+  status: "new" | "processing" | "shipped" | "pending" | "delivered" | "cancelled" | "returned";
   createdAt: string;
 }
 
 export interface OrderDetail extends Order {
   items: Array<{
     id: number;
+    /*
+      Товар позиции. Сервер его отдавал всегда (services/order.ts: getById), а
+      в типе его не было — и добавить строку в заказ с телефона было нечем:
+      сервер различает правку позиции (itemId) и вставку новой (productId).
+    */
+    productId: number;
     productName: string;
     productCode?: string;
-    quantity: number;
-    unitPrice: number;
-    discount?: number;
-    subtotal: number;
+    /** Decimal-колонки приходят строками («2.00»), как и total у заказа. */
+    quantity: string;
+    unitPrice: string;
+    subtotal: string;
     unit?: string;
-    deliveredQuantity?: number | null;
+    deliveredQuantity?: string | null;
     returnReason?: string | null;
   }>;
   notes?: string;
-  discount?: number;
+  /** Сумма скидки деньгами, строкой — как и total; процент считается на экране. */
+  discount?: string;
   subtotal: string;
   shop?: { id: number; name: string; address?: string; city?: string; phone?: string; debt?: string; ownerName?: string } | null;
   agent?: { id: number; name: string } | null;
   deliveryResult?: string | null;
   deliveryNotes?: string | null;
+  /** Обещанный срок или null, если срок магазину не называли. */
+  promisedDeliveryAt?: string | null;
+  /** Когда довезли — чтобы отличить «вовремя» от «позже обещанного». */
+  deliveredAt?: string | null;
 }
 
 // ──────────────────────────────────────
@@ -386,6 +422,11 @@ export interface OrderDetail extends Order {
  * нескольким. Сервер не выбирает за человека — данные в этих организациях
  * разные — а называет их и ждёт повторного запроса с tenantId.
  */
+/** Пароль подошёл, но у человека включён второй фактор: нужен код из приложения. */
+export class TotpCodeRequired extends Error {
+  constructor(message: string) { super(message); this.name = "TotpCodeRequired"; }
+}
+
 export class TenantChoiceRequired extends Error {
   readonly organizations: Array<{ tenantId: number; name: string }>;
   constructor(message: string, organizations: Array<{ tenantId: number; name: string }>) {
@@ -398,13 +439,14 @@ export class TenantChoiceRequired extends Error {
 export async function login(
   email: string,
   password: string,
-  tenantId?: number
+  tenantId?: number,
+  code?: string,
 ): Promise<{ user: User; token: string }> {
   let res;
   try {
     res = await axios.post(
       `${API_BASE}/api/login`,
-      tenantId === undefined ? { email, password } : { email, password, tenantId },
+      { email, password, ...(tenantId === undefined ? {} : { tenantId }), ...(code ? { code } : {}) },
       {
         timeout: 15_000,
         headers: { "Content-Type": "application/json" }
@@ -418,6 +460,9 @@ export async function login(
         data.error ?? "Выберите организацию",
         data.organizations ?? [],
       );
+    }
+    if (response?.status === 401 && data?.code === "TOTP_REQUIRED") {
+      throw new TotpCodeRequired(data.error ?? "Введите код из приложения");
     }
     throw e;
   }
@@ -511,6 +556,13 @@ export async function saveLocation(
    * времени получения, а это значение служит для показа.
    */
   recordedAt?: string,
+  /**
+   * Система пометила координаты как подменённые (Android: приложение
+   * «фиктивное местоположение»). Единственный признак фрода, который не
+   * бывает случайным, — сервер считает по нему; отсутствие GPS фродом
+   * не считается.
+   */
+  mocked?: boolean,
 ): Promise<void> {
   await trpcMutation("agent.saveLocation", {
     lat: String(lat),
@@ -518,6 +570,7 @@ export async function saveLocation(
     accuracy: accuracy !== undefined ? String(accuracy) : undefined,
     batteryLevel,
     recordedAt,
+    mocked: mocked === true ? true : undefined,
   });
 }
 
@@ -532,7 +585,7 @@ export async function saveVisitPhoto(
 
 // ── Barcode Lookup ───────────────────────────────────────────────────────────
 export async function findByBarcode(barcode: string): Promise<{
-  id: number; code: string; name: string; unitPrice: string; unit: string; available: string;
+  id: number; code: string; name: string; unitPrice: string; unit: string; available: string | null;
 } | null> {
   return trpcQuery("product.findByBarcode", { barcode });
 }
@@ -550,7 +603,7 @@ export interface AgentLocation {
 }
 
 export async function getAgentLocations(): Promise<AgentLocation[]> {
-  return trpcQuery<AgentLocation[]>("agent.getLocations", {});
+  return trpcQuery<AgentLocation[]>("agent.getLocations");
 }
 
 // ── Supervisor: create a visit plan for an agent ─────────────────────────────
@@ -639,6 +692,152 @@ export async function getSmartAlerts(): Promise<SmartAlert[]> {
   return trpcQuery<SmartAlert[]>("notification.smartAlerts");
 }
 
+/* ── Уведомления ───────────────────────────────────────────────────────────
+   Толчок на телефон — это только сигнал: пропустил его, и узнать было
+   неоткуда. Список отвечает на «что мне приходило», а сервер и так хранит
+   прочитанное месяц, непрочитанное три.
+   ────────────────────────────────────────────────────────────────────────── */
+export type NotificationType = "order" | "payment" | "stock" | "system";
+
+export interface AppNotification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  message: string | null;
+  isRead: boolean;
+  /** Куда вело уведомление в вебе — на телефоне разбирается отдельно. */
+  link: string | null;
+  createdAt: string;
+}
+
+export async function getNotifications(opts?: { unreadOnly?: boolean; cursor?: number; limit?: number }): Promise<{ items: AppNotification[]; hasMore: boolean }> {
+  return trpcQuery<{ items: AppNotification[]; hasMore: boolean }>("notification.list", {
+    unreadOnly: opts?.unreadOnly,
+    cursor: opts?.cursor,
+    limit: opts?.limit ?? 30,
+  });
+}
+
+export async function getNotificationCounts(): Promise<{ unread: number; byType: Record<NotificationType, number> }> {
+  return trpcQuery<{ unread: number; byType: Record<NotificationType, number> }>("notification.counts");
+}
+
+export async function markNotificationRead(id: number): Promise<unknown> {
+  return trpcMutation("notification.markRead", { id });
+}
+
+export async function markAllNotificationsRead(): Promise<unknown> {
+  return trpcMutation("notification.markAllRead", undefined);
+}
+
+/* ── Показатели курьера ────────────────────────────────────────────────────
+   Своё, а не чужое: без courierId сервер считает вошедшего.
+   ────────────────────────────────────────────────────────────────────────── */
+export interface CourierStats {
+  courierId: number;
+  courierName: string;
+  /** Довезённые заказы — за них и платят. */
+  delivered: number;
+  /** Сорванные: магазин закрыт, отказ, не дозвонились. */
+  failed: number;
+  /** Довезены, но товар вернулся — полностью или частью. */
+  returned: number;
+  deliveredAmount: number;
+  /** Наличные, привезённые в кассу. */
+  cashCollected: number;
+  /** В скольких РАЗНЫХ днях периода он что-то довёз. */
+  workDays: number;
+  /** Доля довезённого от назначенного. Ноль назначенных — мерить нечего. */
+  successRate: number;
+}
+
+export async function getCourierKpi(period: "week" | "month" | "quarter" = "month"): Promise<CourierStats> {
+  return trpcQuery<CourierStats>("kpi.courierKpi", { period });
+}
+
+/* ── Долги по моим заказам ─────────────────────────────────────────────────
+   Кому идти собирать. Считается по заказам агента, за вычетом уже внесённых
+   платежей; заказы без остатка сюда не попадают.
+   ────────────────────────────────────────────────────────────────────────── */
+export interface MyDebt {
+  orderId: number;
+  orderNumber: string;
+  paymentMethod: string;
+  status: string;
+  createdAt: string;
+  shopId: number;
+  shopName: string;
+  shopPhone: string | null;
+  shopAddress: string | null;
+  total: string;
+  paid: string;
+  remaining: string;
+}
+
+export async function getMyDebts(): Promise<MyDebt[]> {
+  return trpcQuery<MyDebt[]>("agent.myDebts");
+}
+
+/* ── Долги магазинов целиком: для супервайзера ──────────────────────────────
+   Не «сколько должны», а «сколько и КАК ДАВНО»: миллион недельного долга и
+   миллион полугодового — это две разные организации, и решение, к кому ехать,
+   принимается именно из различия. Возраст считается по неоплаченным заказам.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** Границы возраста: неделя — обычная отсрочка, месяц — пора ехать, два — трудные деньги. */
+export type AgeBucket = "d0_7" | "d8_30" | "d31_60" | "d60plus";
+
+export interface ShopAging {
+  shopId: number;
+  shopName: string;
+  /** Телефон магазина: долг закрывается звонком, и номер нужен в той же строке. */
+  phone: string | null;
+  /** Агент, за которым числится магазин, — на чьём маршруте висит долг. */
+  agentName: string | null;
+  debt: number;
+  buckets: Record<AgeBucket, number>;
+  /** Долг без привязки к заказу: ручные начисления. Состарить его нечем. */
+  unattributed: number;
+  /** Возраст самого старого неоплаченного заказа, дней. */
+  oldestDays: number | null;
+}
+
+export interface ReceivablesAging {
+  totalDebt: number;
+  buckets: Record<AgeBucket, number>;
+  unattributed: number;
+  debtorCount: number;
+  shops: ShopAging[];
+}
+
+export async function getReceivablesAging(): Promise<ReceivablesAging> {
+  return trpcQuery<ReceivablesAging>("shop.receivablesAging");
+}
+
+/* ── Переписка по заказу ───────────────────────────────────────────────────
+   Часть заказа: сервер не даёт ни читать, ни писать в чужой.
+   ────────────────────────────────────────────────────────────────────────── */
+export interface OrderComment {
+  id: number;
+  orderId: number;
+  userId: number;
+  content: string;
+  parentId: number | null;
+  createdAt: string;
+  userName: string | null;
+  userAvatar: string | null;
+  /** Ответы на этот комментарий — сервер уже собрал их деревом. */
+  replies?: OrderComment[];
+}
+
+export async function getOrderComments(orderId: number): Promise<OrderComment[]> {
+  return trpcQuery<OrderComment[]>("order.listComments", { orderId });
+}
+
+export async function addOrderComment(orderId: number, content: string, parentId?: number): Promise<{ id: number }> {
+  return trpcMutation("order.addComment", { orderId, content, parentId });
+}
+
 export async function getProducts(search?: string): Promise<Product[]> {
   const res = await trpcQuery<Product[] | { data: Product[] }>("product.listAll", search ? { search } : undefined);
   return Array.isArray(res) ? res : (res as { data?: Product[] })?.data ?? [];
@@ -680,10 +879,11 @@ export async function getMyWorkZones(): Promise<Territory[]> {
  */
 const ORDER_CREATE_TIMEOUT_MS = 120_000;
 
-export async function createOrder(input: CreateOrderInput): Promise<{ id: number; orderNumber?: string; total?: number }> {
+export async function createOrder(input: CreateOrderInput): Promise<{ id: number; orderNumber?: string; total?: number; held?: boolean }> {
   // total нужен, чтобы сверить сумму, которую агент назвал владельцу, с той,
   // что сервер посчитал по своим ценам на момент отправки.
-  return trpcMutation<{ id: number; orderNumber?: string; total?: number }>("order.create", input, { timeout: ORDER_CREATE_TIMEOUT_MS });
+  // held — заказ ждёт подтверждения офиса (скидка выше порога), а не в работе.
+  return trpcMutation<{ id: number; orderNumber?: string; total?: number; held?: boolean }>("order.create", input, { timeout: ORDER_CREATE_TIMEOUT_MS });
 }
 
 export async function getMyOrders(): Promise<Order[]> {
@@ -691,8 +891,8 @@ export async function getMyOrders(): Promise<Order[]> {
   return result.data ?? [];
 }
 
-export async function getOrderById(id: number): Promise<OrderDetail> {
-  return trpcQuery<OrderDetail>("order.getById", { id });
+export async function getOrderById(id: number): Promise<OrderDetail | null> {
+  return trpcQuery<OrderDetail | null>("order.getById", { id });
 }
 
 export async function cancelOrder(id: number): Promise<void> {
@@ -711,17 +911,45 @@ export async function updateOrder(id: number, data: { notes?: string; discount?:
   return trpcMutation<void>("order.update", { id, ...data });
 }
 
-export async function updateOrderItems(id: number, items: Array<{ itemId: number; quantity: number }>): Promise<void> {
+/**
+ * Правка состава заказа.
+ *
+ * Одним списком три действия, как их различает сервер: {itemId, quantity} —
+ * изменить количество, {itemId, quantity: 0} — убрать позицию,
+ * {productId, quantity, unitPrice} — добавить товар.
+ *
+ * Кому и когда это можно, решает сервер: свой заказ и пока он не уехал.
+ */
+export async function updateOrderItems(
+  id: number,
+  items: Array<{ itemId?: number; productId?: number; quantity: number; unitPrice?: string }>,
+): Promise<void> {
   return trpcMutation<void>("order.updateItems", { id, items });
 }
 
-export async function listAllOrders(params?: { page?: number; pageSize?: number; status?: string; showDeleted?: boolean }): Promise<{ data: Order[]; total: number }> {
+/**
+ * Перенести обещанный срок доставки.
+ *
+ * Своя ручка, а не order.update: та открыта только офису и заодно правит
+ * скидку со способом оплаты. Здесь ровно одна возможность — та, что нужна
+ * агенту, которому магазин звонит: «сегодня не успеваем, привезём в
+ * понедельник».
+ *
+ * null означает снятое обещание, а не «оставить как было»: иначе ошибочно
+ * поставленный срок нечем было бы убрать. Сервер откажет по закрытому
+ * заказу — переписывать обещание задним числом нельзя.
+ */
+export async function setPromisedDelivery(orderId: number, promisedDeliveryAt: string | null): Promise<void> {
+  return trpcMutation<void>("order.setPromisedDelivery", { orderId, promisedDeliveryAt });
+}
+
+export async function listAllOrders(params?: { page?: number; pageSize?: number; status?: Order["status"]; showDeleted?: boolean }): Promise<{ data: Order[]; total: number }> {
   return trpcQuery<{ data: Order[]; total: number }>("order.list", params ?? {});
 }
 
 export async function getShop(id: number): Promise<Shop | null> {
   try {
-    return await trpcQuery<Shop>("agent.getShopById", { id });
+    return await trpcQuery<Shop | null>("agent.getShopById", { id });
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("empty json payload")) return null;
     throw e;
@@ -730,7 +958,7 @@ export async function getShop(id: number): Promise<Shop | null> {
 
 export async function getShopForSupervisor(id: number): Promise<Shop | null> {
   try {
-    return await trpcQuery<Shop>("agent.getShopByIdSupervisor", { id });
+    return await trpcQuery<Shop | null>("agent.getShopByIdSupervisor", { id });
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("empty json payload")) return null;
     throw e;
@@ -816,15 +1044,11 @@ export interface TenantBranding {
   currencySymbol: string;
 }
 
-export async function getBranding(): Promise<TenantBranding> {
-  return trpcQuery<TenantBranding>("settings.branding");
-}
-
 /** Оформление арендатора — branding.get. */
 export interface TenantBrandingResponse {
   primaryColor: string | null;
   secondaryColor: string | null;
-  accentColor: string | null;
+  accentColor?: string | null;
   logoUrl: string | null;
   faviconUrl: string | null;
   appName: string | null;
@@ -883,16 +1107,26 @@ export async function assignCourier(orderId: number, courierId: number): Promise
   await trpcMutation("courier.assignCourier", { orderId, courierId });
 }
 
+/*
+  Отметки курьера ждут дольше обычных 15 с — как создание заказа.
+
+  Отметка списывает склад и пишет платёж; сервер за городом отвечает
+  медленно, и 15 секунд обрывали запрос, который на сервере уже прошёл.
+  Очередь повторяла его — сервер теперь отвечает на повтор «дубль», но
+  лучше не обрывать первый.
+*/
+const DELIVERY_TIMEOUT_MS = 120_000;
+
 export async function markOutForDelivery(orderId: number): Promise<void> {
-  await trpcMutation("courier.markOutForDelivery", { orderId });
+  await trpcMutation("courier.markOutForDelivery", { orderId }, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
 export async function markDelivered(orderId: number, cashAmount?: string): Promise<void> {
-  await trpcMutation("courier.markDelivered", { orderId, cashAmount });
+  await trpcMutation("courier.markDelivered", { orderId, cashAmount }, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
 export async function markFailed(orderId: number, reason?: string): Promise<void> {
-  await trpcMutation("courier.markFailed", { orderId, reason });
+  await trpcMutation("courier.markFailed", { orderId, reason }, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
 export interface CompleteDeliveryInput {
@@ -906,8 +1140,8 @@ export interface CompleteDeliveryInput {
   notes?: string;
 }
 
-export async function completeDelivery(input: CompleteDeliveryInput): Promise<{ success: boolean; result: string; finalStatus: string }> {
-  return trpcMutation("courier.completeDelivery", input);
+export async function completeDelivery(input: CompleteDeliveryInput): Promise<{ success: boolean; result: string; finalStatus: string; duplicate?: boolean }> {
+  return trpcMutation("courier.completeDelivery", input, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
 // ── Merchandiser / Visit Reports ──────────────────────────────────────────────
@@ -917,8 +1151,9 @@ export interface VisitReport {
   shopId: number;
   userId: number;
   planId: number;
-  photos: string[];
-  checklist: Array<{
+  photos?: string[];
+  /** null — отчёт без чек-листа (json-колонка); экраны его не читают. */
+  checklist: null | Array<{
     productId: number;
     productName: string;
     present: boolean;
@@ -963,14 +1198,14 @@ export async function registerPushToken(pushToken: string): Promise<{ success: b
 }
 
 export async function removePushToken(): Promise<{ success: boolean }> {
-  return trpcMutation<{ success: boolean }>("user.removePushToken", {});
+  return trpcMutation<{ success: boolean }>("user.removePushToken", undefined);
 }
 
 // ── Sales targets ─────────────────────────────────────────────────────────────
 export interface SalesTarget {
   id: number;
   userId: number;
-  userName: string;
+  userName: string | null;
   shopId?: number;
   periodType: "daily" | "weekly" | "monthly";
   periodStart: string;
@@ -980,16 +1215,16 @@ export interface SalesTarget {
   notes?: string;
 }
 
-export async function getSalesTargets(filters?: { periodType?: string; userId?: number }): Promise<SalesTarget[]> {
+export async function getSalesTargets(filters?: { periodType?: "daily" | "weekly" | "monthly"; userId?: number }): Promise<SalesTarget[]> {
   return trpcQuery<SalesTarget[]>("salesTarget.list", filters);
 }
 
 export async function getSalesTargetSummary(): Promise<Array<{
   userId: number;
-  userName: string;
+  userName: string | null;
   targetAmount: string;
   actualAmount: string;
-  completion: number;
+  revenueCompletion: number;
 }>> {
   return trpcQuery("salesTarget.summary");
 }
@@ -998,7 +1233,7 @@ export async function getSalesTargetSummary(): Promise<Array<{
 export interface Commission {
   id: number;
   userId: number;
-  userName: string;
+  userName: string | null;
   commissionRate: string;
   periodType: "monthly" | "quarterly";
   periodStart: string;
@@ -1008,7 +1243,7 @@ export interface Commission {
   status: "pending" | "approved" | "paid";
 }
 
-export async function getCommissions(filters?: { periodType?: string; userId?: number; status?: string }): Promise<Commission[]> {
+export async function getCommissions(filters?: { periodType?: "monthly" | "quarterly"; userId?: number; status?: "pending" | "approved" | "paid" }): Promise<Commission[]> {
   return trpcQuery<Commission[]>("commission.list", filters);
 }
 
@@ -1053,7 +1288,7 @@ export async function bulkCreateSalesTargets(periodStart: string, periodEnd: str
 // ── Agent KPI ────────────────────────────────────────────────────────────────
 export interface AgentKpiData {
   kpiScore: number;
-  grade: string;
+  kpiGrade: "A" | "B" | "C" | "D" | "F";
   totalPlans: number;
   visitedPlans: number;
   skippedPlans: number;
@@ -1068,11 +1303,88 @@ export interface AgentKpiData {
   debtCollectionRate: number;
   targetRevenue: number;
   targetProgress: number;
-  salary?: { base: number; commission: number; bonus: number; total: number };
+  salary?: { base: number; commission: number; total: number };
 }
 
-export async function getAgentKpi(period: string): Promise<AgentKpiData> {
+export async function getAgentKpi(period: "week" | "month" | "quarter"): Promise<AgentKpiData> {
   return trpcQuery<AgentKpiData>("kpi.agentKpi", { period });
+}
+
+/* ── Зарплата ──────────────────────────────────────────────────────────────
+   Своя, а не чужая: сервер считает строго по вошедшему (ctx.user.id).
+   Открыто и агенту, и курьеру — расчёт у них разный, а ручка одна.
+   ────────────────────────────────────────────────────────────────────────── */
+export interface MySalary {
+  agentName: string;
+  /** Подпись периода, «ГГГГ-ММ-ДД — ГГГГ-ММ-ДД» — её рисует сервер. */
+  period: string;
+
+  baseSalary: number;
+  commissionRate: number;
+  salesAmount: number;
+  commissionAmount: number;
+  /**
+   * По скольким проданным товарам процент НЕ общий.
+   *
+   * Этим объясняется расхождение суммы с простым «продажи × процент»: без
+   * пояснения человек читает его как ошибку расчёта.
+   */
+  productRateCount: number;
+
+  kpiScore: number;
+
+  /** Чем платят курьеру: суммой за довезённую заявку или процентом. */
+  courierPayMode: "per_delivery" | "percent";
+  deliveryRate: number;
+  deliveredCount: number;
+  deliveredAmount: number;
+  deliveryPay: number;
+
+  /** Обед и дорожные — ставки ЗА ОДИН рабочий день. */
+  mealAllowance: number;
+  travelAllowance: number;
+  /** В скольких днях периода человек выходил возить. */
+  workDays: number;
+  allowancePay: number;
+
+  totalSalary: number;
+
+  breakdown: {
+    base: number;
+    commission: number;
+    fraudDeduction: number;
+    delivery: number;
+    allowance: number;
+  };
+}
+
+export async function getMySalary(period: "week" | "month" | "quarter" = "month"): Promise<MySalary> {
+  return trpcQuery<MySalary>("kpi.salary", { period });
+}
+
+/** Одна выдача денег на руки. */
+export interface MyPayout {
+  id: number;
+  /** Аванс отличается от выплаты только тем, что выдан до конца периода. */
+  kind: "payout" | "advance";
+  amount: string;
+  paidAt: string;
+  note: string | null;
+  /**
+   * Когда человек сам подтвердил получение.
+   *
+   * Пусто — не «не получил», а «ещё не подтвердил»: деньги могли отдать в
+   * руки, а телефон он откроет вечером.
+   */
+  confirmedAt: string | null;
+}
+
+export async function getMyPayouts(period: "week" | "month" | "quarter" = "month"): Promise<MyPayout[]> {
+  return trpcQuery<MyPayout[]>("kpi.myPayouts", { period });
+}
+
+export async function confirmPayout(id: number): Promise<{ success: boolean }> {
+  return trpcMutation("kpi.confirmPayout", { id });
 }
 
 // ── Returns ───────────────────────────────────────────────────────────────────
@@ -1103,7 +1415,7 @@ export interface ReturnItem {
   condition?: string;
 }
 
-export async function getReturns(filters?: { status?: string; shopId?: number }): Promise<{ data: Return[]; total: number }> {
+export async function getReturns(filters?: { status?: Return["status"]; shopId?: number }): Promise<{ data: Return[]; total: number }> {
   return trpcQuery("returns.list", filters);
 }
 
@@ -1170,7 +1482,7 @@ export async function getPriceLists(): Promise<PriceList[]> {
   return trpcQuery<PriceList[]>("priceList.list");
 }
 
-export async function getPriceListById(id: number): Promise<(PriceList & { items: PriceListItem[]; assignments: Array<{ id: number; shopId: number; shopName?: string }> }) | null> {
+export async function getPriceListById(id: number): Promise<(Omit<PriceList, "itemCount" | "shopCount"> & { items: PriceListItem[]; assignments: Array<{ id: number; shopId: number; shopName?: string }> }) | null> {
   return trpcQuery("priceList.getById", { id });
 }
 
@@ -1201,6 +1513,8 @@ export interface RecordPartialPaymentInput {
   method: "cash" | "card" | "transfer";
   debtDueDate?: string;
   notes?: string;
+  /** Ключ повтора: делать один раз при открытии окна, слать тот же при каждой попытке (uuidv4 из store/offline). */
+  idempotencyKey?: string;
 }
 
 export async function recordPartialPayment(input: RecordPartialPaymentInput): Promise<{ success: boolean }> {
@@ -1224,7 +1538,7 @@ export async function recordPartialDelivery(input: RecordPartialDeliveryInput): 
 export interface RecordDeliveryAndPaymentInput {
   orderId: number;
   deliveredItems: Array<{ itemId: number; deliveredQuantity: number; returnReason?: string }>;
-  payment: { paidAmount: string; method: "cash" | "card" | "transfer"; debtDueDate?: string; notes?: string };
+  payment: { paidAmount: string; method: "cash" | "card" | "transfer"; debtDueDate?: string; notes?: string; idempotencyKey?: string };
   photos?: string[];
 }
 

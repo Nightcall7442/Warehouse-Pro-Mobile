@@ -13,7 +13,7 @@ import { STATUS_CONFIG } from "../components/order/OrderStyles";
 /** Статусы заказа, которые отдаёт сервер (Order.status в src/api.ts). */
 const SERVER_STATUSES = [
   "new", "processing", "shipped", "pending", "delivered",
-  "cancelled", "returned", "partially_returned", "partial_return_kept",
+  "cancelled", "returned",
 ];
 
 describe("названия статусов", () => {
@@ -24,13 +24,10 @@ describe("названия статусов", () => {
     }
   });
 
-  it("два разных возврата названы по-разному", () => {
-    /*
-      partially_returned — товар вернулся на склад, partial_return_kept — остался
-      в магазине. На главной оба звались «Частичный возврат», и по ленте их было
-      не отличить, хотя это разные деньги.
-    */
-    expect(orderStatusLabel("partially_returned")).not.toBe(orderStatusLabel("partial_return_kept"));
+  it("исторических статусов частичного возврата больше нет", () => {
+    // Сняты с перечисления базы миграцией 0034; частичный возврат — документ.
+    expect(orderStatusLabel("partially_returned")).toBe("partially_returned");
+    expect(orderStatusLabel("partial_return_kept")).toBe("partial_return_kept");
   });
 
   it("«Отгружен» без ё", () => {

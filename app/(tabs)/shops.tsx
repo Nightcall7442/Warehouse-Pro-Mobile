@@ -9,12 +9,13 @@ import { getMyShops, getAvailableShops, getAllShopsForSupervisor, getMyWorkZones
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { useLocation, getDistanceKm, getEstimatedTime } from "../../src/hooks/useLocation";
-import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii, ThemeColors, soft } from "../../src/theme";
 import { ScreenHeader, SearchInput, Card } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 
-function ShopCard({ shop, isDark: _isDark, colors, index, distance, estimatedTime, onView, onOrder }: {
+function ShopCard({
+  shop, isDark: _isDark, colors, index, distance, estimatedTime, onView, onOrder }: {
   shop: Shop; isDark: boolean; colors: ThemeColors; index: number;
   distance?: number; estimatedTime?: string; onView: () => void; onOrder: () => void;
 }) {
@@ -204,7 +205,7 @@ export default function ShopsScreen() {
         <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
             <PressableScale onPress={() => { setSelectedTerritory(null); }} haptic="none">
-              <View style={{ width: 36, height: 36, borderRadius: Radii.full, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border.default }}>
+              <View style={{ width: 36, height: 36, borderRadius: Radii.full, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center", ...soft(isDark).raised}}>
                 <Feather name="arrow-left" size={18} color={colors.text.primary} />
               </View>
             </PressableScale>
@@ -255,7 +256,7 @@ export default function ShopsScreen() {
           <View style={{ flexDirection: "row", gap: Spacing.sm }}>
             {isAgent && (workZones ?? []).length > 0 && (
               <PressableScale onPress={() => setShowWorkZones(true)} haptic="light">
-                <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.full, borderWidth: 1, borderColor: colors.border.default, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
+                <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.full, ...soft(isDark).raised, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
                   <Feather name="map" size={18} color={colors.text.primary} />
                 </View>
               </PressableScale>
@@ -367,7 +368,7 @@ export default function ShopsScreen() {
               keyExtractor={z => String(z.id)}
               style={{ maxHeight: 300 }}
               renderItem={({ item: zone }) => (
-                <View style={{ flexDirection: "row", alignItems: "center", padding: Spacing.base, marginBottom: Spacing.sm, borderRadius: Radii.md, backgroundColor: colors.bg.card, borderWidth: 1, borderColor: colors.border.default }}>
+                <View style={{ flexDirection: "row", alignItems: "center", padding: Spacing.base, marginBottom: Spacing.sm, borderRadius: Radii.md, backgroundColor: colors.bg.card, ...soft(isDark).raised}}>
                   <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: zone.color ? zone.color + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center", marginRight: Spacing.md }}>
                     <Feather name="map-pin" size={16} color={zone.color || colors.accent.primary} />
                   </View>

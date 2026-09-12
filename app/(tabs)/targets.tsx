@@ -7,7 +7,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getSalesTargetSummary, getPlans, getAgentsList, Plan } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Gradients } from "../../src/theme";
+import { Typography, Spacing, Radii, Gradients, soft } from "../../src/theme";
 import { Card, EmptyState } from "../../src/components/ui";
 import { ErrorState } from "../../src/components/QueryState";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
@@ -80,7 +80,7 @@ export default function TargetsScreen() {
   // Summary stats
   const totalTarget = (summary ?? []).reduce((s, a) => s + Number(a.targetAmount), 0);
   const totalActual = (summary ?? []).reduce((s, a) => s + Number(a.actualAmount), 0);
-  const avgCompletion = summary && summary.length > 0 ? Math.round(summary.reduce((s, a) => s + a.completion, 0) / summary.length) : 0;
+  const avgCompletion = summary && summary.length > 0 ? Math.round(summary.reduce((s, a) => s + a.revenueCompletion, 0) / summary.length) : 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
@@ -170,14 +170,14 @@ export default function TargetsScreen() {
             </View>
           )}
           renderItem={({ item, index }) => {
-            const revPct = Math.min(100, item.completion);
+            const revPct = Math.min(100, item.revenueCompletion);
             const color = revPct >= 100 ? colors.status.success : revPct >= 60 ? colors.status.warning : colors.status.danger;
             return (
               <FadeInItem delay={index * 40}>
                 <Card style={{ padding: 16 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 }}>
                     <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.brand.primary }}>{item.userName.charAt(0)}</Text>
+                      <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.brand.primary }}>{(item.userName ?? "—").charAt(0)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{item.userName}</Text>
@@ -209,7 +209,7 @@ export default function TargetsScreen() {
               onPrev={() => setDate(d => new Date(d.getTime() - 86_400_000))}
               onNext={() => setDate(d => new Date(d.getTime() + 86_400_000))} />
             <PressableScale onPress={() => setFilterAgentId(null)} haptic="selection">
-              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, backgroundColor: colors.bg.card, borderRadius: Radii.md, borderWidth: 1, borderColor: filterAgentId ? colors.accent.primary : colors.border.default, padding: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, backgroundColor: colors.bg.card, borderRadius: Radii.md, ...(filterAgentId ? soft(isDark).raisedSm : soft(isDark).inset), padding: 10 }}>
                 <Feather name="user" size={15} color={filterAgentId ? colors.accent.primary : colors.text.muted} />
                 <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 13, color: filterAgentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? "Все агенты"}</Text>
                 <Feather name="chevron-down" size={16} color={colors.text.muted} />

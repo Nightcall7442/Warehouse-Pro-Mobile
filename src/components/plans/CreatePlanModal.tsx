@@ -9,7 +9,7 @@ import {
 } from "../../api";
 import { notify } from "../../store/toast";
 import { useThemeColors, useThemeStore } from "../../store/theme";
-import { Typography, Spacing, Radii } from "../../theme";
+import { Typography, Spacing, Radii, soft } from "../../theme";
 import { Button } from "../ui";
 import { ShimmerSkeleton } from "../Animated";
 import { BottomSheet, SelectRow, FieldLabel } from "./PlanHelpers";
@@ -173,8 +173,6 @@ export function CreatePlanModal({
               borderRadius: Radii.lg,
               padding: Spacing.md,
               marginTop: Spacing.sm,
-              borderWidth: 1,
-              borderColor: colors.border.subtle,
             }}
           >
             <Text
@@ -223,9 +221,7 @@ export function CreatePlanModal({
           multiline
           style={{
             backgroundColor: colors.bg.input,
-            borderRadius: Radii.lg,
-            borderWidth: 1,
-            borderColor: colors.border.default,
+            borderRadius: Radii.lg, ...soft(isDark).inset,
             padding: Spacing.md,
             fontFamily: Typography.fontRegular,
             fontSize: Typography.size.base,

@@ -8,13 +8,14 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Shadows, KpiColors, BOTTOM_TAB_HEIGHT } from "../../src/theme";
+import { Typography, Spacing, Radii, KpiColors, BOTTOM_TAB_HEIGHT, soft } from "../../src/theme";
 import { Card, Badge, EmptyState } from "../../src/components/ui";
 // Высота плавающей панели вкладок — одна на приложение. Здесь стояло голое
 // 100 (80 панели + отбивка), и такие же числа расползлись по другим экранам.
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
-import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, Plan } from "../../src/api";
+import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, getMySalary, Plan } from "../../src/api";
+import { useRouter } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { formatMoney } from "../../src/store/branding";
 
@@ -86,17 +87,16 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index, isPending }: {
   // То же правило: незнакомое состояние показывается кодом, а не «Запланирован».
   const cfg = STATUS_META[plan.status] ?? { ...STATUS_META.planned, label: plan.status };
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
-  const shadowColor = isDark ? "#000" : Shadows.xs.shadowColor;
 
   return (
     <FadeInItem delay={index * 50}>
       <View style={{
         flexDirection: "row", alignItems: "center",
         backgroundColor: colors.bg.card, borderRadius: Radii.lg,
-        padding: 12, marginBottom: 8, borderWidth: 1,
-        borderColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.5)",
-        shadowColor, shadowOffset: Shadows.xs.shadowOffset, shadowOpacity: Shadows.xs.shadowOpacity,
-        shadowRadius: Shadows.xs.shadowRadius, elevation: Shadows.xs.elevation,
+        padding: 12, marginBottom: 8,
+        // Пара теней вместо волосяной обводки и одиночной тени: строка плана
+        // выступает из холста так же, как карточка списка.
+        ...soft(isDark).raised,
         opacity: plan.status === "visited" ? 0.6 : 1,
       }}>
         <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: cfg.bg, alignItems: "center", justifyContent: "center" }}>
@@ -156,11 +156,26 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
     retry: false,
   });
 
+  /*
+    Зарплата — отдельным запросом, потому что она и живёт отдельно: агентский
+    KPI её не считает и никогда не содержал.
+
+    Отказ гасится в null: у кого зарплата не настроена, строки просто не
+    будет — показывать ему ошибку на экране плана незачем.
+  */
+  const { data: salary } = useQuery({
+    queryKey: ["mySalary", "month"],
+    queryFn: () => getMySalary("month").then((res) => res.totalSalary).catch(() => null),
+    retry: false,
+  });
+
+  const router = useRouter();
+
   if (isLoading) return <ShimmerSkeleton height={120} radius={Radii.xxl} />;
   if (!kpi) return null;
 
   const GRADE_COLORS: Record<string, string> = { A: colors.status.success, B: colors.status.info, C: colors.status.warning, D: colors.status.danger, F: colors.status.danger };
-  const gradeColor = GRADE_COLORS[kpi.grade] ?? colors.text.muted;
+  const gradeColor = GRADE_COLORS[kpi.kpiGrade] ?? colors.text.muted;
 
   return (
     <Card style={{ marginBottom: Spacing.base }}>
@@ -168,7 +183,7 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
         <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>ПОКАЗАТЕЛИ</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View style={{ width: 28, height: 28, borderRadius: Radii.sm, backgroundColor: gradeColor + "20", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 14, color: gradeColor }}>{kpi.grade}</Text>
+            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 14, color: gradeColor }}>{kpi.kpiGrade}</Text>
           </View>
           <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.primary }}>{kpi.kpiScore}/100</Text>
         </View>
@@ -191,16 +206,32 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
         </View>
       ))}
 
-      {/* Salary */}
-      {kpi.salary && (
-        <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>Зарплата</Text>
-            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
-              {formatMoney(kpi.salary.total)}
-            </Text>
+      {/*
+        Зарплата.
+
+        Здесь стояло `{kpi.salary && …}`, и оно не рисовалось НИКОГДА:
+        kpi.agentKpi поля salary не возвращает и не возвращал — блок ждал
+        числа, которого в ответе нет. Со стороны это выглядело как «зарплату
+        на телефоне не показывают».
+
+        Теперь число берётся у своей ручки (kpi.salary) и ведёт на разбор:
+        одной суммой человек её не проверит, а спорить о зарплате приходят с
+        разложением.
+      */}
+      {salary != null && (
+        <PressableScale onPress={() => router.push("/salary")} haptic="light">
+          <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>Зарплата</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
+                  {formatMoney(salary)}
+                </Text>
+                <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+              </View>
+            </View>
           </View>
-        </View>
+        </PressableScale>
       )}
     </Card>
   );

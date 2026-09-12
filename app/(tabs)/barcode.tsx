@@ -22,7 +22,7 @@ export default function BarcodeScannerScreen() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
-  const [foundProduct, setFoundProduct] = useState<{ id: number; code: string; name: string; unitPrice: string; unit: string; available: string } | null>(null);
+  const [foundProduct, setFoundProduct] = useState<{ id: number; code: string; name: string; unitPrice: string; unit: string; available: string | null } | null>(null);
   const [searching, setSearching] = useState(false);
 
   // Чернила на кнопках, залитых цветом арендатора. Белый литерал поверх такой

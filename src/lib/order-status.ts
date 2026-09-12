@@ -33,15 +33,6 @@
  * а не чинить расхождение названий.
  */
 
-/*
-  Последние две строки — исторические.
-
-  «partially_returned» и «partial_return_kept» сняли с перечисления базы
-  миграцией 0034, и ни одна новая запись их не носит. Здесь они остаются
-  потому, что на них ещё смотрят четыре места (OrderStyles, theme, лента
-  заказов, тип в api.ts), и выдёргивать их заодно с правкой подписей значит
-  чинить не то. Убирать — отдельно и целиком.
-*/
 export const ORDER_STATUSES: Record<string, { label: string; color: string }> = {
   new:        { label: "Новый",       color: "#5b6d8a" },
   processing: { label: "В обработке", color: "#d4973a" },
@@ -50,8 +41,6 @@ export const ORDER_STATUSES: Record<string, { label: string; color: string }> = 
   delivered:  { label: "Доставлен",   color: "#34c473" },
   cancelled:  { label: "Отменён",     color: "#d45050" },
   returned:   { label: "Возврат",     color: "#d45050" },
-  partially_returned:  { label: "Возврат частично",  color: "#d4973a" },
-  partial_return_kept: { label: "Возврат (магазин)", color: "#34c473" },
 };
 
 /**

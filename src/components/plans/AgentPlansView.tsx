@@ -25,6 +25,8 @@ import { FadeInItem, PressableScale, ShimmerSkeleton } from "../Animated";
 import { PlanRow } from "./PlanRow";
 import { preparePhoto } from "../../lib/prepare-photo";
 import { sendVisitPing } from "../../lib/visit-ping";
+import { useVisitQueue } from "../../store/visit-queue";
+import { isRetryableError } from "../../store/offline";
 
 export function AgentPlansView() {
   const insets = useSafeAreaInsets();
@@ -104,11 +106,21 @@ export function AgentPlansView() {
       */
       if (variables.status === "visited") void sendVisitPing();
     },
-    // Наружу уходил e.message — текст axios: «Network Error». Запасная
-    // русская фраза была мёртвой: у Error поле message всегда строка, и до
-    // ?? дело не доходило никогда.
-    onError: (e: Error) => notify.error(errorText(e)),
+    /*
+      Нет связи — отметка в очередь, а не в мусор. Раньше агент в подвале
+      магазина получал «Network Error», и визит оставался неотмеченным: план
+      показывал пропуск, KPI считал прогул. Отказ по существу (план не ваш,
+      уже отмечен) — по-прежнему ошибка вслух.
+    */
+    onError: async (e: Error, variables) => {
+      if (!isRetryableError(e)) { notify.error(errorText(e)); return; }
+      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status });
+      if (ok) notify.info("Нет связи — отметка сохранена и уйдёт сама");
+      else notify.error(errorText(e));
+    },
   });
+
+  const queueVisit = useVisitQueue();
 
   const photoMutation = useMutation({
     mutationFn: ({ planId, photoUrl }: { planId: number; photoUrl: string }) =>
@@ -129,7 +141,16 @@ export function AgentPlansView() {
   const handleOptimize = async () => {
     setOptimizing(true);
     try {
-      const { coords } = await (await import("expo-location")).getCurrentPositionAsync({ accuracy: 1 });
+      /*
+        Точность — та же, что у всех остальных съёмок в приложении.
+
+        Здесь стояло `accuracy: 1`, то есть Lowest — это километры. Батарею
+        оно бережёт, но маршрут строится ОТ этой точки, и с километровой
+        ошибкой порядок объезда по городу выходит неверным. Balanced берётся
+        по вышкам и Wi-Fi, стоит немногим дороже и даёт десятки метров.
+      */
+      const Loc = await import("expo-location");
+      const { coords } = await Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.Balanced });
       const result = await getOptimizedRoute(coords.latitude, coords.longitude);
       if (result.plans.length > 0) {
         setOptimizedPlanIds(result.plans.map(p => p.id));
@@ -154,17 +175,24 @@ export function AgentPlansView() {
       quality: 0.7,
     });
     if (!result.canceled && result.assets?.[0]?.uri) {
+      const uri = result.assets[0].uri;
       try {
         // Снимок уменьшается перед отправкой: камера отдаёт полное разрешение.
-        const { dataUrl } = await preparePhoto(result.assets[0].uri);
+        const { dataUrl } = await preparePhoto(uri);
         // Папка "visits", а не "shops": снимок визита — это доказательство
         // обхода, а не фотография точки, и лежать вперемешку с карточками
         // магазинов ему незачем. Папка в uploadFile была объявлена и не
         // использовалась.
         const url = await uploadFile(dataUrl, "visits");
         photoMutation.mutate({ planId, photoUrl: url });
-      } catch {
-        notify.error("Ошибка загрузки фото");
+      } catch (e) {
+        // Без связи снимок ждёт в очереди ссылкой на файл камеры и грузится
+        // при первой связи вместе с отметкой.
+        if (isRetryableError(e) && await queueVisit.add({ planId, status: "visited", photoUri: uri })) {
+          notify.info("Нет связи — фото и отметка сохранены и уйдут сами");
+        } else {
+          notify.error("Ошибка загрузки фото");
+        }
       }
     }
   };

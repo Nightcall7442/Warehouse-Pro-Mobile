@@ -8,8 +8,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, safeBottomPadding } from "../../src/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { Typography, Spacing, Radii, safeBottomPadding, soft } from "../../src/theme";
 import { getProducts, submitVisitReport, updatePlanStatus, uploadFile, type Product } from "../../src/api";
 import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
@@ -85,11 +85,12 @@ const ChecklistRow = memo(function ChecklistRow({
   onPromo: (productId: number, value: string) => void;
 }) {
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   return (
     <View style={{ backgroundColor: colors.bg.card, paddingHorizontal: Spacing.lg }}>
       <PressableScale onPress={() => onToggle(productId)} haptic="light">
         <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, backgroundColor: present ? colors.accent.primary + "10" : "transparent", borderRadius: Radii.md, marginBottom: 4 }}>
-          <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: present ? colors.accent.primary : colors.border.strong, alignItems: "center", justifyContent: "center", marginRight: 12, backgroundColor: present ? colors.accent.primary : "transparent" }}>
+          <View style={{ width: 24, height: 24, borderRadius: 12, ...(present ? soft(isDark).raisedSm : soft(isDark).inset), alignItems: "center", justifyContent: "center", marginRight: 12, backgroundColor: present ? colors.accent.primary : "transparent" }}>
             {present && <Feather name="check" size={14} color="#fff" />}
           </View>
           <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: present ? colors.text.primary : colors.text.secondary }}>{productName}</Text>
@@ -116,6 +117,7 @@ function CardDots() {
 }
 
 export default function MerchandiserVisitScreen() {
+  const { isDark } = useThemeStore();
   const { planId, shopId, shopName } = useLocalSearchParams<{ planId: string; shopId: string; shopName: string }>();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -306,7 +308,7 @@ export default function MerchandiserVisitScreen() {
             </View>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {photos.map((photo, i) => (
-                <View key={i} style={{ width: 80, height: 80, borderRadius: Radii.md, overflow: "hidden", borderWidth: 1, borderColor: colors.border.default }}>
+                <View key={i} style={{ width: 80, height: 80, borderRadius: Radii.md, overflow: "hidden", backgroundColor: colors.bg.input }}>
                   <Image source={{ uri: photo }} style={{ width: "100%", height: "100%" }} />
                   <PressableScale onPress={() => removePhoto(i)} haptic="light">
                     <View style={{ position: "absolute", top: 4, right: 4, backgroundColor: colors.status.danger, borderRadius: 10, padding: 2 }}>
@@ -355,7 +357,7 @@ export default function MerchandiserVisitScreen() {
               <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>Заметки о конкурентах</Text>
             </View>
             <TextInput value={competitorNotes} onChangeText={setCompetitorNotes} multiline numberOfLines={4} placeholder="Что видно на полках конкурентов..."
-              style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingHorizontal: 12, paddingVertical: 10, fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.primary, textAlignVertical: "top", minHeight: 100 }} />
+              style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, paddingHorizontal: 12, paddingVertical: 10, fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.primary, textAlignVertical: "top", minHeight: 100 }} />
           </Card>
         </FadeInItem>
       </>

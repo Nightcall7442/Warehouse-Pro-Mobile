@@ -61,6 +61,7 @@ export async function sendVisitPing(): Promise<void> {
       // Время съёмки: точка, пролежавшая без связи, должна встать на карту
       // туда, где агент БЫЛ, а не туда, где телефон дозвонился.
       new Date().toISOString(),
+      pos.mocked === true,
     );
   } catch {
     /*

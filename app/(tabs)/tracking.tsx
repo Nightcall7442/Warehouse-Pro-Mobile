@@ -13,8 +13,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getAgentLocations, AgentLocation } from "../../src/api";
-import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, KpiColors, BOTTOM_TAB_HEIGHT } from "../../src/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { Typography, Spacing, Radii, KpiColors, BOTTOM_TAB_HEIGHT, soft } from "../../src/theme";
 import { Card, ScreenHeader, Badge } from "../../src/components/ui";
 import { ShimmerSkeleton, PressableScale, FadeInItem } from "../../src/components/Animated";
 import YandexMapView, { centerOnAgent, fitAllMarkers } from "../../src/components/YandexMapView";
@@ -47,6 +47,7 @@ function batteryColor(level: number): string {
 }
 
 export default function TrackingScreen() {
+  const { isDark } = useThemeStore();
   const { width: SCREEN_W } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -148,7 +149,7 @@ export default function TrackingScreen() {
         title="Трекинг"
         right={
           <PressableScale onPress={fitAll} haptic="light">
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.bg.elevated, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radii.full, borderWidth: 1, borderColor: colors.border.default }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.bg.elevated, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radii.full, ...soft(isDark).raised}}>
               <Feather name="maximize-2" size={13} color={colors.text.secondary} />
               <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>Все</Text>
             </View>
@@ -176,7 +177,7 @@ export default function TrackingScreen() {
 
       {/* Map */}
       <FadeInItem delay={40}>
-        <View style={{ height: SCREEN_W * 0.7, backgroundColor: colors.bg.elevated, marginHorizontal: Spacing.lg, marginTop: Spacing.md, borderRadius: Radii.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border.default }}>
+        <View style={{ height: SCREEN_W * 0.7, backgroundColor: colors.bg.elevated, marginHorizontal: Spacing.lg, marginTop: Spacing.md, borderRadius: Radii.lg, overflow: "hidden", ...soft(isDark).raised}}>
           {isError ? (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
               <Feather name="wifi-off" size={28} color={colors.text.muted} />
@@ -200,7 +201,7 @@ export default function TrackingScreen() {
           {/* Center button */}
           <TouchableOpacity
             onPress={fitAll}
-            style={{ position: "absolute", bottom: 12, right: 12, backgroundColor: colors.bg.card, borderRadius: Radii.full, padding: 10, borderWidth: 1, borderColor: colors.border.default }}
+            style={{ position: "absolute", bottom: 12, right: 12, backgroundColor: colors.bg.card, borderRadius: Radii.full, padding: 10, ...soft(isDark).raised}}
           >
             <Feather name="crosshair" size={18} color={colors.accent.primary} />
           </TouchableOpacity>
@@ -272,7 +273,7 @@ export default function TrackingScreen() {
           const selected = selectedId === loc.agentId;
           return (
             <PressableScale onPress={() => focusAgent(loc)} haptic="light" style={{ marginBottom: 8 }}>
-              <Card style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderWidth: selected ? 1.5 : 1, borderColor: selected ? colors.accent.primary : colors.border.default }}>
+              <Card style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, ...(selected ? soft(isDark).raisedSm : soft(isDark).inset),}}>
                 <View style={{ width: 36, height: 36, borderRadius: Radii.full, backgroundColor: online ? colors.status.success : colors.text.tertiary, alignItems: "center", justifyContent: "center" }}>
                   <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.sm }}>{(loc.agentName ?? "A")[0].toUpperCase()}</Text>
                 </View>

@@ -66,3 +66,29 @@ describe("отложенная копия", () => {
     expect(await loadOfflineCopy("products", 7)).toBeNull();
   });
 });
+
+/*
+  Провод из мастера заказа. Хук был написан и покрыт тестом выше, но ни один
+  экран его не импортировал: при слиянии ветвей 07.09 подключение из
+  app/order/new.tsx потерялось, и утром без связи агент снова видел
+  «Ничего не найдено». Здесь закреплено, что оба пикера читают копию и
+  говорят о её возрасте.
+*/
+describe("мастер заказа читает копию", () => {
+  const src = require("node:fs").readFileSync(require("node:path").resolve(__dirname, "../../app/order/new.tsx"), "utf-8") as string;
+
+  it("оба пикера подключены к useOfflineCopy", () => {
+    expect(src).toContain('useOfflineCopy<typeof liveShops>("shops", liveShops)');
+    expect(src).toContain('useOfflineCopy<typeof liveProducts>("products", liveProducts)');
+  });
+
+  it("о возрасте копии сказано прямо в обоих", () => {
+    expect((src.match(/copyNotice && \(/g) ?? []).length).toBe(2);
+    expect(src).toMatch(/Список сохранён/);
+    expect(src).toMatch(/Каталог сохранён/);
+  });
+
+  it("скелет не перекрывает готовую копию", () => {
+    expect((src.match(/const isLoading = liveLoading && !(shops|products);/g) ?? []).length).toBe(2);
+  });
+});

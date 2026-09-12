@@ -9,8 +9,8 @@ import { router } from "expo-router";
 import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useThemeColors } from "../../src/store/theme";
-import { Typography, Radii, Gradients, ThemeColors, safeBottomPadding } from "../../src/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { Typography, Radii, Gradients, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
 import { Card, Button } from "../../src/components/ui";
 import { createShop, uploadFile, getTerritories, Territory } from "../../src/api";
 import { uuidv4 } from "../../src/store/offline";
@@ -30,6 +30,7 @@ function Field({ label, children, colors }: { label: string; children: React.Rea
 export default function NewShopScreen() {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const qc = useQueryClient();
 
   const [name, setName] = useState("");
@@ -48,7 +49,7 @@ export default function NewShopScreen() {
   const { data: territories = [] } = useQuery({ queryKey: ["territories"], queryFn: getTerritories });
 
   const inputStyle = {
-    backgroundColor: colors.bg.input, borderWidth: 1, borderColor: colors.border.default,
+    backgroundColor: colors.bg.input, ...soft(isDark).inset,
     borderRadius: Radii.md, padding: 12, fontFamily: Typography.fontRegular, fontSize: Typography.size.base,
     color: colors.text.primary,
   };
@@ -230,7 +231,7 @@ export default function NewShopScreen() {
         <FadeInItem delay={0}>
         {/* Photo */}
         <PressableScale onPress={pickPhoto} haptic="light">
-          <Card style={{ width: "100%", height: 160, overflow: "hidden", marginBottom: 20, borderWidth: 2, borderColor: photo ? "transparent" : colors.border.default, borderStyle: "dashed", padding: 0 }}>
+          <Card style={{ width: "100%", height: 160, overflow: "hidden", marginBottom: 20, ...(photo ? soft(isDark).raisedSm : soft(isDark).inset), borderStyle: "dashed", padding: 0 }}>
             {photo ? (
               <Image source={{ uri: photo }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             ) : (
@@ -273,12 +274,12 @@ export default function NewShopScreen() {
           <Field label="Территория" colors={colors}>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               <TouchableOpacity onPress={() => setTerritoryId(undefined)}
-                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, borderWidth: 1, borderColor: !territoryId ? colors.accent.primary : colors.border.default, backgroundColor: !territoryId ? colors.accent.primary + "15" : colors.bg.input }}>
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, ...((!territoryId) ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: !territoryId ? colors.accent.primary + "15" : colors.bg.input }}>
                 <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: !territoryId ? colors.accent.primary : colors.text.secondary }}>Без территории</Text>
               </TouchableOpacity>
               {territories.map((ter: Territory) => (
                 <TouchableOpacity key={ter.id} onPress={() => setTerritoryId(ter.id)}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, borderWidth: 1, borderColor: territoryId === ter.id ? colors.accent.primary : colors.border.default, backgroundColor: territoryId === ter.id ? colors.accent.primary + "15" : colors.bg.input }}>
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, ...((territoryId === ter.id) ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: territoryId === ter.id ? colors.accent.primary + "15" : colors.bg.input }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ter.color || colors.accent.primary }} />
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: territoryId === ter.id ? colors.accent.primary : colors.text.secondary }}>{ter.name}</Text>
                 </TouchableOpacity>
@@ -293,7 +294,7 @@ export default function NewShopScreen() {
         {/* GPS */}
         <Field label="Геолокация (опционально)" colors={colors}>
           <PressableScale onPress={captureGPS} disabled={gpsLoading} haptic="medium"
-            style={{ backgroundColor: gpsLat ? colors.accent.success + "15" : colors.bg.input, borderWidth: 1, borderColor: gpsLat ? colors.accent.success : colors.border.default, borderRadius: Radii.md, padding: 12, flexDirection: "row", alignItems: "center", gap: 8, opacity: gpsLoading ? 0.6 : 1 }}>
+            style={{ backgroundColor: gpsLat ? colors.accent.success + "15" : colors.bg.input, ...(gpsLat ? soft(isDark).raisedSm : soft(isDark).inset), borderRadius: Radii.md, padding: 12, flexDirection: "row", alignItems: "center", gap: 8, opacity: gpsLoading ? 0.6 : 1 }}>
             {gpsLoading ? <ActivityIndicator size="small" color={colors.accent.primary} /> : <Feather name={gpsLat ? "check-circle" : "crosshair"} size={16} color={gpsLat ? colors.accent.success : colors.accent.primary} />}
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.primary }}>{gpsLat ? "Координаты сохранены" : "Определить местоположение"}</Text>
           </PressableScale>

@@ -8,13 +8,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getAvailableShops, getProducts, createOrder, Shop } from "../../src/api";
+import { PromisedDelivery } from "../../src/components/order/PromisedDelivery";
 import { useOfflineStore, uuidv4, isRetryableError } from "../../src/store/offline";
+import { useOfflineCopy } from "../../src/hooks/useOfflineCopy";
 import { notify } from "../../src/store/toast";
-import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding } from "../../src/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card, SearchInput, Skeleton } from "../../src/components/ui";
 import { PressableScale } from "../../src/components/Animated";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { bumpLine, findScanned, cartSummary } from "../../src/lib/cart";
 
 interface OrderLine {
   productId: number;
@@ -100,10 +104,27 @@ function StepIndicator({ step, total, colors }: { step: number; total: number; c
 
 // ── Step 1: Shop Picker ──────────────────────────────────────────────────────
 function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSelect: (s: Shop) => void; colors: ThemeColors }) {
+  const { isDark } = useThemeStore();
   const [search, setSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("");
   const [recentIds, setRecentIds] = useState<number[]>([]);
-  const { data: shops, isLoading } = useQuery({ queryKey: ["availableShops"], queryFn: getAvailableShops });
+  /*
+    Живые данные с сервера, а при их отсутствии — копия с диска.
+
+    Кэш react-query живёт только в памяти: агент, открывший приложение утром
+    в подсобке без связи, видел на первом же шаге «Ничего не найдено», хотя
+    офлайн-очередь умеет принять заказ. Хук и модуль копии были написаны и
+    покрыты тестом, но провод отсюда потерялся при слиянии ветвей 07.09.
+  */
+  const { data: liveShops, isLoading: liveLoading } = useQuery({ queryKey: ["availableShops"], queryFn: getAvailableShops });
+  const { data: shops, fromCopy, savedAt } = useOfflineCopy<typeof liveShops>("shops", liveShops);
+  // Пока грузится живое, но копия уже есть — показываем копию, не скелет.
+  const isLoading = liveLoading && !shops;
+  // Про возраст копии сказано прямо: по остаткам и ценам агент разговаривает
+  // с хозяином магазина, и выдавать вчерашнее за сегодняшнее молча нельзя.
+  const copyNotice = fromCopy && savedAt
+    ? `Список сохранён ${new Date(savedAt).toLocaleDateString("ru")} — связи нет, он мог устареть`
+    : null;
 
   // Load recent shop IDs on mount
   useEffect(() => {
@@ -145,7 +166,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
     const hasDebt = Number(shop.debt ?? 0) > 0;
     return (
       <PressableScale onPress={() => { onSelect(shop); }} haptic="light" style={{ marginBottom: 8 }}>
-        <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderWidth: selected ? 1.5 : 1, borderColor: selected ? colors.accent.primary : colors.border.default }}>
+        <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, ...(selected ? soft(isDark).raisedSm : soft(isDark).inset),}}>
           <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: selected ? colors.accent.primary + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
             <Feather name="shopping-bag" size={18} color={selected ? colors.accent.primary : colors.text.muted} />
           </View>
@@ -161,7 +182,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
               <Feather name="check" size={14} color="#fff" />
             </View>
           ) : (
-            <View style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: colors.border.default }} />
+            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg.input, ...soft(isDark).insetSm }} />
           )}
         </Card>
       </PressableScale>
@@ -170,15 +191,21 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
 
   return (
     <View style={{ padding: Spacing.base, gap: Spacing.md, flex: 1 }}>
+      {copyNotice && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.status.warningDim, borderRadius: Radii.md, paddingVertical: 8, paddingHorizontal: 10 }}>
+          <Feather name="wifi-off" size={13} color={colors.status.warning} />
+          <Text style={{ flex: 1, fontSize: Typography.size.xs, color: colors.text.secondary }}>{copyNotice}</Text>
+        </View>
+      )}
       <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск по имени, адресу, району…" autoFocus />
       {/* City quick filter */}
       {cities.length > 1 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-          <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: !cityFilter ? colors.accent.primary : colors.border.default }}>
+          <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, ...(!cityFilter ? soft(isDark).raisedSm : soft(isDark).inset) }}>
             <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>Все города</Text>
           </TouchableOpacity>
           {cities.map(c => (
-            <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, borderWidth: 1, borderColor: cityFilter === c ? colors.accent.primary : colors.border.default }}>
+            <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, ...((cityFilter === c) ? soft(isDark).raisedSm : soft(isDark).inset),}}>
               <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: cityFilter === c ? "#fff" : colors.text.secondary }}>{c}</Text>
             </TouchableOpacity>
           ))}
@@ -214,6 +241,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
 
 // ── Step 2: Product Picker + Cart ────────────────────────────────────────────
 function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors }) {
+  const { isDark } = useThemeStore();
   const [showPicker, setShowPicker] = useState(false);
 
   const lineTotal = (l: OrderLine) => l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100);
@@ -256,7 +284,7 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
                 <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{idx + 1}</Text>
               </View>
               <Text style={{ flex: 1, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, lineHeight: 20 }} numberOfLines={2}>{line.name}</Text>
-              <TouchableOpacity onPress={() => onChange(lines.filter((_, i) => i !== idx))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
+              <TouchableOpacity onPress={() => onChange(lines.filter((_, i) => i !== idx))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.bg.elevated, ...soft(isDark).raised, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="x" size={14} color={colors.text.muted} />
               </TouchableOpacity>
             </View>
@@ -269,19 +297,34 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
             </View>
             {/* Inputs */}
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <View style={{ flex: 1, gap: 4 }}>
+              <View style={{ flex: 1.4, gap: 4 }}>
                 <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>КОЛ-ВО</Text>
-                <TextInput value={line.quantity} onChangeText={v => {
-                  const next = [...lines]; next[idx] = { ...next[idx], quantity: v.replace(",", ".") }; onChange(next);
-                }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
-                  style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
+                {/* «− поле +»: цифры набирать в перчатках неудобно, а плюс-минус
+                    на единицу — самая частая правка. Поле остаётся для дробных
+                    и больших чисел. Кнопки 36 точек с hitSlop — до нормы 44. */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <TouchableOpacity testID={`line-minus-${line.productId}`} hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
+                    onPress={() => { const q = Math.max(1, Math.ceil(Number(line.quantity || 0)) - 1); const next = [...lines]; next[idx] = { ...next[idx], quantity: String(q) }; onChange(next); }}
+                    style={{ width: 36, height: 40, borderRadius: Radii.md, backgroundColor: colors.bg.elevated, ...soft(isDark).raisedSm, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="minus" size={14} color={colors.text.primary} />
+                  </TouchableOpacity>
+                  <TextInput value={line.quantity} onChangeText={v => {
+                    const next = [...lines]; next[idx] = { ...next[idx], quantity: v.replace(",", ".") }; onChange(next);
+                  }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
+                    style={{ flex: 1, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, paddingVertical: 10, paddingHorizontal: 4, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
+                  <TouchableOpacity testID={`line-plus-${line.productId}`} hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
+                    onPress={() => { const q = Math.floor(Number(line.quantity || 0)) + 1; const next = [...lines]; next[idx] = { ...next[idx], quantity: String(q) }; onChange(next); }}
+                    style={{ width: 36, height: 40, borderRadius: Radii.md, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="plus" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>СКИДКА (%)</Text>
                 <TextInput value={line.discount} onChangeText={v => {
                   const next = [...lines]; next[idx] = { ...next[idx], discount: clampDiscountText(v) }; onChange(next);
                 }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
-                  style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
+                  style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
               </View>
               <View style={{ flex: 1.2, gap: 4 }}>
                 <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>СУММА</Text>
@@ -305,14 +348,34 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
   );
 }
 
+/*
+  Корзина внутри выбора товара.
+
+  Было: нажатие на товар клало его в заказ с количеством 1 и помечало «В
+  корзине» — а количество правилось только на шаге с составом, после
+  закрытия окна. Агент с двадцатью позициями открывал окно двадцать раз.
+  Теперь: у добавленного товара стоит «− n +» прямо в списке, внизу окна
+  итог по корзине и «Готово», а рядом с поиском — камера: скан штрих-кода
+  или кода товара прибавляет единицу.
+*/
 // ── Product Picker Modal ─────────────────────────────────────────────────────
 function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   visible: boolean; onClose: () => void; lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors;
 }) {
+  const { isDark } = useThemeStore();
   const [search, setSearch] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const debouncedSearch = useDebounce(search, 300);
   const [onlyInStock, setOnlyInStock] = useState(true);
-  const { data: products, isLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
+  // Тот же запасной путь, что у магазинов: см. ShopPicker.
+  const { data: liveProducts, isLoading: liveLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
+  const { data: products, fromCopy, savedAt } = useOfflineCopy<typeof liveProducts>("products", liveProducts);
+  const isLoading = liveLoading && !products;
+  const copyNotice = fromCopy && savedAt
+    ? `Каталог сохранён ${new Date(savedAt).toLocaleDateString("ru")} — связи нет, остатки и цены могли измениться`
+    : null;
 
   const filtered = useMemo(() => {
     let list = (products ?? []).filter(p => !debouncedSearch || p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || (p.code ?? "").toLowerCase().includes(debouncedSearch.toLowerCase()));
@@ -320,7 +383,31 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
     return list.sort((a, b) => (a.category ?? "").localeCompare(b.category ?? "") || a.name.localeCompare(b.name));
   }, [products, debouncedSearch, onlyInStock]);
 
-  const already = useMemo(() => new Set(lines.map(l => l.productId)), [lines]);
+  const qtyOf = useMemo(() => new Map(lines.map(l => [l.productId, Number(l.quantity || 0)])), [lines]);
+  const summary = cartSummary(lines);
+
+  const onScanned = ({ data }: { data: string }) => {
+    // Одна коробка в кадре — один плюс: тот же код принимается снова через паузу.
+    const now = Date.now();
+    if (data === lastScan.current.code && now - lastScan.current.at < 1500) return;
+    lastScan.current = { code: data, at: now };
+    const p = findScanned(products ?? [], data);
+    if (!p) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      notify.error(`Товар со штрих-кодом ${data} не найден`);
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onChange(bumpLine(lines, p, 1));
+  };
+
+  const openScanner = async () => {
+    if (!permission?.granted) {
+      const r = await requestPermission();
+      if (!r.granted) { notify.error("Нет доступа к камере"); return; }
+    }
+    setScanning(true);
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -346,7 +433,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
             </TouchableOpacity>
           </View>
           {/* Search */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, paddingHorizontal: 14, paddingVertical: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).raised, paddingHorizontal: 14, paddingVertical: 10 }}>
             <Feather name="search" size={16} color={colors.text.muted} />
             <TextInput style={{ flex: 1, color: colors.text.primary, fontSize: Typography.size.base, fontFamily: Typography.fontRegular }} placeholder="Название или артикул…" placeholderTextColor={colors.text.muted} value={search} onChangeText={setSearch} autoFocus />
             {/* Очистка поиска была голой иконкой 16 точек. */}
@@ -355,10 +442,35 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                 <Feather name="x-circle" size={16} color={colors.text.muted} />
               </TouchableOpacity>
             )}
+            <TouchableOpacity testID="picker-scan" onPress={openScanner} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Feather name="camera" size={18} color={colors.accent.primary} />
+            </TouchableOpacity>
           </View>
+          {scanning && (
+            <View style={{ marginHorizontal: Spacing.base, marginBottom: Spacing.sm, height: 180, borderRadius: Radii.lg, overflow: "hidden", backgroundColor: "#000" }}>
+              <CameraView
+                style={{ flex: 1 }}
+                onBarcodeScanned={onScanned}
+                barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39"] }}
+              />
+              <TouchableOpacity testID="picker-scan-close" onPress={() => setScanning(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ position: "absolute", top: 8, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="x" size={16} color="#fff" />
+              </TouchableOpacity>
+              <Text style={{ position: "absolute", bottom: 8, left: 0, right: 0, textAlign: "center", color: "#fff", fontSize: Typography.size.xs }}>
+                Каждый скан — плюс единица
+              </Text>
+            </View>
+          )}
+          {copyNotice && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.status.warningDim, borderRadius: Radii.md, paddingVertical: 8, paddingHorizontal: 10 }}>
+              <Feather name="wifi-off" size={13} color={colors.status.warning} />
+              <Text style={{ flex: 1, fontSize: Typography.size.xs, color: colors.text.secondary }}>{copyNotice}</Text>
+            </View>
+          )}
           {/* Stock filter */}
           <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
-            <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: onlyInStock ? colors.accent.primary : colors.border.default, backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
+            <View style={{ width: 20, height: 20, borderRadius: 4, ...(onlyInStock ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
               {onlyInStock && <Feather name="check" size={12} color="#fff" />}
             </View>
             <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, fontFamily: Typography.fontMedium }}>Только в наличии</Text>
@@ -371,14 +483,15 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
             <FlatList data={filtered} keyExtractor={p => String(p.id)} contentContainerStyle={{ padding: Spacing.base, gap: 8 }} keyboardShouldPersistTaps="handled"
               ListEmptyComponent={<View style={{ alignItems: "center", paddingVertical: 40 }}><Feather name="search" size={28} color={colors.text.muted} /><Text style={{ fontSize: Typography.size.base, color: colors.text.secondary, marginTop: Spacing.md }}>Товар не найден</Text></View>}
               renderItem={({ item: p }) => {
-                const added = already.has(p.id);
+                const qty = qtyOf.get(p.id) ?? 0;
+                const added = qty > 0;
                 return (
                   <PressableScale onPress={() => {
                     if (added) return;
-                    onChange([...lines, { productId: p.id, name: p.name, unitPrice: Number(p.unitPrice), quantity: "1", discount: "0", available: parseStock(p.available), unit: p.unit }]);
+                    onChange(bumpLine(lines, p, 1));
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }} haptic="light">
-                    <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 4, borderWidth: 1, borderColor: added ? colors.status.success : colors.border.default, backgroundColor: added ? colors.status.success + "0D" : colors.bg.card }}>
+                    <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 4, ...(added ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: added ? colors.status.success + "0D" : colors.bg.card }}>
                       <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: added ? colors.status.success + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
                         <Feather name={added ? "check" : "package"} size={16} color={added ? colors.status.success : colors.text.muted} />
                       </View>
@@ -390,7 +503,17 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                         </View>
                       </View>
                       {added ? (
-                        <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontSemibold }}>В корзине</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }} testID={`stepper-${p.id}`}>
+                          <TouchableOpacity testID={`stepper-minus-${p.id}`} onPress={() => onChange(bumpLine(lines, p, -1))} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                            style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+                            <Feather name="minus" size={14} color={colors.text.primary} />
+                          </TouchableOpacity>
+                          <Text style={{ minWidth: 22, textAlign: "center", fontSize: Typography.size.sm, fontFamily: Typography.fontBold, color: colors.text.primary }}>{qty}</Text>
+                          <TouchableOpacity testID={`stepper-plus-${p.id}`} onPress={() => onChange(bumpLine(lines, p, 1))} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                            style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                            <Feather name="plus" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
                       ) : (
                         <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
                           <Feather name="plus" size={14} color="#fff" />
@@ -402,6 +525,20 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
               }}
             />
           )}
+          {/* Итог корзины и «Готово» — чтобы набрать весь заказ, не закрывая окно. */}
+          <View testID="picker-summary" style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: Spacing.base, paddingVertical: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>
+                {summary.count === 0 ? "Корзина пуста" : `${summary.count} ${summary.count === 1 ? "товар" : summary.count < 5 ? "товара" : "товаров"}`}
+              </Text>
+              <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary }}>{summary.total.toLocaleString("ru")} сум</Text>
+            </View>
+            <PressableScale onPress={onClose} haptic="medium">
+              <View testID="picker-done" style={{ paddingHorizontal: 22, paddingVertical: 12, borderRadius: Radii.lg, backgroundColor: colors.accent.primary }}>
+                <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.base }}>Готово</Text>
+              </View>
+            </PressableScale>
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -409,10 +546,14 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
 }
 
 // ── Step 3: Review ───────────────────────────────────────────────────────────
-function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPaymentChange, colors }: {
+function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPaymentChange, promisedAt, onPromisedChange, colors }: {
   shopName: string; lines: OrderLine[]; notes: string; onNotesChange: (v: string) => void;
-  paymentMethod: string; onPaymentChange: (v: string) => void; colors: ThemeColors;
+  paymentMethod: string; onPaymentChange: (v: string) => void;
+  /* Когда обещали привезти. null — срок не называли, и это законный ответ. */
+  promisedAt: string | null; onPromisedChange: (v: string | null) => void;
+  colors: ThemeColors;
 }) {
+  const { isDark } = useThemeStore();
   const { subtotal, totalQty } = useMemo(() => {
     let sub = 0, qty = 0;
     for (const l of lines) { sub += l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100); qty += Number(l.quantity || 0); }
@@ -496,7 +637,15 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
           <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>необязательно</Text>
         </View>
         <TextInput value={notes} onChangeText={onNotesChange} placeholder="Комментарий к заказу…" placeholderTextColor={colors.text.tertiary} multiline numberOfLines={3} textAlignVertical="top"
-          style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, borderWidth: 1, borderColor: colors.border.default, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary, minHeight: 80 }} />
+          style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary, minHeight: 80 }} />
+      </Card>
+      {/*
+        Обещанный срок — последним, рядом с примечаниями: это то, что агент
+        договаривает уже на выходе из магазина, а не выбирает вместе с
+        товаром.
+      */}
+      <Card style={{ padding: Spacing.base }}>
+        <PromisedDelivery value={promisedAt} onChange={onPromisedChange} />
       </Card>
     </View>
   );
@@ -511,6 +660,9 @@ interface OrderDraft {
   lines: OrderLine[];
   notes: string;
   paymentMethod: string;
+  /* Необязательное: черновики, сохранённые до появления срока, обязаны
+     восстанавливаться по-прежнему. */
+  promisedAt?: string | null;
   savedAt: number;
 }
 
@@ -542,6 +694,7 @@ async function clearDraft() {
 export default function NewOrderScreen() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string }>();
   const { addOrder } = useOfflineStore();
@@ -562,6 +715,12 @@ export default function NewOrderScreen() {
   });
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  /*
+    Когда обещали привезти. null и остаётся null, пока агент не нажал сам:
+    подставленный срок был бы его обещанием магазину, которого он не давал,
+    и просрочкой, которой не было.
+  */
+  const [promisedAt, setPromisedAt] = useState<string | null>(null);
   /**
    * Когда экран открыт с уже выбранным магазином или товаром, черновик не
    * спрашивается вовсе — значит проверка пройдена сразу, и это начальное
@@ -638,6 +797,7 @@ export default function NewOrderScreen() {
               setLines(draft.lines);
               setNotes(draft.notes);
               setPaymentMethod(draft.paymentMethod);
+              setPromisedAt(draft.promisedAt ?? null);
               setStep(draft.shop ? 2 : 1);
             }},
           ]
@@ -651,10 +811,10 @@ export default function NewOrderScreen() {
   useEffect(() => {
     if (!draftChecked || lines.length === 0) return;
     const timer = setTimeout(() => {
-      saveDraft({ shop: selectedShop, lines, notes, paymentMethod });
+      saveDraft({ shop: selectedShop, lines, notes, paymentMethod, promisedAt });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [selectedShop, lines, notes, paymentMethod, draftChecked]);
+  }, [selectedShop, lines, notes, paymentMethod, promisedAt, draftChecked]);
 
   // The backend only accepts one order-level discount percentage (per-line
   // discounts aren't stored server-side) and recomputes subtotal itself from
@@ -684,7 +844,7 @@ export default function NewOrderScreen() {
 
   const createMutation = useMutation({
     mutationFn: createOrder,
-    onSuccess: () => {
+    onSuccess: (created) => {
       clearDraft();
       // Списки заказов надо пометить устаревшими, иначе агент вернётся на
       // вкладку и не увидит только что созданного: вкладки не размонтируются,
@@ -693,7 +853,10 @@ export default function NewOrderScreen() {
       // второй. В быстром заказе из каталога это давно сделано, здесь забыли.
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Заказ создан!");
+      // Скидка выше порога: заказ оформлен, но ждёт офиса — сказать это сразу,
+      // иначе агент ждёт курьера по заказу, который никто не подтвердил.
+      if (created?.held) notify.info("Заказ оформлен и ждёт подтверждения офиса — скидка выше порога");
+      else notify.success("Заказ создан!");
       router.back();
     },
     onError: async (e: Error) => {
@@ -712,7 +875,7 @@ export default function NewOrderScreen() {
       // Ровно эта ошибка описана и исправлена в самой очереди
       // (src/store/offline.ts), но точка входа сохраняла старую копию.
       if (isRetryableError(e) && selectedShop) {
-        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
+        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, promisedDeliveryAt: promisedAt ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
         const queued = await addOrder(offlineOrder);
         if (!queued) {
           // Запись очереди на диск не удалась — на рабочих телефонах кончается
@@ -778,6 +941,7 @@ export default function NewOrderScreen() {
     const input = {
       shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt",
       idempotencyKey: idempotencyKeyRef.current,
+      promisedDeliveryAt: promisedAt ?? undefined,
       discount: overallDiscountPercent,
       items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Math.max(0, Number(l.discount || 0)) })),
     };
@@ -803,7 +967,7 @@ export default function NewOrderScreen() {
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <TouchableOpacity onPress={() => step > 1 ? setStep(s => s - 1) : router.back()}
-            style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.bg.elevated, borderWidth: 1, borderColor: colors.border.default, alignItems: "center", justifyContent: "center" }}>
+            style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.bg.elevated, ...soft(isDark).raised, alignItems: "center", justifyContent: "center" }}>
             <Feather name="arrow-left" size={18} color={colors.text.primary} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -820,7 +984,7 @@ export default function NewOrderScreen() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); addRecentShopSafely(s.id); }} colors={colors} />}
         {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} />}
-        {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} colors={colors} />}
+        {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} promisedAt={promisedAt} onPromisedChange={setPromisedAt} colors={colors} />}
       </ScrollView>
 
       {/* Bottom CTA */}

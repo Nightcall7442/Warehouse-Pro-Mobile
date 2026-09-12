@@ -13,8 +13,18 @@ import { Card, Button, Badge } from "../../src/components/ui";
 import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
 import { useThemeColors } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LocationDisclosure } from "../../src/components/LocationDisclosure";
 import { FadeInItem } from "../../src/components/Animated";
 import { startBackgroundTracking, stopBackgroundTracking, bufferLocation } from "../../src/backgroundLocation";
+
+/**
+ * Запасной опрос — только для телефонов, где не дали фоновую геолокацию.
+ *
+ * Пять минут, а не две: это принудительная съёмка, она идёт даже когда агент
+ * никуда не двигался, и каждая такая съёмка стоит батареи. Там, где система
+ * следит сама, этот таймер не запускается вовсе.
+ */
+const FALLBACK_TRACK_MS = 5 * 60 * 1000;
 
 type GpsState = "idle" | "locating" | "success" | "error";
 
@@ -42,14 +52,35 @@ export default function GpsScreen() {
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [error, setError] = useState("");
   const [autoTrack, setAutoTrack] = useState(false);
+  // Фоновое слежение не дали — почему: показывается под переключателем.
+  const [trackNotice, setTrackNotice] = useState("");
+  const [askConsent, setAskConsent] = useState(false);
   const [lastSent, setLastSent] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLocating = useRef(false);
   const spin = useSharedValue(0);
 
+  /*
+    Восстановление после перезапуска — только если разрешение ещё живо.
+
+    Прежде трекинг включался по сохранённому признаку безоговорочно. Если
+    человек тем временем отозвал доступ к геолокации в настройках телефона,
+    приложение при следующем запуске молча просило разрешение снова —
+    системным окном, без всякого разъяснения. Это ровно тот случай, который
+    правило Google и запрещает: окно говорит «разрешить доступ», а о том, что
+    след увидит начальник, не говорит ничего.
+
+    Теперь так: разрешение на месте — продолжаем молча, человек согласие уже
+    давал. Разрешения нет — трекинг остаётся выключенным, и когда человек
+    включит его сам, он снова увидит раскрытие.
+  */
   useEffect(() => {
-    AsyncStorage.getItem(AUTO_TRACK_KEY).then(v => { if (v === "true") setAutoTrack(true); });
+    AsyncStorage.getItem(AUTO_TRACK_KEY).then(async v => {
+      if (v !== "true") return;
+      const { status } = await Location.getBackgroundPermissionsAsync();
+      if (status === "granted") setAutoTrack(true);
+    });
   }, []);
 
   useEffect(() => { AsyncStorage.setItem(AUTO_TRACK_KEY, String(autoTrack)); }, [autoTrack]);
@@ -83,7 +114,7 @@ export default function GpsScreen() {
      * пользуемся. Дыру в маршруте потом нечем восстановить.
      */
     try {
-      let c: { lat: number; lng: number; accuracy: number };
+      let c: { lat: number; lng: number; accuracy: number; mocked: boolean };
       let batteryPct: number | undefined;
 
       try {
@@ -94,7 +125,7 @@ export default function GpsScreen() {
           ]),
           Battery.getBatteryLevelAsync().catch(() => null),
         ]);
-        c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 999 };
+        c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 999, mocked: pos.mocked === true };
         batteryPct = battery !== null ? Math.round(battery * 100) : undefined;
       } catch {
         // Вот здесь виноват действительно GPS: координат нет.
@@ -107,7 +138,7 @@ export default function GpsScreen() {
       setCoords(c);
 
       try {
-        await saveLocation(c.lat, c.lng, c.accuracy, batteryPct);
+        await saveLocation(c.lat, c.lng, c.accuracy, batteryPct, undefined, c.mocked);
         setState("success");
         setLastSent(new Date());
       } catch {
@@ -118,6 +149,7 @@ export default function GpsScreen() {
           accuracy: c.accuracy,
           batteryLevel: batteryPct,
           recordedAt: new Date().toISOString(),
+          mocked: c.mocked,
         });
         setError("Точка снята, но не отправлена — нет связи. Она сохранена и уйдёт сама, когда связь появится.");
         setState("error");
@@ -128,19 +160,62 @@ export default function GpsScreen() {
     }
   };
 
+  /* ═════════════════════════════════════════════════════════════════════════
+     Точку снимает КТО-ТО ОДИН.
+
+     ── Что было ─────────────────────────────────────────────────────────────
+
+     При включённом трекинге работали сразу два источника:
+
+       • системная задача (backgroundLocation): отдаёт точку, когда агент
+         сдвинулся на 50 метров, и не чаще раза в две минуты;
+       • свой таймер в экране: раз в пять минут будил приёмник НЕЗАВИСИМО от
+         того, двигался человек или нет.
+
+     Второй и сажал батарею. Агент сидит в магазине, обедает или стоит в
+     пробке — телефон всё равно каждые пять минут берёт свежую точку, ту же
+     самую, что и в прошлый раз. Система в это время уже знает, где телефон,
+     и отдала бы это даром.
+
+     ── Как теперь ───────────────────────────────────────────────────────────
+
+     Если системная задача запустилась — своего таймера нет вовсе: она
+     работает и когда приложение свёрнуто, и когда открыто. Таймер остаётся
+     ЗАПАСНЫМ ходом и включается только там, где разрешения на фоновую
+     геолокацию не дали: без него у такого агента следа не будет совсем.
+     ═════════════════════════════════════════════════════════════════════════ */
   useEffect(() => {
-    if (autoTrack) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      void locate();
-      intervalRef.current = setInterval(locate, 5 * 60 * 1000);
-      startBackgroundTracking().then(result => {
-        if (!result.success && __DEV__) console.warn("Background location permission not granted:", result.reason);
-      });
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    if (!autoTrack) {
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       stopBackgroundTracking();
+      return;
     }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+
+    let cancelled = false;
+    // Первую точку — сразу: человек включил трекинг и должен увидеть, что он
+    // работает, а не ждать первого шага или пяти минут.
+    void locate();
+
+    setTrackNotice("");
+    startBackgroundTracking().then(result => {
+      if (cancelled) return;
+      if (result.success) return;
+      if (__DEV__) console.log("Background location not started:", result.reason);
+      setTrackNotice(
+        result.reason === "background_unavailable_in_expo_go"
+          ? "В Expo Go на iPhone фоновое слежение недоступно — точки уходят, пока экран открыт. В установленном приложении работает в фоне."
+          : result.reason === "background_permission_denied"
+            ? "Фоновая геолокация не разрешена — точки уходят, пока экран открыт. Разрешите «Всегда» в настройках."
+            : "Фоновое слежение не запустилось — точки уходят, пока экран открыт.",
+      );
+      // Запасной ход — только когда система следить отказалась.
+      intervalRef.current = setInterval(locate, FALLBACK_TRACK_MS);
+    });
+
+    return () => {
+      cancelled = true;
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    };
   }, [autoTrack]);
 
   useEffect(() => {
@@ -208,17 +283,62 @@ export default function GpsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Авто-слежение</Text>
-              <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>Отправка каждые 2 минуты</Text>
+              {/*
+                Подпись говорит, как оно работает НА САМОМ ДЕЛЕ.
+
+                «Каждые 2 минуты» было неправдой в обе стороны: стоящий на
+                месте агент слал точку раз в пять минут своим таймером, а
+                идущий — по сдвигу на 50 метров. И главное, из «каждые две
+                минуты» человек делает вывод, что телефон всё время что-то
+                считает, — а он молчит, пока агент не двинулся. Это и есть
+                причина, по которой батарея не садится.
+              */}
+              <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
+                Отправка при перемещении, не чаще раза в 2 минуты
+              </Text>
             </View>
-            <Switch value={autoTrack} onValueChange={v => { Haptics.selectionAsync(); setAutoTrack(v); }} trackColor={{ false: colors.bg.elevated, true: colors.brand.primary }} thumbColor="#fff" />
+            {/*
+              Включение идёт через раскрытие, выключение — сразу.
+
+              Правило Google Play: заметное разъяснение ДО системного запроса
+              разрешения, и согласие отдельным действием. Системное окно
+              говорит «разрешить доступ к местоположению» и НЕ говорит, что
+              след увидит начальник, — а человек соглашается именно на это.
+
+              Выключение спрашивать не о чем: отказаться от слежки можно без
+              объяснений и мгновенно.
+            */}
+            <Switch
+              value={autoTrack}
+              onValueChange={v => {
+                Haptics.selectionAsync();
+                if (v) setAskConsent(true);
+                else setAutoTrack(false);
+              }}
+              trackColor={{ false: colors.bg.elevated, true: colors.brand.primary }}
+              thumbColor="#fff"
+            />
           </View>
           {autoTrack && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
-              <Badge variant="success">Авто-слежение активно</Badge>
+            <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle, gap: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Badge variant={trackNotice ? "warning" : "success"}>{trackNotice ? "Слежение только на экране" : "Авто-слежение активно"}</Badge>
+              </View>
+              {trackNotice ? (
+                <Text testID="track-notice" style={{ fontSize: Typography.size.xs, color: colors.text.secondary, lineHeight: 16 }}>{trackNotice}</Text>
+              ) : null}
             </View>
           )}
         </Card>
       </FadeInItem>
+
+      <LocationDisclosure
+        visible={askConsent}
+        onAccept={() => { setAskConsent(false); setAutoTrack(true); }}
+        /* Отказ ничего не включает и ни к чему не ведёт: трекинг остаётся
+           выключенным, экран работает как работал. */
+        onDecline={() => setAskConsent(false)}
+      />
 
       {/* Last sent */}
       {lastSent && (

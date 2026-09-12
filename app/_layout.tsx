@@ -20,6 +20,7 @@ import {
 import { JetBrainsMono_400Regular } from "@expo-google-fonts/jetbrains-mono";
 import { useAuthStore } from "../src/store/auth";
 import { useOfflineStore } from "../src/store/offline";
+import { useVisitQueue } from "../src/store/visit-queue";
 import { Typography } from "../src/theme";
 import { useThemeStore } from "../src/store/theme";
 import { useBrandingStore } from "../src/store/branding";
@@ -65,8 +66,15 @@ function AutoSync() {
     const { orders, deliveryActions } = useOfflineStore.getState();
     const pendingOrders = orders.filter((o) => !o.synced);
     const pendingActions = deliveryActions.filter((a) => !a.synced);
+    const pendingVisits = useVisitQueue.getState().actions.filter((a) => !a.synced);
 
     const tasks: Promise<unknown>[] = [];
+    // Третья очередь — визиты и фото: см. store/visit-queue.
+    if (pendingVisits.length > 0) {
+      tasks.push(useVisitQueue.getState().sync().then(({ synced }) => {
+        if (synced > 0) qc.invalidateQueries({ queryKey: ["agentPlans"] });
+      }));
+    }
     if (pendingOrders.length > 0) {
       tasks.push(syncAll().then(({ synced }) => {
         if (synced > 0) qc.invalidateQueries({ queryKey: ["myOrders"] });
@@ -163,6 +171,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     load(); loadTheme(); loadBranding();
+    void useVisitQueue.getState().load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -204,6 +213,14 @@ export default function RootLayout() {
               <Stack.Screen name="order/[id]" options={{ headerShown: false }} />
               <Stack.Screen name="order/deliver" options={{ headerShown: false }} />
               <Stack.Screen name="merchandiser/visit" options={{ headerShown: false, presentation: "modal" }} />
+              {/*
+                Своя шапка, поэтому системная выключена: иначе на экране
+                оказались бы два заголовка друг над другом — незаявленный
+                экран получает её по умолчанию.
+              */}
+              <Stack.Screen name="salary" options={{ headerShown: false }} />
+              <Stack.Screen name="notifications" options={{ headerShown: false }} />
+              <Stack.Screen name="debts" options={{ headerShown: false }} />
             </Stack>
             {/* Поверх всего: экран блокировки по простою. Ниже Stack, чтобы
                 закрывать любой открытый экран, включая модальные. */}
