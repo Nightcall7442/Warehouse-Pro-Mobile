@@ -99,7 +99,7 @@ describe("точку снимает кто-то один", () => {
     const at = GPS.indexOf("startBackgroundTracking().then");
     must(at > -1, "запуск системной задачи не найден");
     const block = GPS.slice(at, GPS.indexOf("});", at));
-    expect(block).toContain("if (result.success) return;");
+    expect(block).toContain('if (result.success) { setTrackNotice(""); return; }');
     expect(block).toContain("setInterval(locate, FALLBACK_TRACK_MS)");
   });
 
