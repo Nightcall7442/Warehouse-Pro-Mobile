@@ -188,6 +188,9 @@ export default function GpsScreen() {
     if (!autoTrack) {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       stopBackgroundTracking();
+      // Пометка про «только на экране» без слежения не нужна — снять в
+      // продолжении, а не синхронно (см. ниже).
+      void Promise.resolve().then(() => setTrackNotice(""));
       return;
     }
 
@@ -196,10 +199,11 @@ export default function GpsScreen() {
     // работает, а не ждать первого шага или пяти минут.
     void locate();
 
-    setTrackNotice("");
+    // Пометка ставится в продолжении промиса, не синхронно в эффекте:
+    // синхронный setState здесь — лишний рендер, и линтер его не пропускает.
     startBackgroundTracking().then(result => {
       if (cancelled) return;
-      if (result.success) return;
+      if (result.success) { setTrackNotice(""); return; }
       if (__DEV__) console.log("Background location not started:", result.reason);
       setTrackNotice(
         result.reason === "background_unavailable_in_expo_go"
