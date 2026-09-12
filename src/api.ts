@@ -1101,16 +1101,26 @@ export async function assignCourier(orderId: number, courierId: number): Promise
   await trpcMutation("courier.assignCourier", { orderId, courierId });
 }
 
+/*
+  Отметки курьера ждут дольше обычных 15 с — как создание заказа.
+
+  Отметка списывает склад и пишет платёж; сервер за городом отвечает
+  медленно, и 15 секунд обрывали запрос, который на сервере уже прошёл.
+  Очередь повторяла его — сервер теперь отвечает на повтор «дубль», но
+  лучше не обрывать первый.
+*/
+const DELIVERY_TIMEOUT_MS = 120_000;
+
 export async function markOutForDelivery(orderId: number): Promise<void> {
-  await trpcMutation("courier.markOutForDelivery", { orderId });
+  await trpcMutation("courier.markOutForDelivery", { orderId }, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
 export async function markDelivered(orderId: number, cashAmount?: string): Promise<void> {
-  await trpcMutation("courier.markDelivered", { orderId, cashAmount });
+  await trpcMutation("courier.markDelivered", { orderId, cashAmount }, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
 export async function markFailed(orderId: number, reason?: string): Promise<void> {
-  await trpcMutation("courier.markFailed", { orderId, reason });
+  await trpcMutation("courier.markFailed", { orderId, reason }, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
 export interface CompleteDeliveryInput {
@@ -1124,8 +1134,8 @@ export interface CompleteDeliveryInput {
   notes?: string;
 }
 
-export async function completeDelivery(input: CompleteDeliveryInput): Promise<{ success: boolean; result: string; finalStatus: string }> {
-  return trpcMutation("courier.completeDelivery", input);
+export async function completeDelivery(input: CompleteDeliveryInput): Promise<{ success: boolean; result: string; finalStatus: string; duplicate?: boolean }> {
+  return trpcMutation("courier.completeDelivery", input, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
 // ── Merchandiser / Visit Reports ──────────────────────────────────────────────

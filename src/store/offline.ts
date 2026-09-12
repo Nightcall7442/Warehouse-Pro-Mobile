@@ -387,27 +387,45 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       set({ deliveryActions: syncingActions });
       await writeDeliveryActionsQueue(syncingActions);
 
-      const results = await Promise.allSettled(
-        pendingActions.map((entry) => {
-          const { action } = entry;
-          if (action.type === "markOutForDelivery") {
-            return markOutForDelivery(action.orderId);
-          } else if (action.type === "markDelivered") {
-            return markDelivered(action.orderId, action.cashAmount);
-          } else if (action.type === "completeDelivery") {
-            return completeDelivery(action.input);
-          } else {
-            return markFailed(action.orderId, action.reason);
-          }
-        })
-      );
+      /*
+        По одному и в порядке постановки, а не все разом.
+
+        Разом — значит «выехал» и «доставлен» по одному заказу летели
+        параллельно, и «доставлен» мог прийти на сервер первым и получить
+        отказ. И при обрыве связи все двадцать запросов упирались в тайм-аут
+        каждый по отдельности. Теперь: по createdAt, один за другим; первый
+        же сетевой отказ останавливает проход — остальные ждут следующего,
+        а не бьются в мёртвую сеть. Отказ по существу (заказ не ваш) не
+        останавливает: за ним могут стоять исправные.
+      */
+      const ordered = [...pendingActions].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const results: PromiseSettledResult<unknown>[] = [];
+      const skipped = new Set<string>();
+      let networkDown = false;
+      for (const entry of ordered) {
+        if (networkDown) { skipped.add(entry.id); continue; }
+        const { action } = entry;
+        try {
+          const value = action.type === "markOutForDelivery" ? await markOutForDelivery(action.orderId)
+            : action.type === "markDelivered" ? await markDelivered(action.orderId, action.cashAmount)
+            : action.type === "completeDelivery" ? await completeDelivery(action.input)
+            : await markFailed(action.orderId, action.reason);
+          results.push({ status: "fulfilled", value });
+        } catch (reason) {
+          results.push({ status: "rejected", reason });
+          if (isRetryableError(reason)) networkDown = true;
+        }
+      }
+      const pendingActionsInOrder = ordered.filter(a => !skipped.has(a.id));
       
       let synced = 0;
       let failed = 0;
 
       const finalActions = syncingActions.map(a => {
         if (a.synced) return a;
-        const idx = pendingActions.findIndex((p) => p.id === a.id);
+        // Не дошли до отправки (сеть упала раньше) — обратно в ожидание.
+        if (skipped.has(a.id)) return { ...a, status: "pending" as const };
+        const idx = pendingActionsInOrder.findIndex((p) => p.id === a.id);
         // Left out of this pass (already refused for good, or queued while it
         // ran) — leave it exactly as it is. Falling through here would mark an
         // entry synced that was never actually sent.
