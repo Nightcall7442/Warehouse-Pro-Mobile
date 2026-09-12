@@ -76,8 +76,13 @@ describe("цели касания", () => {
   });
 
   it("ни одной кнопки меньше 40 точек без hitSlop", () => {
-    const glob = require("glob") as typeof import("glob");
-    const files = [...glob.sync("app/**/*.tsx"), ...glob.sync("src/**/*.tsx")].filter(f => !f.includes("__tests__"));
+    const { readdirSync, statSync } = require("fs") as typeof import("fs");
+    const walk = (dir: string): string[] => readdirSync(dir).flatMap(e => {
+      const full = `${dir}/${e}`;
+      if (statSync(full).isDirectory()) return e === "__tests__" || e === "node_modules" ? [] : walk(full);
+      return full.endsWith(".tsx") ? [full] : [];
+    });
+    const files = [...walk("app"), ...walk("src")];
     const offenders: string[] = [];
     for (const f of files) {
       const s = readFileSync(f, "utf-8");

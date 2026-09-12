@@ -182,8 +182,22 @@ export default function DeliveriesScreen() {
     return byOrder;
   }, [deliveryActions]);
 
+  /*
+    Отложенный «выехал» — не конец работы с заказом, а её середина.
+
+    Раньше любая отложенная отметка убирала заказ в «ЖДУТ ОТПРАВКИ» без
+    кнопок, и курьер без связи мог сделать по заказу только одно действие:
+    «выехал» — и всё, «доставлен» ждал появления сети. Очередь теперь уходит
+    по одной и по порядку, поэтому заказ с отложенным «выехал» показывается
+    «В ПУТИ» со всеми кнопками, а «ждут отправки» — только отметки, после
+    которых делать уже нечего (доставлен, недоставлен, проведён).
+  */
   const queuedOrderIds = useMemo(
-    () => new Set(queuedActionByOrder.keys()),
+    () => new Set([...queuedActionByOrder].filter(([, type]) => type !== "markOutForDelivery").map(([id]) => id)),
+    [queuedActionByOrder],
+  );
+  const locallyOut = useMemo(
+    () => new Set([...queuedActionByOrder].filter(([, type]) => type === "markOutForDelivery").map(([id]) => id)),
     [queuedActionByOrder],
   );
 
@@ -375,12 +389,12 @@ export default function DeliveriesScreen() {
     const all = deliveries ?? [];
     return {
       queued: all.filter((d: Delivery) => queuedOrderIds.has(d.id)),
-      assigned: all.filter((d: Delivery) => d.deliveryStatus === "assigned" && !queuedOrderIds.has(d.id)),
-      inTransit: all.filter((d: Delivery) => d.deliveryStatus === "out_for_delivery" && !queuedOrderIds.has(d.id)),
+      assigned: all.filter((d: Delivery) => d.deliveryStatus === "assigned" && !queuedOrderIds.has(d.id) && !locallyOut.has(d.id)),
+      inTransit: all.filter((d: Delivery) => (d.deliveryStatus === "out_for_delivery" || locallyOut.has(d.id)) && !queuedOrderIds.has(d.id)),
       deliveredCount: all.filter((d: Delivery) => d.deliveryStatus === "delivered").length,
       totalDeliveries: all.length,
     };
-  }, [deliveries, queuedOrderIds]);
+  }, [deliveries, queuedOrderIds, locallyOut]);
 
   /*
     Маршрут — один плоский список «заголовок + карточка», как на вкладке
