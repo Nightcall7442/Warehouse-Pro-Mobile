@@ -58,7 +58,7 @@ describe("API Functions", () => {
 
 describe("версия сборки в каждом запросе", () => {
   it("заголовок x-client-version вида mobile/<версия>", async () => {
-    const { CLIENT_VERSION } = await import("../api");
+    const { CLIENT_VERSION } = require("../api") as typeof import("../api");
     expect(CLIENT_VERSION).toMatch(/^mobile\/[0-9A-Za-z.+-]+$/);
     const src = require("fs").readFileSync("src/api.ts", "utf-8");
     expect(src).toContain('"x-client-version": CLIENT_VERSION');
