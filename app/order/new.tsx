@@ -844,7 +844,7 @@ export default function NewOrderScreen() {
 
   const createMutation = useMutation({
     mutationFn: createOrder,
-    onSuccess: () => {
+    onSuccess: (created) => {
       clearDraft();
       // Списки заказов надо пометить устаревшими, иначе агент вернётся на
       // вкладку и не увидит только что созданного: вкладки не размонтируются,
@@ -853,7 +853,10 @@ export default function NewOrderScreen() {
       // второй. В быстром заказе из каталога это давно сделано, здесь забыли.
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Заказ создан!");
+      // Скидка выше порога: заказ оформлен, но ждёт офиса — сказать это сразу,
+      // иначе агент ждёт курьера по заказу, который никто не подтвердил.
+      if (created?.held) notify.info("Заказ оформлен и ждёт подтверждения офиса — скидка выше порога");
+      else notify.success("Заказ создан!");
       router.back();
     },
     onError: async (e: Error) => {

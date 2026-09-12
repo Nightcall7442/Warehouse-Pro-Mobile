@@ -878,10 +878,11 @@ export async function getMyWorkZones(): Promise<Territory[]> {
  */
 const ORDER_CREATE_TIMEOUT_MS = 120_000;
 
-export async function createOrder(input: CreateOrderInput): Promise<{ id: number; orderNumber?: string; total?: number }> {
+export async function createOrder(input: CreateOrderInput): Promise<{ id: number; orderNumber?: string; total?: number; held?: boolean }> {
   // total нужен, чтобы сверить сумму, которую агент назвал владельцу, с той,
   // что сервер посчитал по своим ценам на момент отправки.
-  return trpcMutation<{ id: number; orderNumber?: string; total?: number }>("order.create", input, { timeout: ORDER_CREATE_TIMEOUT_MS });
+  // held — заказ ждёт подтверждения офиса (скидка выше порога), а не в работе.
+  return trpcMutation<{ id: number; orderNumber?: string; total?: number; held?: boolean }>("order.create", input, { timeout: ORDER_CREATE_TIMEOUT_MS });
 }
 
 export async function getMyOrders(): Promise<Order[]> {
