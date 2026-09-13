@@ -126,3 +126,18 @@ describe("экран доступен из приложения", () => {
 
   });
 });
+
+describe("частичный возврат вместе с деньгами", () => {
+  const base = { result: "partial_returned" as const, orderTotal: 100, returnedItemsCount: 1, keptTotal: 80 };
+  it("оплата в пределах оставшегося товара — проходит, ноль — тоже (всё в долг)", () => {
+    expect(validateDeliveryForm({ ...base, paidAmount: "80" })).toBeNull();
+    expect(validateDeliveryForm({ ...base, paidAmount: "0" })).toBeNull();
+    expect(validateDeliveryForm({ ...base, paidAmount: "" })).toBeNull();
+  });
+  it("оплата больше оставшегося — отказ с суммой", () => {
+    expect(validateDeliveryForm({ ...base, paidAmount: "100" })).toMatch(/больше суммы за оставшийся товар/);
+  });
+  it("без keptTotal (старый вызов) сумма не проверяется", () => {
+    expect(validateDeliveryForm({ result: "partial_returned", orderTotal: 100, returnedItemsCount: 1, paidAmount: "100" })).toBeNull();
+  });
+});

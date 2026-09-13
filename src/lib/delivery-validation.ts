@@ -34,6 +34,8 @@ export interface DeliveryFormState {
   orderTotal: number;
   /** Сколько позиций отмечено к возврату. */
   returnedItemsCount: number;
+  /** Сумма за то, что осталось у магазина после частичного возврата. */
+  keptTotal?: number;
 }
 
 /**
@@ -59,6 +61,15 @@ export function validateDeliveryForm(form: DeliveryFormState): string | null {
 
   if (form.result === "partial_returned" && form.returnedItemsCount === 0) {
     return "Укажите возвращённое количество хотя бы одного товара";
+  }
+  /*
+    Частичный возврат идёт вместе с деньгами: «привёз 10, 2 вернули, за 8
+    заплатили» — самый обычный случай дня. Раньше сумму при возврате нельзя
+    было указать вовсе: всё оставшееся ложилось магазину в долг, а наличные
+    у курьера в системе не существовали. Ноль — тоже ответ (всё в долг).
+  */
+  if (form.result === "partial_returned" && form.keptTotal !== undefined && paid > form.keptTotal + 0.005) {
+    return `Оплата больше суммы за оставшийся товар (${form.keptTotal.toLocaleString("ru")})`;
   }
 
   return null;

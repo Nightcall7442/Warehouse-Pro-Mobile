@@ -17,6 +17,10 @@ import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/component
 import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, getMySalary, Plan } from "../../src/api";
 import { useRouter } from "expo-router";
 import { notify } from "../../src/store/toast";
+import { useAuthStore } from "../../src/store/auth";
+import { useVisitQueue } from "../../src/store/visit-queue";
+import { isRetryableError } from "../../src/store/offline";
+import { sendVisitPing } from "../../src/lib/visit-ping";
 import { formatMoney } from "../../src/store/branding";
 
 type IconName = keyof typeof Feather.glyphMap;
@@ -257,18 +261,58 @@ export default function PlanScreen() {
     retry: false,
   });
 
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const isMerchandiser = user?.role === "merchandiser";
+  const queueVisit = useVisitQueue();
+
+  /*
+    Без ветки onError отметка визита пропадала молча: агент жал «Посещён»,
+    ничего не происходило — ни галочки, ни сообщения, — он жал ещё раз и
+    бросал. Вечером в отчёте оказывалось три визита из четырнадцати, а
+    посещаемость весит 30% в его KPI. Восстановить это потом нечем.
+
+    Нет связи — отметка в очередь, а не «повторите позже»: половина визитов
+    делается в подсобках без сети, и просить агента помнить о повторе —
+    значит терять их. Очередь (store/visit-queue) была написана для этого
+    экрана, но подключена только к AgentPlansView.
+  */
   const updateMutation = useMutation({
     mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) => updatePlanStatus(planId, status),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["plans"] }); qc.invalidateQueries({ queryKey: ["myQuota"] }); },
-    // Без этой ветки отметка визита пропадала молча: агент жал «Посещён»,
-    // ничего не происходило — ни галочки, ни сообщения, — он жал ещё раз и
-    // бросал. Вечером в отчёте оказывалось три визита из четырнадцати, а
-    // посещаемость весит 30% в его KPI. Восстановить это потом нечем.
-    onError: (e: Error) => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error(`Отметка не сохранена: ${e.message}. Повторите, когда появится связь.`);
+    onSuccess: (_d, variables) => {
+      qc.invalidateQueries({ queryKey: ["plans"] });
+      qc.invalidateQueries({ queryKey: ["myQuota"] });
+      // Точка на карте начальника — следом за отметкой, как в AgentPlansView.
+      if (variables.status === "visited") void sendVisitPing();
+    },
+    onError: async (e: Error, variables) => {
+      if (!isRetryableError(e)) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        notify.error(`Отметка не сохранена: ${e.message}`);
+        return;
+      }
+      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status });
+      if (ok) notify.info("Нет связи — отметка сохранена и уйдёт сама");
+      else notify.error(`Отметка не сохранена: ${e.message}. Повторите, когда появится связь.`);
     },
   });
+
+  /*
+    «Готово» у мерчандайзера — это отчёт: фото полки, чек-лист, заметки.
+    Кнопка ставила visited без ничего, и единственный переход на экран отчёта
+    лежал в AgentPlansView — на вкладке, которой у мерчандайзера нет. В бою
+    роль не производила ни одного отчёта, а KPI считал визиты сделанными.
+  */
+  const handleDone = (plan: Plan) => {
+    if (isMerchandiser) {
+      router.push({
+        pathname: "/merchandiser/visit",
+        params: { planId: String(plan.id), shopId: String(plan.shopId ?? ""), shopName: plan.shopName ?? "Магазин" },
+      });
+      return;
+    }
+    updateMutation.mutate({ planId: plan.id, status: "visited" });
+  };
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -341,7 +385,7 @@ export default function PlanScreen() {
                 colors={colors}
                 isDark={isDark}
                 index={idx}
-                onDone={() => updateMutation.mutate({ planId: plan.id, status: "visited" })}
+                onDone={() => handleDone(plan)}
                 onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
                 // Пендинг — по строке, а не по всему экрану. isPending у
                 // мутации один на список, и отметка одного визита гасила

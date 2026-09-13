@@ -5,7 +5,7 @@ import { useScrollTopOnFocus } from "../../src/hooks/useScrollTopOnFocus";
 import { useRouter } from "expo-router";
 import { reportNotQueued } from "../../src/lib/offline-guard";
 import {
-  View, Text, FlatList, TextInput,
+  View, Text, FlatList, TextInput, TouchableOpacity,
   RefreshControl, ActivityIndicator, Linking, Alert,
 } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -161,7 +161,7 @@ export default function DeliveriesScreen() {
     queryFn: () => listMyDeliveries(),
   });
 
-  const { addDeliveryAction, deliveryActions } = useOfflineStore();
+  const { addDeliveryAction, deliveryActions, retryDeliveryAction, discardDeliveryAction } = useOfflineStore();
 
   // An order queued offline stays in `myDeliveries` untouched — there's no
   // server response to update it with yet — so without this, the card kept
@@ -178,6 +178,21 @@ export default function DeliveriesScreen() {
     const byOrder = new Map<number, string>();
     for (const a of deliveryActions) {
       if (!a.synced) byOrder.set(deliveryActionOrderId(a.action), a.action.type);
+    }
+    return byOrder;
+  }, [deliveryActions]);
+  /*
+    Отметка, которую сервер ОТВЕРГ по существу («заказ уже завершён», «не
+    назначен на вас»), — не «ждёт связи». Она висела в «ЖДУТ ОТПРАВКИ» до
+    конца дня без текста ошибки и без кнопок: ни повторить, ни убрать —
+    кнопки были только на вкладке «Заказы», которой у курьера нет.
+  */
+  const failedActionByOrder = useMemo(() => {
+    const byOrder = new Map<number, { id: string; error: string; retryable: boolean }>();
+    for (const a of deliveryActions) {
+      if (!a.synced && a.status === "failed") {
+        byOrder.set(deliveryActionOrderId(a.action), { id: a.id, error: a.error ?? "Сервер отклонил отметку", retryable: a.retryable !== false });
+      }
     }
     return byOrder;
   }, [deliveryActions]);
@@ -618,12 +633,46 @@ export default function DeliveriesScreen() {
                     {QUEUED_LABEL[queuedActionByOrder.get(item.order.id) ?? ""] ?? "Отмечено"}
                   </Badge>
                 </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
-                  <Feather name="clock" size={13} color={colors.text.tertiary} />
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary, flex: 1 }}>
-                    Записано на телефоне. Уйдёт на сервер, когда появится связь.
-                  </Text>
-                </View>
+                {(() => {
+                  const failed = failedActionByOrder.get(item.order.id);
+                  if (!failed) {
+                    return (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
+                        <Feather name="clock" size={13} color={colors.text.tertiary} />
+                        <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary, flex: 1 }}>
+                          Записано на телефоне. Уйдёт на сервер, когда появится связь.
+                        </Text>
+                      </View>
+                    );
+                  }
+                  return (
+                    <View style={{ marginTop: 10 }}>
+                      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+                        <Feather name="alert-circle" size={13} color={colors.status.danger} />
+                        <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.status.danger, flex: 1 }}>
+                          Сервер отклонил: {failed.error}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+                        <TouchableOpacity
+                          onPress={() => { void retryDeliveryAction(failed.id); }}
+                          style={{ flex: 1, height: 40, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.brand.primaryDim }}
+                        >
+                          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.brand.primary }}>Повторить</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => Alert.alert("Убрать отметку?", `Заказ ${item.order.orderNumber} вернётся в список, отметку придётся поставить заново.`, [
+                            { text: "Отмена", style: "cancel" },
+                            { text: "Убрать", style: "destructive", onPress: () => { void discardDeliveryAction(failed.id); } },
+                          ])}
+                          style={{ flex: 1, height: 40, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.input }}
+                        >
+                          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.secondary }}>Убрать</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })()}
               </Card>
             );
           }
