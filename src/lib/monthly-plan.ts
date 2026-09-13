@@ -1,4 +1,5 @@
 import type { MyQuota } from "../api";
+import { tt } from "../i18n";
 
 /**
  * Pace maths for the monthly plan card.
@@ -10,9 +11,10 @@ import type { MyQuota } from "../api";
 /** Money the agent recognises: 12 400 000 → "12,4 млн". */
 export function money(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return "0";
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(".", ",")} млрд`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(".", ",")} млн`;
-  if (n >= 1_000) return `${Math.round(n / 1_000)} тыс`;
+  // Единица — отдельной строкой, а не внутри шаблона: храповик видит шаблон целиком.
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace(".", ",") + " " + tt("млрд", "mlrd");
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(".", ",") + " " + tt("млн", "mln");
+  if (n >= 1_000) return Math.round(n / 1_000) + " " + tt("тыс", "ming");
   return Math.round(n).toLocaleString("ru");
 }
 

@@ -15,6 +15,7 @@ import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { Card, Badge, Button, IconCircle } from "../../src/components/ui";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
+import { useT } from "../../src/i18n";
 
 interface ChecklistItem {
   productId: number;
@@ -86,6 +87,7 @@ const ChecklistRow = memo(function ChecklistRow({
 }) {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
+  const t = useT();
   return (
     <View style={{ backgroundColor: colors.bg.card, paddingHorizontal: Spacing.lg }}>
       <PressableScale onPress={() => onToggle(productId)} haptic="light">
@@ -94,9 +96,9 @@ const ChecklistRow = memo(function ChecklistRow({
             {present && <Feather name="check" size={14} color="#fff" />}
           </View>
           <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: present ? colors.text.primary : colors.text.secondary }}>{productName}</Text>
-          <TextInput value={price} onChangeText={v => onPrice(productId, v)} placeholder="Цена" keyboardType="numeric"
+          <TextInput value={price} onChangeText={v => onPrice(productId, v)} placeholder={t("Цена", "Narx")} keyboardType="numeric"
             style={{ width: 60, textAlign: "right", fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 6, paddingVertical: 4, marginRight: 4 }} />
-          <TextInput value={promoNote} onChangeText={v => onPromo(productId, v)} placeholder="Акция"
+          <TextInput value={promoNote} onChangeText={v => onPromo(productId, v)} placeholder={t("Акция", "Aksiya")}
             style={{ width: 70, fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 6, paddingVertical: 4 }} />
         </View>
       </PressableScale>
@@ -122,6 +124,7 @@ export default function MerchandiserVisitScreen() {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const qc = useQueryClient();
+  const t = useT();
 
   const [photos, setPhotos] = useState<string[]>([]);
   // Список товаров и правки по нему держатся раздельно: строки меняются только
@@ -143,11 +146,11 @@ export default function MerchandiserVisitScreen() {
     loadVisitDraft(planId).then(draft => {
       if (draft && (draft.photos.length > 0 || draft.checklist.some(i => i.present) || draft.competitorNotes)) {
         Alert.alert(
-          "Продолжить черновик?",
-          "Найден незавершённый отчёт по этому визиту — сеть, видимо, прервалась при отправке.",
+          t("Продолжить черновик?", "Qoralamani davom ettirasizmi?"),
+          t("Найден незавершённый отчёт по этому визиту — сеть, видимо, прервалась при отправке.", "Bu tashrif bo'yicha tugallanmagan hisobot topildi — yuborishda aloqa uzilgan ko'rinadi."),
           [
-            { text: "Начать заново", style: "cancel", onPress: () => { setRows(fresh); clearVisitDraft(planId); } },
-            { text: "Продолжить", onPress: () => {
+            { text: t("Начать заново", "Qaytadan boshlash"), style: "cancel", onPress: () => { setRows(fresh); clearVisitDraft(planId); } },
+            { text: t("Продолжить", "Davom etish"), onPress: () => {
               setPhotos(draft.photos);
               // Merge on productId rather than trusting the two lists to line
               // up. Comparing lengths meant that the office adding a single
@@ -212,16 +215,16 @@ export default function MerchandiserVisitScreen() {
       await clearVisitDraft(planId);
       qc.invalidateQueries({ queryKey: ["plans"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Отчёт отправлен!");
+      notify.success(t("Отчёт отправлен!", "Hisobot yuborildi!"));
       router.back();
     },
-    onError: (e: Error) => notify.error(e.message + " — черновик сохранён, можно повторить попытку."),
+    onError: (e: Error) => notify.error(e.message + t(" — черновик сохранён, можно повторить попытку.", " — qoralama saqlandi, qayta urinish mumkin.")),
   });
 
   const pickPhoto = async (useCamera: boolean) => {
     const permMethod = useCamera ? ImagePicker.requestCameraPermissionsAsync : ImagePicker.requestMediaLibraryPermissionsAsync;
     const perm = await permMethod();
-    if (!perm.granted) { notify.error("Нет доступа"); return; }
+    if (!perm.granted) { notify.error(t("Нет доступа", "Ruxsat yo'q")); return; }
     const launchMethod = useCamera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
     // base64 у камеры больше не запрашивается: он держал бы в памяти лишнюю
     // копию полноразмерного кадра до того момента, как мы его уменьшим.
@@ -235,7 +238,7 @@ export default function MerchandiserVisitScreen() {
         const { dataUrl } = await preparePhoto(result.assets[0].uri);
         const url = await uploadFile(dataUrl, "visits");
         setPhotos(prev => [...prev, url]);
-      } catch (e) { notify.error(e instanceof Error ? e.message : "Ошибка загрузки фото"); }
+      } catch (e) { notify.error(e instanceof Error ? e.message : t("Ошибка загрузки фото", "Rasmni yuklab bo'lmadi")); }
     }
   };
 
@@ -264,7 +267,7 @@ export default function MerchandiserVisitScreen() {
         </PressableScale>
         <View style={{ flex: 1, marginLeft: 8 }}>
           <CardDots />
-          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>Отчёт о визите</Text>
+          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{t("Отчёт о визите", "Tashrif hisoboti")}</Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }}>{shopName}</Text>
         </View>
       </View>
@@ -304,7 +307,7 @@ export default function MerchandiserVisitScreen() {
           <Card style={{ padding: Spacing.lg, marginBottom: Spacing.md }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <IconCircle name="camera" size={14} variant="brand" />
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>Фотографии</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>{t("Фотографии", "Rasmlar")}</Text>
             </View>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {photos.map((photo, i) => (
@@ -317,7 +320,7 @@ export default function MerchandiserVisitScreen() {
                   </PressableScale>
                 </View>
               ))}
-              <PressableScale onPress={() => Alert.alert("Добавить фото", "", [{ text: "Камера", onPress: () => pickPhoto(true) }, { text: "Галерея", onPress: () => pickPhoto(false) }, { text: "Отмена", style: "cancel" }])} haptic="light">
+              <PressableScale onPress={() => Alert.alert(t("Добавить фото", "Rasm qo'shish"), "", [{ text: t("Камера", "Kamera"), onPress: () => pickPhoto(true) }, { text: t("Галерея", "Galereya"), onPress: () => pickPhoto(false) }, { text: t("Отмена", "Bekor"), style: "cancel" }])} haptic="light">
                 <View style={{ width: 80, height: 80, borderRadius: Radii.md, borderWidth: 2, borderStyle: "dashed", borderColor: colors.border.strong, alignItems: "center", justifyContent: "center" }}>
                   <Feather name="camera" size={22} color={colors.text.muted} />
                 </View>
@@ -332,7 +335,7 @@ export default function MerchandiserVisitScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <IconCircle name="check-square" size={14} variant="brand" />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>Чек-лист</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>{t("Чек-лист", "Ro'yxat")}</Text>
               </View>
               <Badge variant={completionPct === 100 ? "success" : "info"}>{presentCount}/{totalItems} ({completionPct}%)</Badge>
             </View>
@@ -354,9 +357,9 @@ export default function MerchandiserVisitScreen() {
           <Card style={{ padding: Spacing.lg, marginBottom: Spacing.md }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <IconCircle name="message-square" size={14} variant="brand" />
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>Заметки о конкурентах</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>{t("Заметки о конкурентах", "Raqobatchilar haqida izoh")}</Text>
             </View>
-            <TextInput value={competitorNotes} onChangeText={setCompetitorNotes} multiline numberOfLines={4} placeholder="Что видно на полках конкурентов..."
+            <TextInput value={competitorNotes} onChangeText={setCompetitorNotes} multiline numberOfLines={4} placeholder={t("Что видно на полках конкурентов...", "Raqobatchilar javonida nima bor...")}
               style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, paddingHorizontal: 12, paddingVertical: 10, fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.primary, textAlignVertical: "top", minHeight: 100 }} />
           </Card>
         </FadeInItem>
@@ -369,9 +372,9 @@ export default function MerchandiserVisitScreen() {
         <Button variant="primary" size="lg" fullWidth icon="send" loading={submitReport.isPending}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            Alert.alert("Завершить визит?", "Отчёт будет отправлен", [{ text: "Отмена", style: "cancel" }, { text: "Отправить", onPress: () => submitReport.mutate() }]);
+            Alert.alert(t("Завершить визит?", "Tashrifni yakunlaysizmi?"), t("Отчёт будет отправлен", "Hisobot yuboriladi"), [{ text: t("Отмена", "Bekor"), style: "cancel" }, { text: t("Отправить", "Yuborish"), onPress: () => submitReport.mutate() }]);
           }}>
-          Завершить визит
+          {t("Завершить визит", "Tashrifni yakunlash")}
         </Button>
       </View>
     </View>

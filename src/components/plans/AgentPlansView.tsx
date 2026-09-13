@@ -27,6 +27,7 @@ import { preparePhoto } from "../../lib/prepare-photo";
 import { sendVisitPing } from "../../lib/visit-ping";
 import { useVisitQueue } from "../../store/visit-queue";
 import { isRetryableError } from "../../store/offline";
+import { useT, useLang } from "../../i18n";
 
 export function AgentPlansView() {
   const insets = useSafeAreaInsets();
@@ -36,6 +37,8 @@ export function AgentPlansView() {
   const router = useRouter();
   const { user } = useAuthStore();
   const isMerchandiser = user?.role === "merchandiser";
+  const t = useT();
+  const lang = useLang();
 
   /*
     Опрос идёт, только пока экран открыт.
@@ -89,7 +92,7 @@ export function AgentPlansView() {
       updatePlanStatus(planId, status),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["agentPlans"] });
-      notify.success("Статус обновлён");
+      notify.success(t("Статус обновлён", "Holat yangilandi"));
       /*
         Отмеченный визит сам ставит точку на карту слежения.
 
@@ -115,7 +118,7 @@ export function AgentPlansView() {
     onError: async (e: Error, variables) => {
       if (!isRetryableError(e)) { notify.error(errorText(e)); return; }
       const ok = await queueVisit.add({ planId: variables.planId, status: variables.status });
-      if (ok) notify.info("Нет связи — отметка сохранена и уйдёт сама");
+      if (ok) notify.info(t("Нет связи — отметка сохранена и уйдёт сама", "Aloqa yo'q — belgi saqlandi, o'zi yuboriladi"));
       else notify.error(errorText(e));
     },
   });
@@ -127,7 +130,7 @@ export function AgentPlansView() {
       saveVisitPhoto(planId, photoUrl),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agentPlans"] });
-      notify.success("Фото отправлено, визит отмечен");
+      notify.success(t("Фото отправлено, визит отмечен", "Rasm yuborildi, tashrif belgilandi"));
       // Точка уходит следом за отметкой и не задерживает её: см. sendVisitPing.
       void sendVisitPing();
     },
@@ -154,10 +157,10 @@ export function AgentPlansView() {
       const result = await getOptimizedRoute(coords.latitude, coords.longitude);
       if (result.plans.length > 0) {
         setOptimizedPlanIds(result.plans.map(p => p.id));
-        notify.success(`Маршрут оптимизирован (${result.totalStops} точек, ${result.totalDistance.toFixed(1)} км)`);
+        notify.success(t(`Маршрут оптимизирован (${result.totalStops} точек, ${result.totalDistance.toFixed(1)} км)`, `Yo'nalish tuzildi (${result.totalStops} nuqta, ${result.totalDistance.toFixed(1)} km)`));
       }
     } catch {
-      notify.error("Не удалось оптимизировать маршрут");
+      notify.error(t("Не удалось оптимизировать маршрут", "Yo'nalishni tuzib bo'lmadi"));
     } finally {
       setOptimizing(false);
     }
@@ -166,7 +169,7 @@ export function AgentPlansView() {
   const handleTakePhoto = async (planId: number) => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Нет доступа", "Разрешите доступ к камере в настройках");
+      Alert.alert(t("Нет доступа", "Ruxsat yo'q"), t("Разрешите доступ к камере в настройках", "Sozlamalarda kameraga ruxsat bering"));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -189,9 +192,9 @@ export function AgentPlansView() {
         // Без связи снимок ждёт в очереди ссылкой на файл камеры и грузится
         // при первой связи вместе с отметкой.
         if (isRetryableError(e) && await queueVisit.add({ planId, status: "visited", photoUri: uri })) {
-          notify.info("Нет связи — фото и отметка сохранены и уйдут сами");
+          notify.info(t("Нет связи — фото и отметка сохранены и уйдут сами", "Aloqa yo'q — rasm va belgi saqlandi, o'zi yuboriladi"));
         } else {
-          notify.error("Ошибка загрузки фото");
+          notify.error(t("Ошибка загрузки фото", "Rasmni yuklab bo'lmadi"));
         }
       }
     }
@@ -205,10 +208,10 @@ export function AgentPlansView() {
       });
       return;
     }
-    Alert.alert("Подтвердить визит", `Отметить "${planName}" как посещённый?`, [
-      { text: "Отмена", style: "cancel" },
-      { text: "Без фото", onPress: () => updateMutation.mutate({ planId, status: "visited" }) },
-      { text: "С фото", onPress: () => handleTakePhoto(planId) },
+    Alert.alert(t("Подтвердить визит", "Tashrifni tasdiqlash"), t(`Отметить "${planName}" как посещённый?`, `"${planName}" tashrif qilindi deb belgilaysizmi?`), [
+      { text: t("Отмена", "Bekor"), style: "cancel" },
+      { text: t("Без фото", "Rasmsiz"), onPress: () => updateMutation.mutate({ planId, status: "visited" }) },
+      { text: t("С фото", "Rasm bilan"), onPress: () => handleTakePhoto(planId) },
     ]);
   };
 
@@ -218,13 +221,13 @@ export function AgentPlansView() {
 
   const today = new Date();
   const greeting =
-    today.getHours() < 12 ? "Доброе утро" : today.getHours() < 18 ? "Добрый день" : "Добрый вечер";
+    today.getHours() < 12 ? t("Доброе утро", "Xayrli ertalab") : today.getHours() < 18 ? t("Добрый день", "Xayrli kun") : t("Добрый вечер", "Xayrli kech");
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       <ScreenHeader
-        title="Мои планы"
-        subtitle={`${greeting} — ${today.toLocaleDateString("ru", { day: "numeric", month: "long" })}`}
+        title={t("Мои планы", "Mening rejalarim")}
+        subtitle={`${greeting} — ${today.toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru", { day: "numeric", month: "long" })}`}
       />
 
       {total > 0 && (
@@ -294,10 +297,10 @@ export function AgentPlansView() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
-                {optimizing ? "Оптимизация..." : optimizedPlanIds ? "Маршрут оптимизирован" : "Оптимизировать маршрут"}
+                {optimizing ? t("Оптимизация...", "Tuzilmoqda...") : optimizedPlanIds ? t("Маршрут оптимизирован", "Yo'nalish tuzildi") : t("Оптимизировать маршрут", "Yo'nalishni tuzish")}
               </Text>
               <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
-                {optimizedPlanIds ? `${optimizedPlanIds.length} точек по порядку` : "Сортировка по близости"}
+                {optimizedPlanIds ? t(`${optimizedPlanIds.length} точек по порядку`, `${optimizedPlanIds.length} nuqta tartib bilan`) : t("Сортировка по близости", "Yaqinlik bo'yicha tartib")}
               </Text>
             </View>
             {!optimizing && <Feather name="check-circle" size={16} color={colors.status.success} />}
@@ -344,17 +347,17 @@ export function AgentPlansView() {
             // нет. Отказ теперь называет себя отказом и даёт чем повторить.
             isError ? (
               <ErrorState
-                what="планы"
+                what={t("планы", "rejalarni")}
                 error={error}
-                description="Это сбой связи, а не пустой день. Проверьте подключение и попробуйте снова."
+                description={t("Это сбой связи, а не пустой день. Проверьте подключение и попробуйте снова.", "Bu aloqa xatosi, bo'sh kun emas. Ulanishni tekshirib, qayta urinib ko'ring.")}
                 onRetry={() => { void refetch(); }}
                 retrying={refreshing}
               />
             ) : (
               <EmptyState
                 icon="calendar"
-                title="Планов на сегодня нет"
-                description="Супервайзер ещё не назначил маршрут"
+                title={t("Планов на сегодня нет", "Bugunga reja yo'q")}
+                description={t("Супервайзер ещё не назначил маршрут", "Supervisor hali yo'nalish bermagan")}
               />
             )
           }
@@ -365,7 +368,7 @@ export function AgentPlansView() {
                 colors={colors}
                 isDark={isDark}
                 onPress={() => plan.shopId && router.push({ pathname: "/shop/[id]", params: { id: String(plan.shopId) } })}
-                onVisit={() => handleVisitDone(plan.id, plan.shopName ?? "Магазин", plan.shopId)}
+                onVisit={() => handleVisitDone(plan.id, plan.shopName ?? t("Магазин", "Do'kon"), plan.shopId)}
                 onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
                 // Пендинг — по строке, а не по всему списку. Отметка одного
                 // визита гасила кнопки во всех карточках сразу: агент на

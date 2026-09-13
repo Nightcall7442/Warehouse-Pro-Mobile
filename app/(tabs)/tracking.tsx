@@ -19,6 +19,7 @@ import { Card, ScreenHeader, Badge } from "../../src/components/ui";
 import { ShimmerSkeleton, PressableScale, FadeInItem } from "../../src/components/Animated";
 import YandexMapView, { centerOnAgent, fitAllMarkers } from "../../src/components/YandexMapView";
 import type { WebView } from "react-native-webview";
+import { tt, useT, useLang } from "../../src/i18n";
 
 const ONLINE_WINDOW = 600;
 
@@ -31,13 +32,13 @@ function isOnline(createdAt: string | undefined): boolean {
   return (Date.now() - new Date(createdAt).getTime()) / 1000 < ONLINE_WINDOW;
 }
 
-function timeAgo(createdAt: string | undefined): string {
-  if (!createdAt) return "Нет данных";
+function timeAgo(createdAt: string | undefined, lang: "ru" | "uz"): string {
+  if (!createdAt) return tt("Нет данных", "Ma'lumot yo'q");
   const s = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
-  if (s < 60) return "Только что";
-  if (s < 3600) return `${Math.floor(s / 60)} мин назад`;
-  if (s < 86400) return `${Math.floor(s / 3600)} ч назад`;
-  return new Date(createdAt).toLocaleDateString("ru");
+  if (s < 60) return tt("Только что", "Hozirgina");
+  if (s < 3600) return tt(`${Math.floor(s / 60)} мин назад`, `${Math.floor(s / 60)} daqiqa oldin`);
+  if (s < 86400) return tt(`${Math.floor(s / 3600)} ч назад`, `${Math.floor(s / 3600)} soat oldin`);
+  return new Date(createdAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru");
 }
 
 function batteryColor(level: number): string {
@@ -54,6 +55,8 @@ export default function TrackingScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const t = useT();
+  const lang = useLang();
 
   /*
     Опрос идёт, только пока экран открыт.
@@ -109,12 +112,12 @@ export default function TrackingScreen() {
           // прислал имя, на булавке стояла латинская «A» (берётся первая буква),
           // а по нажатию открывалось «Agent #12» — при том, что тот же человек
           // строкой ниже подписан «Агент #12».
-          label: l.agentName ?? `Агент #${l.agentId}`,
+          label: l.agentName ?? t(`Агент #${l.agentId}`, `Agent #${l.agentId}`),
           color: isOnline(l.createdAt) ? KpiColors.teal : colors.text.muted,
           online: isOnline(l.createdAt),
           batteryLevel: l.batteryLevel ?? null,
         })),
-    [locations, colors.text.muted]
+    [locations, colors.text.muted, t]
   );
 
   const center = useMemo(() => {
@@ -146,12 +149,12 @@ export default function TrackingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       <ScreenHeader
-        title="Трекинг"
+        title={t("Трекинг", "Kuzatuv")}
         right={
           <PressableScale onPress={fitAll} haptic="light">
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.bg.elevated, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radii.full, ...soft(isDark).raised}}>
               <Feather name="maximize-2" size={13} color={colors.text.secondary} />
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>Все</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>{t("Все", "Hammasi")}</Text>
             </View>
           </PressableScale>
         }
@@ -163,9 +166,9 @@ export default function TrackingScreen() {
           {/* «ОНЛАЙН» и «НЕ В СЕТИ» — одно и то же понятие, написанное на двух
               языках, и стояли они рядом как пара. Оборот один на весь экран. */}
           {[
-            { label: "НА СВЯЗИ", value: onlineCount, color: colors.status.success },
-            { label: "НЕ НА СВЯЗИ", value: offlineCount, color: colors.status.warning },
-            { label: "ВСЕГО", value: locations.length, color: colors.accent.primary },
+            { label: t("НА СВЯЗИ", "ALOQADA"), value: onlineCount, color: colors.status.success },
+            { label: t("НЕ НА СВЯЗИ", "ALOQADA EMAS"), value: offlineCount, color: colors.status.warning },
+            { label: t("ВСЕГО", "JAMI"), value: locations.length, color: colors.accent.primary },
           ].map(k => (
             <Card key={k.label} style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
               <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xl, color: k.color, fontVariant: ["tabular-nums"] }}>{k.value}</Text>
@@ -181,10 +184,10 @@ export default function TrackingScreen() {
           {isError ? (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
               <Feather name="wifi-off" size={28} color={colors.text.muted} />
-              <Text style={{ fontFamily: Typography.fontMedium, color: colors.text.secondary }}>Ошибка загрузки</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, color: colors.text.secondary }}>{t("Ошибка загрузки", "Yuklab bo'lmadi")}</Text>
               <PressableScale onPress={() => refetch()} haptic="light">
                 <View style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.accent.primary, borderRadius: Radii.md }}>
-                  <Text style={{ color: "#fff", fontFamily: Typography.fontMedium }}>Повторить</Text>
+                  <Text style={{ color: "#fff", fontFamily: Typography.fontMedium }}>{t("Повторить", "Qayta urinish")}</Text>
                 </View>
               </PressableScale>
             </View>
@@ -216,16 +219,16 @@ export default function TrackingScreen() {
               <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.xs }}>{(selectedLoc.agentName ?? "A")[0].toUpperCase()}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>{selectedLoc.agentName ?? `Агент #${selectedLoc.agentId}`}</Text>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>{selectedLoc.agentName ?? t(`Агент #${selectedLoc.agentId}`, `Agent #${selectedLoc.agentId}`)}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
                 <Badge variant={isOnline(selectedLoc.createdAt) ? "success" : "warning"}>
-                  {isOnline(selectedLoc.createdAt) ? "На связи" : timeAgo(selectedLoc.createdAt)}
+                  {isOnline(selectedLoc.createdAt) ? t("На связи", "Aloqada") : timeAgo(selectedLoc.createdAt, lang)}
                 </Badge>
                 {selectedLoc.batteryLevel != null && (
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: batteryColor(selectedLoc.batteryLevel) }}>🔋 {selectedLoc.batteryLevel}%</Text>
                 )}
                 {selectedLoc.accuracy && (
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>±{Math.round(Number(selectedLoc.accuracy))}м</Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>±{Math.round(Number(selectedLoc.accuracy))}{t("м", "m")}</Text>
                 )}
               </View>
             </View>
@@ -255,7 +258,7 @@ export default function TrackingScreen() {
           !isLoading ? (
             <View style={{ alignItems: "center", paddingTop: 40, gap: 8 }}>
               <Feather name="map-pin" size={28} color={colors.text.muted} />
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.secondary }}>Нет данных о локации</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.secondary }}>{t("Нет данных о локации", "Joylashuv ma'lumoti yo'q")}</Text>
             </View>
           ) : null
         }
@@ -278,10 +281,10 @@ export default function TrackingScreen() {
                   <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.sm }}>{(loc.agentName ?? "A")[0].toUpperCase()}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{loc.agentName ?? `Агент #${loc.agentId}`}</Text>
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{loc.agentName ?? t(`Агент #${loc.agentId}`, `Agent #${loc.agentId}`)}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 }}>
                     <Badge variant={online ? "success" : "warning"}>
-                      {online ? "На связи" : timeAgo(loc.createdAt)}
+                      {online ? t("На связи", "Aloqada") : timeAgo(loc.createdAt, lang)}
                     </Badge>
                     {loc.batteryLevel != null && (
                       <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: batteryColor(loc.batteryLevel) }}>🔋 {loc.batteryLevel}%</Text>

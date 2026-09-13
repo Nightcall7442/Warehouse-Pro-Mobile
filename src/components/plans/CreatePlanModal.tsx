@@ -13,6 +13,7 @@ import { Typography, Spacing, Radii, soft } from "../../theme";
 import { Button } from "../ui";
 import { ShimmerSkeleton } from "../Animated";
 import { BottomSheet, SelectRow, FieldLabel } from "./PlanHelpers";
+import { useT } from "../../i18n";
 
 export function CreatePlanModal({
   visible,
@@ -30,6 +31,7 @@ export function CreatePlanModal({
   const [agentId, setAgentId] = useState<number | null>(null);
   const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
+  const t = useT();
 
   const { data: agents, isLoading: agentsLoading } = useQuery({
     queryKey: ["agentsList"],
@@ -46,18 +48,18 @@ export function CreatePlanModal({
     if (!allShops) return [];
     const map = new Map<string, ShopSummary[]>();
     for (const shop of allShops) {
-      const territory = shop.district || shop.city || "Без территории";
+      const territory = shop.district || shop.city || t("Без территории", "Territoriyasiz");
       if (!map.has(territory)) map.set(territory, []);
       map.get(territory)!.push(shop);
     }
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b, "ru"))
       .map(([territory, shops]) => ({ territory, shops, count: shops.length }));
-  }, [allShops]);
+  }, [allShops, t]);
 
   const selectedShops = useMemo(() => {
     if (!selectedTerritory) return [];
-    return territories.find(t => t.territory === selectedTerritory)?.shops ?? [];
+    return territories.find(terr => terr.territory === selectedTerritory)?.shops ?? [];
   }, [territories, selectedTerritory]);
 
   const mutation = useMutation({
@@ -77,14 +79,14 @@ export function CreatePlanModal({
       // не был назначен ранее.
       notify.success(
         result && result.skipped > 0
-          ? `Создано ${result.created}, уже были: ${result.skipped}`
-          : `Создано ${result?.created ?? 0} планов`,
+          ? t(`Создано ${result.created}, уже были: ${result.skipped}`, `Yaratildi: ${result.created}, avval bor edi: ${result.skipped}`)
+          : t(`Создано ${result?.created ?? 0} планов`, `${result?.created ?? 0} ta reja yaratildi`),
       );
       const createdAgent = agentId ?? undefined;
       reset();
       onCreated(createdAgent);
     },
-    onError: (e: Error) => notify.error(e.message ?? "Не удалось создать планы"),
+    onError: (e: Error) => notify.error(e.message ?? t("Не удалось создать планы", "Rejalarni yaratib bo'lmadi")),
   });
 
   function reset() {
@@ -95,7 +97,7 @@ export function CreatePlanModal({
   }
 
   return (
-    <BottomSheet visible={visible} onClose={reset} title="Новый план визита" colors={colors}>
+    <BottomSheet visible={visible} onClose={reset} title={t("Новый план визита", "Yangi tashrif rejasi")} colors={colors}>
       {/* Под полем примечания стоит «Создать план»: без этого первое
           касание кнопки уходило на закрытие клавиатуры. */}
       <ScrollView
@@ -103,7 +105,7 @@ export function CreatePlanModal({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <FieldLabel colors={colors}>Агент *</FieldLabel>
+        <FieldLabel colors={colors}>{t("Агент *", "Agent *")}</FieldLabel>
         {agentsLoading ? (
           <View style={{ gap: Spacing.sm }}>
             {[1, 2].map(i => (
@@ -118,7 +120,7 @@ export function CreatePlanModal({
               color: colors.text.tertiary,
             }}
           >
-            Нет активных агентов
+            {t("Нет активных агентов", "Faol agentlar yo'q")}
           </Text>
         ) : (
           agents!.map(a => (
@@ -134,7 +136,7 @@ export function CreatePlanModal({
           ))
         )}
 
-        <FieldLabel colors={colors}>Территория *</FieldLabel>
+        <FieldLabel colors={colors}>{t("Территория *", "Territoriya *")}</FieldLabel>
         {shopsLoading ? (
           <View style={{ gap: Spacing.sm }}>
             {[1, 2, 3].map(i => (
@@ -149,19 +151,19 @@ export function CreatePlanModal({
               color: colors.text.tertiary,
             }}
           >
-            Нет магазинов
+            {t("Нет магазинов", "Do'konlar yo'q")}
           </Text>
         ) : (
-          territories.map(t => (
+          territories.map(terr => (
             <SelectRow
-              key={t.territory}
-              label={t.territory}
-              sublabel={`${t.count} магазинов`}
+              key={terr.territory}
+              label={terr.territory}
+              sublabel={t(`${terr.count} магазинов`, `${terr.count} ta do'kon`)}
               icon="map-pin"
-              selected={selectedTerritory === t.territory}
+              selected={selectedTerritory === terr.territory}
               colors={colors}
               isDark={isDark}
-              onPress={() => setSelectedTerritory(t.territory)}
+              onPress={() => setSelectedTerritory(terr.territory)}
             />
           ))
         )}
@@ -183,7 +185,7 @@ export function CreatePlanModal({
                 marginBottom: 4,
               }}
             >
-              БУДУТ НАЗНАЧЕНЫ
+              {t("БУДУТ НАЗНАЧЕНЫ", "TAYINLANADI")}
             </Text>
             {selectedShops.slice(0, 5).map(s => (
               <Text
@@ -206,17 +208,17 @@ export function CreatePlanModal({
                   marginTop: 2,
                 }}
               >
-                ...и ещё {selectedShops.length - 5}
+                {t(`...и ещё ${selectedShops.length - 5}`, `...va yana ${selectedShops.length - 5}`)}
               </Text>
             )}
           </View>
         )}
 
-        <FieldLabel colors={colors}>Примечания</FieldLabel>
+        <FieldLabel colors={colors}>{t("Примечания", "Izohlar")}</FieldLabel>
         <TextInput
           value={notes}
           onChangeText={setNotes}
-          placeholder="Для всех магазинов территории…"
+          placeholder={t("Для всех магазинов территории…", "Territoriyadagi barcha do'konlar uchun…")}
           placeholderTextColor={colors.text.muted}
           multiline
           style={{
@@ -240,13 +242,13 @@ export function CreatePlanModal({
             disabled={!agentId || !selectedTerritory}
             onPress={() => {
               if (!agentId || !selectedTerritory) {
-                notify.error("Выберите агента и территорию");
+                notify.error(t("Выберите агента и территорию", "Agent va territoriya tanlang"));
                 return;
               }
               mutation.mutate();
             }}
           >
-            {`Создать план (${selectedShops.length})`}
+            {t(`Создать план (${selectedShops.length})`, `Reja yaratish (${selectedShops.length})`)}
           </Button>
         </View>
       </ScrollView>
