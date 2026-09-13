@@ -57,7 +57,7 @@ export function ErrorState({
     <View>
       <EmptyState
         icon="alert-circle"
-        title={t(`Не удалось загрузить ${what}`, `${whatUz} yuklanmadi`)}
+        title={t(`Не удалось загрузить ${what}`, `${whatUz} yuklab bo'lmadi`)}
         description={
           refusal ??
           description ??
