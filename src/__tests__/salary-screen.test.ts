@@ -90,8 +90,9 @@ describe("сумма разложена, а не показана одним ч�
       недоплатили» разрешать нечем. Курьерские строки — школьным умножением:
       «12 × 15 000», а не «180 000».
     */
-    expect(SALARY).toContain('label="Оклад"');
-    expect(SALARY).toContain('label="Обед и дорожные"');
+    // Подписи идут парой t("ru", "uz") — страж ищет русское слово в паре.
+    expect(SALARY).toContain('label={t("Оклад"');
+    expect(SALARY).toContain('label={t("Обед и дорожные"');
     expect(SALARY).toContain("salary.workDays");
     must(SALARY.includes("`${salary.deliveredCount} × ${formatMoney(salary.deliveryRate)}`"),
       "оплата за доставки показана без расчёта");
@@ -115,8 +116,8 @@ describe("сумма разложена, а не показана одним ч�
     must(at > 0, "разделения на курьера и агента нет");
     const courierBranch = SALARY.slice(at, SALARY.indexOf(") : (", at));
     const agentBranch = SALARY.slice(SALARY.indexOf(") : (", at), SALARY.indexOf("</>\n              )}", at));
-    must(!courierBranch.includes('label="Комиссия"'), "курьеру показали комиссию");
-    must(!agentBranch.includes('label="Обед и дорожные"'), "агенту показали обед и дорожные");
+    must(!courierBranch.includes('label={t("Комиссия"'), "курьеру показали комиссию");
+    must(!agentBranch.includes('label={t("Обед и дорожные"'), "агенту показали обед и дорожные");
   });
 });
 

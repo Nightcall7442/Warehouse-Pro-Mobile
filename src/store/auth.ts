@@ -140,7 +140,7 @@ export async function stopTrackingOnSignOut(): Promise<void> {
     const { stopBackgroundTracking } = require("../backgroundLocation") as typeof import("../backgroundLocation");
     await stopBackgroundTracking();
   } catch (e) {
-    if (__DEV__) console.warn("Не удалось остановить фоновый трекинг при выходе:", e);
+    if (__DEV__) console.warn("Не удалось остановить фоновый трекинг при выходе:", e); // i18n-ignore: журнал разработчика, не экран
   }
   // Порядок важен: сначала остановить задачу, потом чистить буфер — иначе
   // очередной фоновый вызов допишет точку уже после очистки.

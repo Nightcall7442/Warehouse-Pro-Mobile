@@ -1,5 +1,6 @@
 import { Alert } from "react-native";
 import * as Haptics from "expo-haptics";
+import { tt } from "../i18n";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Сообщить, что запись в очередь НЕ легла на диск.
@@ -24,16 +25,14 @@ import * as Haptics from "expo-haptics";
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * @param what Что именно не сохранилось, в именительном падеже:
- *             «Отметка о доставке», «Приём наличных».
+ * @param what Что именно не сохранилось, в именительном падеже и уже на языке
+ *             телефона: t("Отметка о доставке", "Yetkazish belgisi").
  */
 export function reportNotQueued(what: string) {
   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   Alert.alert(
-    `${what} НЕ сохранена`,
-    "На телефоне нет места, и запись не легла на диск — она держится только " +
-      "в памяти и пропадёт, когда приложение выгрузится.\n\n" +
-      "Освободите место и повторите действие. Если товар уже отдан или деньги " +
-      "приняты — сообщите в офис прямо сейчас, чтобы отметку поставили вручную.",
+    tt(`${what} НЕ сохранена`, `${what} SAQLANMADI`),
+    tt("На телефоне нет места, и запись не легла на диск — она держится только в памяти и пропадёт, когда приложение выгрузится.\n\nОсвободите место и повторите действие. Если товар уже отдан или деньги приняты — сообщите в офис прямо сейчас, чтобы отметку поставили вручную.",
+      "Telefonda joy yo'q, yozuv diskka tushmadi — u faqat xotirada turibdi va ilova yopilganda yo'qoladi.\n\nJoy bo'shatib, amalni qaytaring. Agar tovar berilgan yoki pul olingan bo'lsa — hoziroq ofisga xabar bering, belgini qo'lda qo'yishsin."),
   );
 }

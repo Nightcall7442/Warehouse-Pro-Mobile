@@ -20,6 +20,9 @@ import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { notify } from "../../src/store/toast";
 import { useBrandingStore } from "../../src/store/branding";
 import { useOfflineStore, isRetryableError } from "../../src/store/offline";
+import { useT } from "../../src/i18n";
+import { unitShort } from "../../src/lib/units";
+import { paymentMethodLabel } from "../../src/lib/order-status";
 
 type DeliveryResult = "paid" | "partial_paid" | "returned" | "partial_returned";
 
@@ -27,30 +30,48 @@ type DeliveryResult = "paid" | "partial_paid" | "returned" | "partial_returned";
 // separate from the 3 standard status colors — matches the same orange used in OrderStyles.
 const PARTIAL_RETURN_COLOR = "#f09050";
 
-function getResultOptions(colors: ReturnType<typeof useThemeColors>): Array<{ value: DeliveryResult; icon: string; label: string; color: string }> {
+type T = (ru: string, uz: string) => string;
+
+/** Слово исхода — одно и на кнопке выбора, и в тосте после отправки. */
+function resultLabel(t: T, result: string): string {
+  switch (result) {
+    case "paid": return t("100% оплачен", "100% to'langan");
+    case "partial_paid": return t("Частично оплачен", "Qisman to'langan");
+    case "returned": return t("Возврат", "Qaytarish");
+    case "partial_returned": return t("Частичный возврат", "Qisman qaytarish");
+    default: return result;
+  }
+}
+
+function getResultOptions(t: T, colors: ReturnType<typeof useThemeColors>): Array<{ value: DeliveryResult; icon: string; label: string; color: string }> {
   return [
-    { value: "paid", icon: "check-circle", label: "100% оплачен", color: colors.status.success },
-    { value: "partial_paid", icon: "clock", label: "Частично оплачен", color: colors.status.warning },
-    { value: "returned", icon: "rotate-ccw", label: "Возврат", color: colors.status.danger },
-    { value: "partial_returned", icon: "package", label: "Частичный возврат", color: PARTIAL_RETURN_COLOR },
+    { value: "paid", icon: "check-circle", label: resultLabel(t, "paid"), color: colors.status.success },
+    { value: "partial_paid", icon: "clock", label: resultLabel(t, "partial_paid"), color: colors.status.warning },
+    { value: "returned", icon: "rotate-ccw", label: resultLabel(t, "returned"), color: colors.status.danger },
+    { value: "partial_returned", icon: "package", label: resultLabel(t, "partial_returned"), color: PARTIAL_RETURN_COLOR },
   ];
 }
 
-const RETURN_REASONS = [
-  { value: "changed_mind", label: "Передумал" },
-  { value: "no_space", label: "Не влезло в машину" },
-  { value: "damaged", label: "Товар испорчен" },
-  { value: "wrong_item", label: "Не тот товар" },
-  { value: "wrong_client", label: "Клиент не тот" },
-  { value: "other", label: "Свой вариант" },
-];
+/* Коды уходят на сервер; подпись — на языке телефона. */
+function getReturnReasons(t: T) {
+  return [
+    { value: "changed_mind", label: t("Передумал", "Fikridan qaytdi") },
+    { value: "no_space", label: t("Не влезло в машину", "Mashinaga sig'madi") },
+    { value: "damaged", label: t("Товар испорчен", "Tovar buzilgan") },
+    { value: "wrong_item", label: t("Не тот товар", "Boshqa tovar") },
+    { value: "wrong_client", label: t("Клиент не тот", "Boshqa mijoz") },
+    { value: "other", label: t("Свой вариант", "Boshqa sabab") },
+  ];
+}
 
 export default function DeliveryScreen() {
   const { isDark } = useThemeStore();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useThemeColors();
-  const RESULT_OPTIONS = useMemo(() => getResultOptions(colors), [colors]);
+  const t = useT();
+  const RESULT_OPTIONS = useMemo(() => getResultOptions(t, colors), [t, colors]);
+  const RETURN_REASONS = useMemo(() => getReturnReasons(t), [t]);
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { branding } = useBrandingStore();
@@ -114,30 +135,24 @@ export default function DeliveryScreen() {
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myDeliveries"] });
-      const labels: Record<string, string> = {
-        paid: "100% оплачен",
-        partial_paid: "Частично оплачен",
-        returned: "Возврат",
-        partial_returned: "Частичный возврат",
-      };
       if ("offline" in data && data.offline) {
         // Курьер к этому мигу уже отдал товар и, возможно, взял деньги. Если
         // запись не легла на диск — сказать об этом и НЕ закрывать экран:
         // закрытый экран курьер прочитает как «всё в порядке».
         if (!data.queued) {
-          reportNotQueued("Отметка о доставке");
+          reportNotQueued(t("Отметка о доставке", "Yetkazish belgisi"));
           return;
         }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        notify.info("Нет подключения. Доставка сохранена офлайн и отправится автоматически.");
+        notify.info(t("Нет подключения. Доставка сохранена офлайн и отправится автоматически.", "Aloqa yo'q. Yetkazish oflayn saqlandi va o'zi yuboriladi."));
       } else {
-        notify.success(`Доставка: ${labels[data.result] ?? data.result}`);
+        notify.success(t(`Доставка: ${resultLabel(t, data.result)}`, `Yetkazish: ${resultLabel(t, data.result)}`));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       router.back();
     },
     onError: (e: Error) => {
-      notify.error(e.message || "Ошибка");
+      notify.error(e.message || t("Ошибка", "Xatolik"));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     },
     onSettled: () => setSubmitting(false),
@@ -189,7 +204,7 @@ export default function DeliveryScreen() {
       keptTotal,
     });
     if (problem) {
-      Alert.alert("Ошибка", problem);
+      Alert.alert(t("Ошибка", "Xatolik"), problem);
       return;
     }
     // Дату пишут как привыкли — «15.09.2026»; сервер ждёт ГГГГ-ММ-ДД. Разбор
@@ -197,25 +212,30 @@ export default function DeliveryScreen() {
     // после того, как товар отдан и деньги взяты.
     const dueIso = debtDueDate.trim() ? parseDueDate(debtDueDate) : null;
     if (debtDueDate.trim() && !dueIso) {
-      Alert.alert("Дата не разобрана", `«${debtDueDate}» — напишите день, месяц и год, например 15.09.2026.`);
+      Alert.alert(t("Дата не разобрана", "Sana tushunilmadi"), t(`«${debtDueDate}» — напишите день, месяц и год, например 15.09.2026.`, `«${debtDueDate}» — kun, oy va yilni yozing, masalan 15.09.2026.`));
       return;
     }
 
+    const cur = branding.currencySymbol;
+    const total = orderTotal.toLocaleString("ru");
+    const paidStr = Number(paidAmount || 0).toLocaleString("ru");
+    const debtStr = debt.toLocaleString("ru");
+    const n = returnedItemsList.length;
     const labels: Record<string, string> = {
-      paid: `100% оплата: ${orderTotal.toLocaleString("ru")} ${branding.currencySymbol}`,
-      partial_paid: `Оплата: ${Number(paidAmount).toLocaleString("ru")} ${branding.currencySymbol}, долг: ${debt.toLocaleString("ru")} ${branding.currencySymbol}`,
-      returned: "Полный возврат — товар вернётся на склад",
-      partial_returned: `Возврат: ${returnedItemsList.length} позици${returnedItemsList.length === 1 ? "я" : "и"}; оплата ${Number(paidAmount || 0).toLocaleString("ru")} ${branding.currencySymbol}` +
-        (debt > 0 ? `, долг ${debt.toLocaleString("ru")} ${branding.currencySymbol}` : ""),
+      paid: t(`100% оплата: ${total} ${cur}`, `100% to'lov: ${total} ${cur}`),
+      partial_paid: t(`Оплата: ${paidStr} ${cur}, долг: ${debtStr} ${cur}`, `To'lov: ${paidStr} ${cur}, qarz: ${debtStr} ${cur}`),
+      returned: t("Полный возврат — товар вернётся на склад", "To'liq qaytarish — tovar omborga qaytadi"),
+      partial_returned: t(`Возврат: ${n} позици${n === 1 ? "я" : "и"}; оплата ${paidStr} ${cur}`, `Qaytarish: ${n} ta pozitsiya; to'lov ${paidStr} ${cur}`) +
+        (debt > 0 ? t(`, долг ${debtStr} ${cur}`, `, qarz ${debtStr} ${cur}`) : ""),
     };
 
     Alert.alert(
-      "Подтверждение доставки",
+      t("Подтверждение доставки", "Yetkazishni tasdiqlash"),
       labels[result],
       [
-        { text: "Отмена", style: "cancel" },
+        { text: t("Отмена", "Bekor"), style: "cancel" },
         {
-          text: "Подтвердить",
+          text: t("Подтвердить", "Tasdiqlash"),
           onPress: () => {
             setSubmitting(true);
             mutation.mutate({
@@ -246,14 +266,14 @@ export default function DeliveryScreen() {
       <View style={[s.screen, { justifyContent: "center", alignItems: "center", padding: 24 }]}>
         <Feather name="wifi-off" size={32} color={colors.text.muted} />
         <Text style={{ color: colors.text.primary, fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, marginTop: 12, textAlign: "center" }}>
-          Не удалось загрузить заказ
+          {t("Не удалось загрузить заказ", "Buyurtmani yuklab bo'lmadi")}
         </Text>
         <Text style={{ color: colors.text.secondary, fontSize: Typography.size.sm, marginTop: 6, textAlign: "center" }}>
-          Это сбой связи, а не отсутствие заказа.
+          {t("Это сбой связи, а не отсутствие заказа.", "Bu aloqa uzilishi, buyurtma yo'q degani emas.")}
         </Text>
         <View style={{ marginTop: 16, minWidth: 160 }}>
           <Button variant="primary" icon="refresh-cw" onPress={() => refetch()}>
-            Повторить
+            {t("Повторить", "Qayta urinish")}
           </Button>
         </View>
       </View>
@@ -263,7 +283,7 @@ export default function DeliveryScreen() {
   if (isLoading || !order) {
     return (
       <View style={[s.screen, { justifyContent: "center", alignItems: "center" }]}>
-        <Text style={{ color: colors.text.secondary }}>Загрузка...</Text>
+        <Text style={{ color: colors.text.secondary }}>{t("Загрузка...", "Yuklanmoqda...")}</Text>
       </View>
     );
   }
@@ -284,10 +304,10 @@ export default function DeliveryScreen() {
             <Feather name="arrow-left" size={24} color={colors.text.primary} />
           </TouchableOpacity>
           <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xl, color: colors.text.primary }}>
-            Доставка: {order.orderNumber}
+            {t("Доставка", "Yetkazish")}: {order.orderNumber}
           </Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2 }}>
-            {order.shop?.name ?? "Магазин"} • Итого: {orderTotal.toLocaleString("ru")} {branding.currencySymbol}
+            {order.shop?.name ?? t("Магазин", "Do'kon")} • {t("Итого", "Jami")}: {orderTotal.toLocaleString("ru")} {branding.currencySymbol}
           </Text>
         </View>
 
@@ -301,7 +321,7 @@ export default function DeliveryScreen() {
         */}
         <View testID="deliver-items" style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
           <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 8 }}>
-            СОСТАВ · {order.items.length} {plural(order.items.length, "позиция", "позиции", "позиций")}
+            {t(`СОСТАВ · ${order.items.length} ${plural(order.items.length, "позиция", "позиции", "позиций")}`, `TARKIB · ${order.items.length} ta pozitsiya`)}
           </Text>
           {order.items.map(item => (
             <View key={item.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
@@ -309,7 +329,7 @@ export default function DeliveryScreen() {
                 {item.productName}
               </Text>
               <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.primary }}>
-                × {qty(item.quantity)} {item.unit ?? "шт"}
+                × {qty(item.quantity)} {unitShort(item.unit)}
               </Text>
             </View>
           ))}
@@ -318,7 +338,7 @@ export default function DeliveryScreen() {
         {/* Result Selection */}
         <View style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
           <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 12 }}>
-            РЕЗУЛЬТАТ ДОСТАВКИ
+            {t("РЕЗУЛЬТАТ ДОСТАВКИ", "YETKAZISH NATIJASI")}
           </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {RESULT_OPTIONS.map(opt => {
@@ -357,13 +377,13 @@ export default function DeliveryScreen() {
         {showPaymentFields && (
           <View style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
             <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 12 }}>
-              ОПЛАТА
+              {t("ОПЛАТА", "TO'LOV")}
             </Text>
 
             {(result === "partial_paid" || result === "partial_returned") && (
               <>
                 <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
-                  {result === "partial_returned" ? `Оплата (за оставшееся ${keptTotal.toLocaleString("ru")} ${branding.currencySymbol}):` : "Сумма оплаты:"}
+                  {result === "partial_returned" ? t(`Оплата (за оставшееся ${keptTotal.toLocaleString("ru")} ${branding.currencySymbol}):`, `To'lov (qolgan ${keptTotal.toLocaleString("ru")} ${branding.currencySymbol} uchun):`) : t("Сумма оплаты:", "To'lov summasi:")}
                 </Text>
                 <TextInput
                   value={paidAmount}
@@ -382,7 +402,7 @@ export default function DeliveryScreen() {
                 {debt > 0 && (
                   <View style={{ padding: 10, borderRadius: Radii.md, backgroundColor: colors.status.dangerDim, marginBottom: 8 }}>
                     <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.status.danger }}>
-                      Долг: {debt.toLocaleString("ru")} {branding.currencySymbol}
+                      {t("Долг", "Qarz")}: {debt.toLocaleString("ru")} {branding.currencySymbol}
                     </Text>
                   </View>
                 )}
@@ -392,7 +412,7 @@ export default function DeliveryScreen() {
             {result === "paid" && (
               <View style={{ padding: 10, borderRadius: Radii.md, backgroundColor: colors.status.successDim, marginBottom: 8 }}>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.status.success }}>
-                  Сумма: {orderTotal.toLocaleString("ru")} {branding.currencySymbol}
+                  {t("Сумма", "Summa")}: {orderTotal.toLocaleString("ru")} {branding.currencySymbol}
                 </Text>
               </View>
             )}
@@ -414,7 +434,7 @@ export default function DeliveryScreen() {
                     fontFamily: Typography.fontMedium, fontSize: Typography.size.sm,
                     color: paymentMethod === m ? colors.brand.primary : colors.text.secondary,
                   }}>
-                    {m === "cash" ? "Наличные" : m === "card" ? "Карта" : "Перевод"}
+                    {paymentMethodLabel(m)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -424,7 +444,7 @@ export default function DeliveryScreen() {
             {(result === "partial_paid" || (result === "partial_returned" && debt > 0)) && (
               <>
                 <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
-                  Когда обещал доплатить:
+                  {t("Когда обещал доплатить:", "Qachon to'lashga va'da berdi:")}
                 </Text>
                 <TextInput
                   value={debtDueDate}
@@ -448,10 +468,10 @@ export default function DeliveryScreen() {
         {showReturnFields && (
           <View style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
             <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 12 }}>
-              ВОЗВРАТ
+              {t("ВОЗВРАТ", "QAYTARISH")}
             </Text>
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
-              Причина возврата:
+              {t("Причина возврата:", "Qaytarish sababi:")}
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
               {RETURN_REASONS.map(r => (
@@ -477,7 +497,7 @@ export default function DeliveryScreen() {
             {result === "partial_returned" && (
               <>
                 <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginTop: 8, marginBottom: 8 }}>
-                  Возвращённое количество:
+                  {t("Возвращённое количество:", "Qaytarilgan miqdor:")}
                 </Text>
                 {order.items.map(item => {
                   const qty = Number(returnedQty[item.id] || 0);
@@ -494,7 +514,7 @@ export default function DeliveryScreen() {
                           {item.productName}
                         </Text>
                         <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>
-                          Заказано: {item.quantity} {item.unit ?? "шт"}
+                          {t("Заказано", "Buyurtilgan")}: {item.quantity} {unitShort(item.unit)}
                         </Text>
                       </View>
                       <TouchableOpacity
@@ -532,12 +552,12 @@ export default function DeliveryScreen() {
         {/* Notes */}
         <View style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
           <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
-            Комментарий:
+            {t("Комментарий:", "Izoh:")}
           </Text>
           <TextInput
             value={notes}
             onChangeText={setNotes}
-            placeholder="Комментарий курьера..."
+            placeholder={t("Комментарий курьера...", "Kuryer izohi...")}
             placeholderTextColor={colors.text.muted}
             multiline
             style={{
@@ -569,7 +589,7 @@ export default function DeliveryScreen() {
           }}
         >
           <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>
-            {submitting ? "Отправка..." : "ЗАВЕРШИТЬ ДОСТАВКУ"}
+            {submitting ? t("Отправка...", "Yuborilmoqda...") : t("ЗАВЕРШИТЬ ДОСТАВКУ", "YETKAZISHNI YAKUNLASH")}
           </Text>
         </TouchableOpacity>
       </View>

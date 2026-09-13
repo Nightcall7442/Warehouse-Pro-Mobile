@@ -20,6 +20,8 @@
  * поля. Проверять надо было итог.
  */
 
+import { tt } from "../i18n";
+
 export type DeliveryResult =
   | "paid"
   | "partial_paid"
@@ -47,20 +49,20 @@ export function validateDeliveryForm(form: DeliveryFormState): string | null {
   const paid = Number(form.paidAmount || 0);
 
   if (form.result === "partial_paid") {
-    if (!(paid > 0)) return "Укажите сумму оплаты";
+    if (!(paid > 0)) return tt("Укажите сумму оплаты", "To'lov summasini kiriting");
     // Равная итогу сумма — это полная оплата, а не частичная. Пропустив её
     // сюда, получим заказ с долгом в ноль и пометкой «оплачен частично».
-    if (paid >= form.orderTotal) return "При частичной оплате сумма должна быть меньше итого";
+    if (paid >= form.orderTotal) return tt("При частичной оплате сумма должна быть меньше итого", "Qisman to'lovda summa jamidan kam bo'lishi kerak");
   }
 
   // Полная оплата нулевого заказа бессмысленна: платить не за что, а отметка
   // «оплачен» закроет долг, которого не было.
   if (form.result === "paid" && !(form.orderTotal > 0)) {
-    return "У заказа нулевая сумма — отметьте «не оплачен»";
+    return tt("У заказа нулевая сумма — отметьте «не оплачен»", "Buyurtma summasi nol — «to'lanmagan» deb belgilang");
   }
 
   if (form.result === "partial_returned" && form.returnedItemsCount === 0) {
-    return "Укажите возвращённое количество хотя бы одного товара";
+    return tt("Укажите возвращённое количество хотя бы одного товара", "Kamida bitta tovarning qaytarilgan miqdorini kiriting");
   }
   /*
     Частичный возврат идёт вместе с деньгами: «привёз 10, 2 вернули, за 8
@@ -69,7 +71,8 @@ export function validateDeliveryForm(form: DeliveryFormState): string | null {
     у курьера в системе не существовали. Ноль — тоже ответ (всё в долг).
   */
   if (form.result === "partial_returned" && form.keptTotal !== undefined && paid > form.keptTotal + 0.005) {
-    return `Оплата больше суммы за оставшийся товар (${form.keptTotal.toLocaleString("ru")})`;
+    const kept = form.keptTotal.toLocaleString("ru");
+    return tt(`Оплата больше суммы за оставшийся товар (${kept})`, `To'lov qolgan tovar summasidan ko'p (${kept})`);
   }
 
   return null;

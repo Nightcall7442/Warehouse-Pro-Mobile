@@ -74,7 +74,8 @@ describe("«не доставлено» — с причиной", () => {
 describe("«выехал по всем»", () => {
   it("кнопка стоит над «ОЖИДАЮТ ДОСТАВКИ» и гонит ту же мутацию по порядку", () => {
     const at = DELIVERIES.indexOf('rows.push({ type: "take-all"');
-    const header = DELIVERIES.indexOf('title: "ОЖИДАЮТ ДОСТАВКИ"');
+    // Заголовок идёт парой t("ru", "uz") — страж ищет русское слово в паре.
+    const header = DELIVERIES.indexOf('title: t("ОЖИДАЮТ ДОСТАВКИ"');
     must(at > 0 && at < header, "кнопки «Выехал по всем» нет над разделом ожидающих");
     // Подряд через await, а не Promise.all: очередь без сети ложится по одной
     // в порядке списка, а на сети в полёте один запрос.
@@ -97,7 +98,7 @@ describe("первая точка маршрута видна сразу", () =>
     must(DELIVERIES.includes("ListFooterComponent={<MonthTotals />}"), "итоги месяца не в подвале");
     must(!DELIVERIES.includes("ListHeaderComponent"), "над маршрутом снова блок");
     must(!DELIVERIES.includes("ProgressRing"), "кольца вернулись");
-    must(DELIVERIES.includes("Ожидают {assigned.length} · В пути {inTransit.length}"), "строки «Ожидают N · В пути M» нет");
+    must(DELIVERIES.includes("Ожидают ${assigned.length} · В пути ${inTransit.length}"), "строки «Ожидают N · В пути M» нет");
   });
 });
 

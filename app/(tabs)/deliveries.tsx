@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { Card, Button, Badge, SectionHeader, EmptyState } from "../../src/components/ui";
-import { mapUrl, FAIL_REASONS, FAIL_REASON_MAX, failReason } from "../../src/lib/courier-route";
+import { mapUrl, FAIL_REASONS, FAIL_REASON_MAX, failReason, failReasonLabel } from "../../src/lib/courier-route";
 import { listMyDeliveries, type Delivery } from "../../src/api";
 import { useOfflineStore, isRetryableError, deliveryActionOrderId } from "../../src/store/offline";
 import { errorText } from "../../src/lib/error-text";
@@ -26,6 +26,7 @@ import { formatMoney } from "../../src/store/branding";
 import { getCourierKpi } from "../../src/api";
 import { deliveryStatusLabel } from "../../src/lib/order-status";
 import { plural } from "../../src/lib/plural";
+import { tt, useT } from "../../src/i18n";
 
 /* Слово — из общего словаря, здесь только значок и вид плашки. */
 const STATUS_CONFIG: Record<string, { icon: keyof typeof Feather.glyphMap; variant: "info" | "warning" | "success" | "danger" }> = {
@@ -59,6 +60,7 @@ const STATUS_CONFIG: Record<string, { icon: keyof typeof Feather.glyphMap; varia
  */
 function MonthTotals() {
   const colors = useThemeColors();
+  const t = useT();
   const router = useRouter();
 
   /*
@@ -74,11 +76,11 @@ function MonthTotals() {
   if (!data) return null;
 
   const cells = [
-    { label: "Довезено", value: String(data.delivered) },
-    { label: "Сорвано", value: String(data.failed) },
+    { label: t("Довезено", "Yetkazildi"), value: String(data.delivered) },
+    { label: t("Сорвано", "Bajarilmadi"), value: String(data.failed) },
     // Ноль назначенных — это не «ноль процентов успеха», а «мерить нечего».
-    { label: "Успешных", value: data.delivered + data.failed > 0 ? `${data.successRate}%` : "—" },
-    { label: "Рабочих дней", value: String(data.workDays) },
+    { label: t("Успешных", "Muvaffaqiyatli"), value: data.delivered + data.failed > 0 ? `${data.successRate}%` : "—" },
+    { label: t("Рабочих дней", "Ish kunlari"), value: String(data.workDays) },
   ];
 
   return (
@@ -88,7 +90,7 @@ function MonthTotals() {
           fontFamily: Typography.fontMedium, fontSize: Typography.size.xs,
           letterSpacing: 1.5, textTransform: "uppercase", color: colors.text.muted,
         }}>
-          Итоги месяца
+          {t("Итоги месяца", "Oy yakuni")}
         </Text>
         <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
       </View>
@@ -108,7 +110,7 @@ function MonthTotals() {
 
       <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle, flexDirection: "row", justifyContent: "space-between" }}>
         <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>
-          Привезено денег
+          {t("Привезено денег", "Pul olib kelindi")}
         </Text>
         <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.primary }}>
           {formatMoney(data.cashCollected)}
@@ -127,12 +129,15 @@ type DeliveryRow =
   | { type: "queued"; key: string; order: Delivery };
 
 /** Как называется отложенная отметка, пока она ждёт связи. */
-const QUEUED_LABEL: Record<string, string> = {
-  markOutForDelivery: "Выехал",
-  markDelivered: "Доставлено",
-  completeDelivery: "Доставлено",
-  markFailed: "Не доставлено",
-};
+function queuedLabel(t: (ru: string, uz: string) => string, type: string | undefined): string {
+  switch (type) {
+    case "markOutForDelivery": return t("Выехал", "Yo'lga chiqdi");
+    case "markDelivered":
+    case "completeDelivery": return t("Доставлено", "Yetkazildi");
+    case "markFailed": return t("Не доставлено", "Yetkazilmadi");
+    default: return t("Отмечено", "Belgilandi");
+  }
+}
 
 /*
   Текст красной подсказки — человеку, а не строке axios.
@@ -144,7 +149,7 @@ const QUEUED_LABEL: Record<string, string> = {
   сообщение сервера всплывало пустой красной полосой: тост ничего не фильтрует.
 */
 function failureText(e: unknown): string {
-  if (isRetryableError(e)) return "Нет связи. Действие не сохранилось — повторите, когда появится сеть.";
+  if (isRetryableError(e)) return tt("Нет связи. Действие не сохранилось — повторите, когда появится сеть.", "Aloqa yo'q. Amal saqlanmadi — tarmoq paydo bo'lganda qaytaring.");
   // Дальше говорит errorText: он пропускает слова сервера («Заказ уже
   // завершён») и переводит на русский всё остальное. Здесь стояло сырое
   // e.message — вместе с ним наружу лезли «Request failed with status code 400»
@@ -162,6 +167,7 @@ export default function DeliveriesScreen() {
   useScrollTopOnFocus(listRef);
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
+  const t = useT();
   const qc = useQueryClient();
   const [cashInputs, setCashInputs] = useState<Record<number, string>>({});
   /*
@@ -212,11 +218,11 @@ export default function DeliveriesScreen() {
     const byOrder = new Map<number, { id: string; error: string; retryable: boolean }>();
     for (const a of deliveryActions) {
       if (!a.synced && a.status === "failed") {
-        byOrder.set(deliveryActionOrderId(a.action), { id: a.id, error: a.error ?? "Сервер отклонил отметку", retryable: a.retryable !== false });
+        byOrder.set(deliveryActionOrderId(a.action), { id: a.id, error: a.error ?? t("Сервер отклонил отметку", "Server belgini rad etdi"), retryable: a.retryable !== false });
       }
     }
     return byOrder;
-  }, [deliveryActions]);
+  }, [deliveryActions, t]);
 
   /*
     Отложенный «выехал» — не конец работы с заказом, а её середина.
@@ -291,15 +297,15 @@ export default function DeliveriesScreen() {
       if (result?.offline) {
         // Очередь могла не записаться на диск — тогда отметка исчезнет вместе
         // с приложением, и говорить «сохранено» нельзя.
-        if (!result.queued) { reportNotQueued("Отметка"); return; }
+        if (!result.queued) { reportNotQueued(t("Отметка", "Belgi")); return; }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        notify.info("Нет подключения. Действие сохранено офлайн.");
+        notify.info(t("Нет подключения. Действие сохранено офлайн.", "Aloqa yo'q. Amal oflayn saqlandi."));
         return;
       }
       if (bulkOut.current) return;
       qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Взято в доставку!");
+      notify.success(t("Взято в доставку!", "Yetkazishga olindi!"));
     },
     onError: (e: Error) => notify.error(failureText(e)),
   });
@@ -352,14 +358,14 @@ export default function DeliveriesScreen() {
       if (result?.offline) {
         // Очередь могла не записаться на диск — тогда отметка исчезнет вместе
         // с приложением, и говорить «сохранено» нельзя.
-        if (!result.queued) { reportNotQueued("Отметка"); return; }
+        if (!result.queued) { reportNotQueued(t("Отметка", "Belgi")); return; }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        notify.info("Нет подключения. Действие сохранено офлайн.");
+        notify.info(t("Нет подключения. Действие сохранено офлайн.", "Aloqa yo'q. Amal oflayn saqlandi."));
         return;
       }
       qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Доставлено!");
+      notify.success(t("Доставлено!", "Yetkazildi!"));
     },
     onError: (e: Error) => notify.error(failureText(e)),
   });
@@ -410,14 +416,14 @@ export default function DeliveriesScreen() {
       if (result?.offline) {
         // Очередь могла не записаться на диск — тогда отметка исчезнет вместе
         // с приложением, и говорить «сохранено» нельзя.
-        if (!result.queued) { reportNotQueued("Отметка"); return; }
+        if (!result.queued) { reportNotQueued(t("Отметка", "Belgi")); return; }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        notify.info("Нет подключения. Действие сохранено офлайн.");
+        notify.info(t("Нет подключения. Действие сохранено офлайн.", "Aloqa yo'q. Amal oflayn saqlandi."));
         return;
       }
       qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      notify.warning("Отмечено как недоставлено");
+      notify.warning(t("Отмечено как недоставлено", "Yetkazilmadi deb belgilandi"));
     },
     onError: (e: Error) => notify.error(failureText(e)),
   });
@@ -445,21 +451,21 @@ export default function DeliveriesScreen() {
       руками, и он должен видеть, что отметка не потерялась.
     */
     if (queued.length > 0) {
-      rows.push({ type: "header", key: "h-queued", title: "ЖДУТ ОТПРАВКИ" });
+      rows.push({ type: "header", key: "h-queued", title: t("ЖДУТ ОТПРАВКИ", "YUBORISHNI KUTMOQDA") });
       for (const order of queued) rows.push({ type: "queued", key: `q-${order.id}`, order });
     }
     if (inTransit.length > 0) {
-      rows.push({ type: "header", key: "h-transit", title: "В ПУТИ" });
+      rows.push({ type: "header", key: "h-transit", title: t("В ПУТИ", "YO'LDA") });
       for (const order of inTransit) rows.push({ type: "transit", key: `t-${order.id}`, order });
     }
     if (assigned.length > 0) {
       // Одна точка — хватает кнопки на карточке; «по всем» имеет смысл от двух.
       if (assigned.length > 1) rows.push({ type: "take-all", key: "take-all", count: assigned.length });
-      rows.push({ type: "header", key: "h-assigned", title: "ОЖИДАЮТ ДОСТАВКИ" });
+      rows.push({ type: "header", key: "h-assigned", title: t("ОЖИДАЮТ ДОСТАВКИ", "YETKAZISHNI KUTMOQDA") });
       for (const order of assigned) rows.push({ type: "assigned", key: `a-${order.id}`, order });
     }
     return rows;
-  }, [queued, inTransit, assigned]);
+  }, [queued, inTransit, assigned, t]);
 
   const handleOpenFull = useCallback((order: Delivery) => {
     router.push({ pathname: "/order/deliver", params: { id: String(order.id) } });
@@ -471,18 +477,18 @@ export default function DeliveriesScreen() {
   */
   const openMap = useCallback(async (order: Delivery) => {
     const url = mapUrl(order);
-    if (!url) { notify.error("У магазина нет ни адреса, ни координат"); return; }
+    if (!url) { notify.error(t("У магазина нет ни адреса, ни координат", "Do'konning na manzili, na koordinatalari bor")); return; }
     try {
       const canOpen = await Linking.canOpenURL(url);
       if (canOpen) {
         await Linking.openURL(url);
       } else {
-        notify.error("Не удалось открыть карты");
+        notify.error(t("Не удалось открыть карты", "Xaritani ochib bo'lmadi"));
       }
     } catch {
-      notify.error("Не удалось открыть карты");
+      notify.error(t("Не удалось открыть карты", "Xaritani ochib bo'lmadi"));
     }
-  }, []);
+  }, [t]);
 
   /*
     Обработчики карточек держатся неизменными между отрисовками, иначе
@@ -511,11 +517,13 @@ export default function DeliveriesScreen() {
       живой путь курьера, и он оставался прежним.
     */
     const paid = parseAmount(cashAmount);
-    Alert.alert("Доставлено?", `Заказ ${order.orderNumber} → ${order.shopName}${paid > 0 ? `\nНаличными: ${formatMoney(paid)}` : ""}`, [
-      { text: "Отмена", style: "cancel" },
-      { text: "Да", onPress: () => mutateDeliver({ order, cashAmount: paid > 0 ? String(paid) : undefined }) },
+    const who = `${order.orderNumber} → ${order.shopName}`;
+    const cash = paid > 0 ? t(`\nНаличными: ${formatMoney(paid)}`, `\nNaqd: ${formatMoney(paid)}`) : "";
+    Alert.alert(t("Доставлено?", "Yetkazildimi?"), t(`Заказ ${who}${cash}`, `Buyurtma ${who}${cash}`), [
+      { text: t("Отмена", "Bekor"), style: "cancel" },
+      { text: t("Да", "Ha"), onPress: () => mutateDeliver({ order, cashAmount: paid > 0 ? String(paid) : undefined }) },
     ]);
-  }, [mutateDeliver]);
+  }, [mutateDeliver, t]);
 
   /*
     Было: Alert «Не доставлено? — Да», и отметка уходила без причины.
@@ -544,9 +552,10 @@ export default function DeliveriesScreen() {
     его текст показывает onError, а итог говорит, сколько не вышло.
   */
   const handleTakeAllOut = useCallback((orders: Delivery[]) => {
-    Alert.alert("Выехал по всем?", `${orders.length} ${plural(orders.length, "точка", "точки", "точек")} перейдут «в путь».`, [
-      { text: "Отмена", style: "cancel" },
-      { text: "Выехал", onPress: async () => {
+    const n = orders.length;
+    Alert.alert(t("Выехал по всем?", "Hammasiga yo'lga chiqdingizmi?"), t(`${n} ${plural(n, "точка", "точки", "точек")} перейдут «в путь».`, `${n} ta nuqta «yo'lda»ga o'tadi.`), [
+      { text: t("Отмена", "Bekor"), style: "cancel" },
+      { text: t("Выехал", "Yo'lga chiqdim"), onPress: async () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         bulkOut.current = true;
         let failed = 0;
@@ -559,11 +568,11 @@ export default function DeliveriesScreen() {
         }
         qc.invalidateQueries({ queryKey: ["myDeliveries"] });
         const done = orders.length - failed;
-        if (failed === 0) notify.success(`Выехал по ${done} ${plural(done, "точке", "точкам", "точкам")}`);
-        else notify.warning(`Выехал по ${done} из ${orders.length}, не вышло: ${failed}`);
+        if (failed === 0) notify.success(t(`Выехал по ${done} ${plural(done, "точке", "точкам", "точкам")}`, `${done} ta nuqta bo'yicha yo'lga chiqdingiz`));
+        else notify.warning(t(`Выехал по ${done} из ${n}, не вышло: ${failed}`, `${n} tadan ${done} tasi yo'lda, chiqmadi: ${failed}`));
       } },
     ]);
-  }, [mutateOutAsync, qc]);
+  }, [mutateOutAsync, qc, t]);
 
   if (isLoading) {
     return (
@@ -586,11 +595,11 @@ export default function DeliveriesScreen() {
       <View style={{ flex: 1, backgroundColor: colors.bg.primary, paddingTop: insets.top, justifyContent: "center", padding: Spacing.base }}>
         <EmptyState
           icon="alert-circle"
-          title="Не удалось загрузить доставки"
-          description="Это сбой связи, а не пустой маршрут. Проверьте подключение и попробуйте снова."
+          title={t("Не удалось загрузить доставки", "Yetkazishlarni yuklab bo'lmadi")}
+          description={t("Это сбой связи, а не пустой маршрут. Проверьте подключение и попробуйте снова.", "Bu aloqa uzilishi, marshrut bo'sh degani emas. Ulanishni tekshirib, qayta urinib ko'ring.")}
         />
         <Button onPress={() => { void refetch(); }} loading={isFetching} style={{ marginTop: Spacing.base }}>
-          Повторить
+          {t("Повторить", "Qayta urinish")}
         </Button>
       </View>
     );
@@ -612,7 +621,7 @@ export default function DeliveriesScreen() {
             color: colors.text.primary,
           }}
         >
-          Доставки
+          {t("Доставки", "Yetkazishlar")}
         </Text>
         {/*
           Вместо двух колец «Ожидают / В пути» — одна строка. Кольца с
@@ -620,7 +629,7 @@ export default function DeliveriesScreen() {
           маршрута уезжала за край: курьер листал их каждое утро.
         */}
         <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
-          Ожидают {assigned.length} · В пути {inTransit.length}
+          {t(`Ожидают ${assigned.length} · В пути ${inTransit.length}`, `Kutmoqda ${assigned.length} · Yo'lda ${inTransit.length}`)}
         </Text>
       </View>
 
@@ -661,7 +670,7 @@ export default function DeliveriesScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="truck"
-            title={totalDeliveries === 0 ? "Нет заказов на доставку" : "Маршрут пройден"}
+            title={totalDeliveries === 0 ? t("Нет заказов на доставку", "Yetkaziladigan buyurtma yo'q") : t("Маршрут пройден", "Marshrut yakunlandi")}
           />
         }
         renderItem={({ item }) => {
@@ -669,7 +678,7 @@ export default function DeliveriesScreen() {
           if (item.type === "take-all") {
             return (
               <Button variant="primary" icon="truck" onPress={() => handleTakeAllOut(assigned)} loading={markOut.isPending && bulkOut.current} style={{ marginBottom: 12 }}>
-                {`Выехал по всем (${item.count})`}
+                {t(`Выехал по всем (${item.count})`, `Hammasiga yo'lga chiqdim (${item.count})`)}
               </Button>
             );
           }
@@ -691,7 +700,7 @@ export default function DeliveriesScreen() {
                     </Text>
                   </View>
                   <Badge variant="warning">
-                    {QUEUED_LABEL[queuedActionByOrder.get(item.order.id) ?? ""] ?? "Отмечено"}
+                    {queuedLabel(t, queuedActionByOrder.get(item.order.id))}
                   </Badge>
                 </View>
                 {(() => {
@@ -701,7 +710,7 @@ export default function DeliveriesScreen() {
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
                         <Feather name="clock" size={13} color={colors.text.tertiary} />
                         <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary, flex: 1 }}>
-                          Записано на телефоне. Уйдёт на сервер, когда появится связь.
+                          {t("Записано на телефоне. Уйдёт на сервер, когда появится связь.", "Telefonga yozildi. Aloqa paydo bo'lganda serverga ketadi.")}
                         </Text>
                       </View>
                     );
@@ -711,7 +720,7 @@ export default function DeliveriesScreen() {
                       <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
                         <Feather name="alert-circle" size={13} color={colors.status.danger} />
                         <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.status.danger, flex: 1 }}>
-                          Сервер отклонил: {failed.error}
+                          {t("Сервер отклонил", "Server rad etdi")}: {failed.error}
                         </Text>
                       </View>
                       <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
@@ -719,16 +728,16 @@ export default function DeliveriesScreen() {
                           onPress={() => { void retryDeliveryAction(failed.id); }}
                           style={{ flex: 1, height: 40, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.brand.primaryDim }}
                         >
-                          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.brand.primary }}>Повторить</Text>
+                          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.brand.primary }}>{t("Повторить", "Qayta urinish")}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          onPress={() => Alert.alert("Убрать отметку?", `Заказ ${item.order.orderNumber} вернётся в список, отметку придётся поставить заново.`, [
-                            { text: "Отмена", style: "cancel" },
-                            { text: "Убрать", style: "destructive", onPress: () => { void discardDeliveryAction(failed.id); } },
+                          onPress={() => Alert.alert(t("Убрать отметку?", "Belgi olib tashlansinmi?"), t(`Заказ ${item.order.orderNumber} вернётся в список, отметку придётся поставить заново.`, `Buyurtma ${item.order.orderNumber} ro'yxatga qaytadi, belgini qaytadan qo'yish kerak bo'ladi.`), [
+                            { text: t("Отмена", "Bekor"), style: "cancel" },
+                            { text: t("Убрать", "Olib tashlash"), style: "destructive", onPress: () => { void discardDeliveryAction(failed.id); } },
                           ])}
                           style={{ flex: 1, height: 40, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.input }}
                         >
-                          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.secondary }}>Убрать</Text>
+                          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.secondary }}>{t("Убрать", "Olib tashlash")}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -789,6 +798,7 @@ function FailReasonSheet({ order, colors, onCancel, onConfirm }: {
   onCancel: () => void;
   onConfirm: (order: Delivery, reason: string) => void;
 }) {
+  const t = useT();
   const [choice, setChoice] = useState<string | null>(null);
   const [other, setOther] = useState("");
   const reason = failReason(choice, other);
@@ -815,21 +825,21 @@ function FailReasonSheet({ order, colors, onCancel, onConfirm }: {
     <Modal visible={order != null} transparent animationType="fade" onRequestClose={close}>
       <Pressable style={{ flex: 1, backgroundColor: colors.bg.overlay, justifyContent: "flex-end" }} onPress={close}>
         <Pressable onPress={e => e.stopPropagation()} style={{ backgroundColor: colors.bg.card, borderTopLeftRadius: Radii.xl, borderTopRightRadius: Radii.xl, padding: Spacing.lg, paddingBottom: Spacing.xxl }}>
-          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>Почему не доставлено?</Text>
+          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>{t("Почему не доставлено?", "Nega yetkazilmadi?")}</Text>
           {order && (
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
-              Заказ {order.orderNumber} → {order.shopName}
+              {t("Заказ", "Buyurtma")} {order.orderNumber} → {order.shopName}
             </Text>
           )}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: Spacing.md }}>
-            {FAIL_REASONS.map(r => chip(r, r))}
-            {chip("other", "Другое")}
+            {FAIL_REASONS.map(r => chip(r, failReasonLabel(r)))}
+            {chip("other", t("Другое", "Boshqa"))}
           </View>
           {choice === "other" && (
             <TextInput
               value={other}
               onChangeText={setOther}
-              placeholder="Что случилось"
+              placeholder={t("Что случилось", "Nima bo'ldi")}
               placeholderTextColor={colors.text.muted}
               maxLength={FAIL_REASON_MAX}
               autoFocus
@@ -837,8 +847,8 @@ function FailReasonSheet({ order, colors, onCancel, onConfirm }: {
             />
           )}
           <View style={{ flexDirection: "row", gap: 10, marginTop: Spacing.lg }}>
-            <Button variant="secondary" onPress={close} style={{ flex: 1 }}>Отмена</Button>
-            <Button variant="danger" icon="x-circle" onPress={confirm} disabled={!reason} style={{ flex: 1 }}>Не доставлено</Button>
+            <Button variant="secondary" onPress={close} style={{ flex: 1 }}>{t("Отмена", "Bekor")}</Button>
+            <Button variant="danger" icon="x-circle" onPress={confirm} disabled={!reason} style={{ flex: 1 }}>{t("Не доставлено", "Yetkazilmadi")}</Button>
           </View>
         </Pressable>
       </Pressable>
@@ -871,6 +881,7 @@ const DeliveryCard = memo(function DeliveryCard({
   isPending: boolean;
   failPending: boolean;
 }) {
+  const t = useT();
   // Значок и вид плашки для незнакомого состояния — нейтральные, а не «назначен».
   const config = STATUS_CONFIG[order.deliveryStatus] ?? { icon: "help-circle" as const, variant: "info" as const };
 
@@ -906,13 +917,13 @@ const DeliveryCard = memo(function DeliveryCard({
 
         {mapUrl(order) && (
           <Button variant="secondary" size="sm" icon="map-pin" onPress={() => onOpenMap(order)} style={{ marginBottom: 12 }}>
-            На карте
+            {t("На карте", "Xaritada")}
           </Button>
         )}
 
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border.subtle, paddingTop: 12 }}>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.muted, marginBottom: 6 }}>
-            Сумма наличных (необязательно)
+            {t("Сумма наличных (необязательно)", "Naqd summa (ixtiyoriy)")}
           </Text>
           {/* decimal-pad, а не numeric: на Android у numeric часто нет
               разделителя дробной части, и копейки набрать нечем. */}
@@ -933,7 +944,7 @@ const DeliveryCard = memo(function DeliveryCard({
             }}
           />
           <Button variant="success" icon="check-circle" onPress={() => onDeliver(order, cashInput)} loading={isPending}>
-            Доставлено
+            {t("Доставлено", "Yetkazildi")}
           </Button>
           <View style={{ marginTop: 8 }}>
             {/* Экран полного оформления существовал, но попасть на него было
@@ -942,12 +953,12 @@ const DeliveryCard = memo(function DeliveryCard({
                 только «Доставлено» и «Не доставлено», а частичная оплата,
                 срок долга и возврат по позициям лежали мёртвым грузом. */}
             <Button variant="secondary" icon="edit-3" onPress={() => onOpenFull(order)}>
-              Оформить подробно
+              {t("Оформить подробно", "Batafsil rasmiylashtirish")}
             </Button>
           </View>
           <View style={{ marginTop: 8 }}>
             <Button variant="danger" icon="x-circle" onPress={() => onFail(order)} loading={failPending}>
-              Не доставлено
+              {t("Не доставлено", "Yetkazilmadi")}
             </Button>
           </View>
         </View>
@@ -968,6 +979,7 @@ const AssignedCard = memo(function AssignedCard({
   onTakeOut: (order: Delivery) => void;
   isPending: boolean;
 }) {
+  const t = useT();
   return (
     <Card style={{ marginBottom: 12, padding: 16 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -1000,11 +1012,11 @@ const AssignedCard = memo(function AssignedCard({
       <View style={{ flexDirection: "row", gap: 8 }}>
         {mapUrl(order) && (
           <Button variant="secondary" size="sm" icon="map-pin" onPress={() => onOpenMap(order)} style={{ flex: 1 }}>
-            На карте
+            {t("На карте", "Xaritada")}
           </Button>
         )}
         <Button variant="primary" size="sm" icon="truck" onPress={() => onTakeOut(order)} loading={isPending} style={{ flex: 1 }}>
-          Взять в доставку
+          {t("Взять в доставку", "Yetkazishga olish")}
         </Button>
       </View>
     </Card>

@@ -1,5 +1,7 @@
 import { Image } from "react-native";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
+import { tt } from "../i18n";
+import { humanError } from "./error-text";
 
 /**
  * Подготовить снимок к отправке: уменьшить и сжать.
@@ -104,7 +106,7 @@ export async function preparePhoto(uri: string): Promise<PreparedPhoto> {
   });
 
   if (!result.base64) {
-    throw new Error("Не удалось подготовить фото к отправке");
+    throw humanError(tt("Не удалось подготовить фото к отправке", "Rasmni yuborishga tayyorlab bo'lmadi"));
   }
 
   return {

@@ -33,14 +33,21 @@
  * а не чинить расхождение названий.
  */
 
-export const ORDER_STATUSES: Record<string, { label: string; color: string }> = {
-  new:        { label: "Новый",       color: "#5b6d8a" },
-  processing: { label: "В обработке", color: "#d4973a" },
-  shipped:    { label: "Отгружен",    color: "#4a9de8" },
-  pending:    { label: "В ожидании",  color: "#d4973a" },
-  delivered:  { label: "Доставлен",   color: "#34c473" },
-  cancelled:  { label: "Отменён",     color: "#d45050" },
-  returned:   { label: "Возврат",     color: "#d45050" },
+/*
+  Русское слово лежит в `label`, узбекское — в `uz`; строки помечены
+  i18n-ignore, потому что пара уже здесь, а выбирает язык orderStatusLabel().
+  `label` остаётся русским ради экранов, читающих его напрямую.
+*/
+import { tt } from "../i18n";
+
+export const ORDER_STATUSES: Record<string, { label: string; uz: string; color: string }> = {
+  new:        { label: "Новый",       uz: "Yangi",         color: "#5b6d8a" }, // i18n-ignore: пара ru/uz
+  processing: { label: "В обработке", uz: "Jarayonda",     color: "#d4973a" }, // i18n-ignore: пара ru/uz
+  shipped:    { label: "Отгружен",    uz: "Yuklandi",      color: "#4a9de8" }, // i18n-ignore: пара ru/uz
+  pending:    { label: "В ожидании",  uz: "Kutishda",      color: "#d4973a" }, // i18n-ignore: пара ru/uz
+  delivered:  { label: "Доставлен",   uz: "Yetkazildi",    color: "#34c473" }, // i18n-ignore: пара ru/uz
+  cancelled:  { label: "Отменён",     uz: "Bekor qilindi", color: "#d45050" }, // i18n-ignore: пара ru/uz
+  returned:   { label: "Возврат",     uz: "Qaytarildi",    color: "#d45050" }, // i18n-ignore: пара ru/uz
 };
 
 /**
@@ -51,16 +58,28 @@ export const ORDER_STATUSES: Record<string, { label: string; color: string }> = 
  * словом «not_assigned».
  */
 export const DELIVERY_STATUSES: Record<string, string> = {
-  not_assigned:     "Не назначен",
-  assigned:         "Назначен",
-  out_for_delivery: "В пути",
-  delivered:        "Доставлен",
-  failed:           "Ошибка",
+  not_assigned:     "Не назначен", // i18n-ignore: узбекская пара в DELIVERY_STATUSES_UZ
+  assigned:         "Назначен",    // i18n-ignore: узбекская пара в DELIVERY_STATUSES_UZ
+  out_for_delivery: "В пути",      // i18n-ignore: узбекская пара в DELIVERY_STATUSES_UZ
+  delivered:        "Доставлен",   // i18n-ignore: узбекская пара в DELIVERY_STATUSES_UZ
+  failed:           "Ошибка",      // i18n-ignore: узбекская пара в DELIVERY_STATUSES_UZ
 };
 
-/** Слово состояния доставки. Незнакомый код — как есть. */
+/** Те же состояния по-узбекски; ключи — те же, что выше (проверяется тестом). */
+export const DELIVERY_STATUSES_UZ: Record<string, string> = {
+  not_assigned:     "Tayinlanmagan",
+  assigned:         "Tayinlangan",
+  out_for_delivery: "Yo'lda",
+  delivered:        "Yetkazildi",
+  failed:           "Xatolik",
+};
+
+/** Слово состояния доставки на языке телефона. Незнакомый код — как есть. */
 export function deliveryStatusLabel(status: string | null | undefined): string {
-  return DELIVERY_STATUSES[status ?? ""] ?? status ?? "—";
+  const code = status ?? "";
+  const ru = DELIVERY_STATUSES[code];
+  if (ru == null) return status ?? "—";
+  return tt(ru, DELIVERY_STATUSES_UZ[code] ?? ru);
 }
 
 /**
@@ -70,15 +89,32 @@ export function deliveryStatusLabel(status: string | null | undefined): string {
  * «Перечисление». Слово взято веб-овское — оно же уходит в накладную.
  */
 export const PAYMENT_METHODS: Record<string, string> = {
-  cash:     "Наличные",
-  card:     "Карта",
-  transfer: "Перечисление",
-  debt:     "Долг",
+  cash:     "Наличные",     // i18n-ignore: узбекская пара в PAYMENT_METHODS_UZ
+  card:     "Карта",        // i18n-ignore: узбекская пара в PAYMENT_METHODS_UZ
+  transfer: "Перечисление", // i18n-ignore: узбекская пара в PAYMENT_METHODS_UZ
+  debt:     "Долг",         // i18n-ignore: узбекская пара в PAYMENT_METHODS_UZ
 };
 
-/** Слово, которым статус зовут на всех экранах. Незнакомый код — как есть. */
+/** Те же способы по-узбекски — слова веба (entity-labels): naqd, plastik, o'tkazma, qarz. */
+export const PAYMENT_METHODS_UZ: Record<string, string> = {
+  cash:     "Naqd",
+  card:     "Plastik",
+  transfer: "O'tkazma",
+  debt:     "Qarz",
+};
+
+/** Способ оплаты на языке телефона. Незнакомый код — как есть. */
+export function paymentMethodLabel(method: string | null | undefined): string {
+  const code = method ?? "";
+  const ru = PAYMENT_METHODS[code];
+  if (ru == null) return method ?? "—";
+  return tt(ru, PAYMENT_METHODS_UZ[code] ?? ru);
+}
+
+/** Слово, которым статус зовут на всех экранах, на языке телефона. Незнакомый код — как есть. */
 export function orderStatusLabel(status: string | null | undefined): string {
-  return ORDER_STATUSES[status ?? ""]?.label ?? status ?? "—";
+  const s = ORDER_STATUSES[status ?? ""];
+  return s ? tt(s.label, s.uz) : status ?? "—";
 }
 
 /** Плоский цвет статуса: для точек в ленте и полос на диаграмме. */
