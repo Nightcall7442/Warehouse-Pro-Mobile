@@ -24,14 +24,14 @@ import { useRouter } from "expo-router";
 
 type IconName = keyof typeof Feather.glyphMap;
 
-const ROLE_META: Record<string, { label: string; icon: IconName }> = {
-  agent: { label: "Агент", icon: "truck" },
-  supervisor: { label: "Супервайзер", icon: "eye" },
-  ceo: { label: "Руководитель", icon: "briefcase" },
-  operator: { label: "Оператор", icon: "headphones" },
-  merchandiser: { label: "Мерчандайзер", icon: "tag" },
-  courier: { label: "Курьер", icon: "truck" },
-};
+const roleMetaFor = (t: (ru: string, uz: string) => string): Record<string, { label: string; icon: IconName }> => ({
+  agent: { label: t("Агент", "Agent"), icon: "truck" },
+  supervisor: { label: t("Супервайзер", "Supervayzer"), icon: "eye" },
+  ceo: { label: t("Руководитель", "Rahbar"), icon: "briefcase" },
+  operator: { label: t("Оператор", "Operator"), icon: "headphones" },
+  merchandiser: { label: t("Мерчандайзер", "Merchandayzer"), icon: "tag" },
+  courier: { label: t("Курьер", "Kuryer"), icon: "truck" },
+});
 
 function Label({ children, colors }: { children: React.ReactNode; colors: ReturnType<typeof useThemeColors> }) {
   return (
@@ -67,7 +67,7 @@ export default function ProfileScreen() {
   // Monthly quotas are set against field staff. A CEO has no personal plan, so
   // showing them a permanent "норма не назначена" card would be noise.
   const isFieldRole = user?.role === "agent" || user?.role === "merchandiser";
-  const roleMeta = ROLE_META[user?.role ?? ""] ?? { label: user?.role ?? "—", icon: "user" as IconName };
+  const roleMeta = roleMetaFor(t)[user?.role ?? ""] ?? { label: user?.role ?? "—", icon: "user" as IconName };
 
   const { refetch: refetchKpis } = useQuery({ queryKey: ["agentDashboard"], queryFn: getAgentDashboard, enabled: isAgent });
   const { refetch: refetchShops } = useQuery({ queryKey: ["shops"], queryFn: getMyShops, enabled: isAgent || isSupervisor });
@@ -75,7 +75,7 @@ export default function ProfileScreen() {
 
   const updateMutation = useMutation({
     mutationFn: (data: { name: string }) => updateProfile(data),
-    onSuccess: (_, v) => { updateUser({ name: v.name }); notify.success("Профиль обновлён"); },
+    onSuccess: (_, v) => { updateUser({ name: v.name }); notify.success(t("Профиль обновлён", "Profil yangilandi")); },
     onError: (e: Error) => notify.error(e.message),
   });
 
@@ -93,23 +93,23 @@ export default function ProfileScreen() {
       await updateProfile({ avatar: url });
       return url;
     },
-    onSuccess: (url) => { updateUser({ avatar: url }); notify.success("Аватар обновлён"); },
+    onSuccess: (url) => { updateUser({ avatar: url }); notify.success(t("Аватар обновлён", "Avatar yangilandi")); },
     onError: (e: Error) => notify.error(e.message),
   });
 
   const handleAvatarPress = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") { Alert.alert("Нужно разрешение", "Доступ к галерее"); return; }
+    if (status !== "granted") { Alert.alert(t("Нужно разрешение", "Ruxsat kerak"), t("Доступ к галерее", "Galereyaga kirish")); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.6,
     });
     const uri = result.assets?.[0]?.uri;
     if (!result.canceled && uri) avatarMutation.mutate({ uri });
-  }, [avatarMutation]);
+  }, [avatarMutation, t]);
 
   const pwdMutation = useMutation({
     mutationFn: (d: { currentPassword: string; newPassword: string }) => changePassword(d),
-    onSuccess: () => { setCurrentPwd(""); setNewPwd(""); setConfirmPwd(""); notify.success("Пароль изменён"); },
+    onSuccess: () => { setCurrentPwd(""); setNewPwd(""); setConfirmPwd(""); notify.success(t("Пароль изменён", "Parol o'zgartirildi")); },
     onError: (e: Error) => notify.error(e.message),
   });
 
@@ -129,7 +129,7 @@ export default function ProfileScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.primary} />}
       >
         {/* Title */}
-        <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 24, color: colors.text.primary, marginBottom: Spacing.xl }}>Настройки</Text>
+        <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 24, color: colors.text.primary, marginBottom: Spacing.xl }}>{t("Настройки", "Sozlamalar")}</Text>
 
         {/* ── Monthly plan ──
             Sits directly under the title: it's the thing an agent opens this
@@ -165,11 +165,11 @@ export default function ProfileScreen() {
             </View>
 
             {/* ОСНОВНОЕ */}
-            <Label colors={colors}>ОСНОВНОЕ</Label>
+            <Label colors={colors}>{t("ОСНОВНОЕ", "ASOSIY")}</Label>
             <View style={{ gap: Spacing.sm, marginBottom: Spacing.lg }}>
               <View>
-                <Label colors={colors}>ИМЯ</Label>
-                <TextInput value={newName} onChangeText={setNewName} placeholder="Введите имя" placeholderTextColor={colors.text.tertiary}
+                <Label colors={colors}>{t("ИМЯ", "ISM")}</Label>
+                <TextInput value={newName} onChangeText={setNewName} placeholder={t("Введите имя", "Ismingizni kiriting")} placeholderTextColor={colors.text.tertiary}
                   style={{ backgroundColor: colors.bg.input, borderRadius: Radii.lg, borderWidth: 0, paddingHorizontal: 18, paddingVertical: 13, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary }} />
               </View>
               <View>
@@ -182,7 +182,7 @@ export default function ProfileScreen() {
             <PressableScale onPress={() => updateMutation.mutate({ name: newName })} disabled={updateMutation.isPending || !newName.trim()} haptic="medium">
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20, opacity: updateMutation.isPending || !newName.trim() ? 0.4 : 1 }}>
                 {updateMutation.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Feather name="save" size={14} color="#fff" />}
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>Сохранить профиль</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>{t("Сохранить профиль", "Profilni saqlash")}</Text>
               </View>
             </PressableScale>
           </Card>
@@ -191,13 +191,13 @@ export default function ProfileScreen() {
         {/* ── Password Card ── */}
         <FadeInItem delay={40}>
           <Card style={{ padding: Spacing.xl, marginTop: Spacing.base }}>
-            <Label colors={colors}>СМЕНА ПАРОЛЯ</Label>
+            <Label colors={colors}>{t("СМЕНА ПАРОЛЯ", "PAROLNI O'ZGARTIRISH")}</Label>
             <View style={{ gap: Spacing.sm, marginBottom: Spacing.lg }}>
               {[
-                { label: "ТЕКУЩИЙ ПАРОЛЬ", value: currentPwd, setter: setCurrentPwd },
-                { label: "НОВЫЙ ПАРОЛЬ", value: newPwd, setter: setNewPwd },
+                { label: t("ТЕКУЩИЙ ПАРОЛЬ", "JORIY PAROL"), value: currentPwd, setter: setCurrentPwd },
+                { label: t("НОВЫЙ ПАРОЛЬ", "YANGI PAROL"), value: newPwd, setter: setNewPwd },
                 // Было «ПОДТВЕРДИТЕ НОВЫЙ» — обрубок: новый что?
-                { label: "ПОВТОРИТЕ НОВЫЙ ПАРОЛЬ", value: confirmPwd, setter: setConfirmPwd },
+                { label: t("ПОВТОРИТЕ НОВЫЙ ПАРОЛЬ", "YANGI PAROLNI TAKRORLANG"), value: confirmPwd, setter: setConfirmPwd },
               ].map((f, i) => (
                 <View key={i}>
                   <Label colors={colors}>{f.label}</Label>
@@ -209,9 +209,9 @@ export default function ProfileScreen() {
             {/* Change password button */}
             <PressableScale
               onPress={() => {
-                if (!currentPwd || !newPwd) return notify.error("Заполните все поля");
-                if (newPwd !== confirmPwd) return notify.error("Пароли не совпадают");
-                if (newPwd.length < 8) return notify.error("Минимум 8 символов");
+                if (!currentPwd || !newPwd) return notify.error(t("Заполните все поля", "Barcha maydonlarni to'ldiring"));
+                if (newPwd !== confirmPwd) return notify.error(t("Пароли не совпадают", "Parollar mos emas"));
+                if (newPwd.length < 8) return notify.error(t("Минимум 8 символов", "Kamida 8 ta belgi"));
                 pwdMutation.mutate({ currentPassword: currentPwd, newPassword: newPwd });
               }}
               disabled={pwdMutation.isPending || !currentPwd || !newPwd}
@@ -219,7 +219,7 @@ export default function ProfileScreen() {
             >
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20, ...soft(isDark).raised, opacity: pwdMutation.isPending || !currentPwd || !newPwd ? 0.4 : 1 }}>
                 {pwdMutation.isPending ? <ActivityIndicator color={colors.text.primary} size="small" /> : <Feather name="lock" size={14} color={colors.text.secondary} />}
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>Изменить пароль</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>{t("Изменить пароль", "Parolni o'zgartirish")}</Text>
               </View>
             </PressableScale>
           </Card>
@@ -247,10 +247,10 @@ export default function ProfileScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
-                    Моя зарплата
+                    {t("Моя зарплата", "Mening oyligim")}
                   </Text>
                   <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }}>
-                    Начислено, выдано и подтверждение получения
+                    {t("Начислено, выдано и подтверждение получения", "Hisoblangan, berilgan va olganini tasdiqlash")}
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
@@ -281,10 +281,10 @@ export default function ProfileScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
-                    Мои долги
+                    {t("Мои долги", "Mening qarzlarim")}
                   </Text>
                   <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }}>
-                    Кому идти собирать деньги
+                    {t("Кому идти собирать деньги", "Kimdan pul yig'ish kerak")}
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
@@ -296,7 +296,7 @@ export default function ProfileScreen() {
         {/* ── Appearance Card ── */}
         <FadeInItem delay={80}>
           <Card style={{ padding: Spacing.xl, marginTop: Spacing.base }}>
-            <Label colors={colors}>ТЕМА</Label>
+            <Label colors={colors}>{t("ТЕМА", "MAVZU")}</Label>
             <View style={{ flexDirection: "row", gap: Spacing.sm }}>
               <PressableScale onPress={() => { if (isDark) toggleTheme(); }} haptic="light" style={{ flex: 1 }}>
                 <View style={{
@@ -305,7 +305,7 @@ export default function ProfileScreen() {
                   ...((!isDark) ? soft(isDark).raisedSm : soft(isDark).inset),
                 }}>
                   <Feather name="sun" size={18} color={!isDark ? "#fff" : colors.text.secondary} />
-                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: !isDark ? "#fff" : colors.text.secondary }}>Светлая</Text>
+                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: !isDark ? "#fff" : colors.text.secondary }}>{t("Светлая", "Yorug'")}</Text>
                 </View>
               </PressableScale>
               <PressableScale onPress={() => { if (!isDark) toggleTheme(); }} haptic="light" style={{ flex: 1 }}>
@@ -315,7 +315,7 @@ export default function ProfileScreen() {
                   ...(isDark ? soft(isDark).raisedSm : soft(isDark).inset),
                 }}>
                   <Feather name="moon" size={18} color={isDark ? "#fff" : colors.text.secondary} />
-                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: isDark ? "#fff" : colors.text.secondary }}>Тёмная</Text>
+                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: isDark ? "#fff" : colors.text.secondary }}>{t("Тёмная", "Qorong'i")}</Text>
                 </View>
               </PressableScale>
             </View>
@@ -327,7 +327,8 @@ export default function ProfileScreen() {
           <Card style={{ padding: Spacing.xl, marginTop: Spacing.base }}>
             <Label colors={colors}>{t("ЯЗЫК", "TIL")}</Label>
             <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-              {([["ru", "Русский"], ["uz", "O'zbekcha"]] as const).map(([code, name]) => {
+              {/* Каждый язык назван на самом себе: это и есть подпись переключателя. */}
+              {([["ru", "Русский"], ["uz", "O'zbekcha"]] as const).map(([code, name]) => { // i18n-ignore
                 const active = lang === code;
                 return (
                   <PressableScale key={code} onPress={() => { void setLang(code); }} haptic="light" style={{ flex: 1 }}>
@@ -352,12 +353,12 @@ export default function ProfileScreen() {
         {/* ── Logout Card ── */}
         <FadeInItem delay={120}>
           <PressableScale
-            onPress={() => Alert.alert("Выход", "Вы уверены?", [{ text: "Отмена", style: "cancel" }, { text: "Выйти", style: "destructive", onPress: logout }])}
+            onPress={() => Alert.alert(t("Выход", "Chiqish"), t("Вы уверены?", "Ishonchingiz komilmi?"), [{ text: t("Отмена", "Bekor"), style: "cancel" }, { text: t("Выйти", "Chiqish"), style: "destructive", onPress: logout }])}
             haptic="medium"
           >
             <Card style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: Spacing.lg, marginTop: Spacing.base, borderColor: colors.status.danger + "30", borderWidth: 1 }}>
               <Feather name="log-out" size={16} color={colors.status.danger} />
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.status.danger }}>Выйти из аккаунта</Text>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.status.danger }}>{t("Выйти из аккаунта", "Hisobdan chiqish")}</Text>
             </Card>
           </PressableScale>
         </FadeInItem>

@@ -190,7 +190,8 @@ describe("экран доступен", () => {
   it("вкладка объявлена и подписана", () => {
     // Экран без записи в навигаторе не появится в панели вовсе.
     expect(LAYOUT).toContain('name="debtors"');
-    expect(LAYOUT).toContain("debtors: \"Долги\"");
+    // Подпись — парой t(ru, uz): русское слово остаётся первым доводом.
+    expect(LAYOUT).toContain("debtors: t(\"Долги\", \"Qarzlar\")");
     expect(LAYOUT).toMatch(/debtors: "[a-z-]+"/);
   });
 

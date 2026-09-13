@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import * as Location from "expo-location";
+import { tt } from "../i18n";
 
 export interface LocationCoords {
   latitude: number;
@@ -37,7 +38,7 @@ export function useLocation(options: UseLocationOptions = {}): UseLocationResult
         ({ status } = await Location.requestForegroundPermissionsAsync());
       }
       if (status !== "granted") {
-        setError("Разрешение на геолокацию не выдано");
+        setError(tt("Разрешение на геолокацию не выдано", "Joylashuvga ruxsat berilmagan"));
         setLoading(false);
         return;
       }
@@ -54,7 +55,7 @@ export function useLocation(options: UseLocationOptions = {}): UseLocationResult
         accuracy: pos.coords.accuracy ?? 999,
       });
     } catch {
-      setError("Не удалось определить местоположение");
+      setError(tt("Не удалось определить местоположение", "Joylashuv aniqlanmadi"));
     } finally {
       setLoading(false);
     }
@@ -72,7 +73,7 @@ export function useLocation(options: UseLocationOptions = {}): UseLocationResult
           ({ status } = await Location.requestForegroundPermissionsAsync());
         }
         if (status !== "granted") {
-          if (!cancelled) setError("Разрешение на геолокацию не выдано");
+          if (!cancelled) setError(tt("Разрешение на геолокацию не выдано", "Joylashuvga ruxsat berilmagan"));
           return;
         }
         const pos = await Promise.race([
@@ -89,7 +90,7 @@ export function useLocation(options: UseLocationOptions = {}): UseLocationResult
           });
         }
       } catch {
-        if (!cancelled) setError("Не удалось определить местоположение");
+        if (!cancelled) setError(tt("Не удалось определить местоположение", "Joylashuv aniqlanmadi"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -128,9 +129,9 @@ export function getDistanceKm(
  */
 export function getEstimatedTime(distanceKm: number): string {
   const minutes = Math.round((distanceKm / 30) * 60);
-  if (minutes < 1) return "< 1 мин";
-  if (minutes < 60) return `${minutes} мин`;
+  if (minutes < 1) return tt("< 1 мин", "< 1 daq");
+  if (minutes < 60) return tt(`${minutes} мин`, `${minutes} daq`);
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${hours} ч ${mins} мин`;
+  return tt(`${hours} ч ${mins} мин`, `${hours} soat ${mins} daq`);
 }

@@ -17,6 +17,7 @@ import { uuidv4 } from "../../src/store/offline";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
+import { useT } from "../../src/i18n";
 
 function Field({ label, children, colors }: { label: string; children: React.ReactNode; colors: ThemeColors }) {
   return (
@@ -31,6 +32,7 @@ export default function NewShopScreen() {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
+  const t = useT();
   const qc = useQueryClient();
 
   const [name, setName] = useState("");
@@ -65,18 +67,18 @@ export default function NewShopScreen() {
       const { dataUrl } = await preparePhoto(res.assets[0].uri);
       const url = await uploadFile(dataUrl, "shops");
       setPhoto(url);
-    } catch (e) { notify.error(e instanceof Error ? e.message : "Ошибка загрузки"); }
+    } catch (e) { notify.error(e instanceof Error ? e.message : t("Ошибка загрузки", "Yuklashda xato")); }
   };
 
   const takePhoto = async () => {
     const cam = await ImagePicker.requestCameraPermissionsAsync();
-    if (!cam.granted) { notify.error("Нет доступа к камере"); return; }
+    if (!cam.granted) { notify.error(t("Нет доступа к камере", "Kameraga ruxsat yo'q")); return; }
     await uploadPicked(await ImagePicker.launchCameraAsync(PICKER_OPTS));
   };
 
   const pickFromLibrary = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { notify.error("Нет доступа к галерее"); return; }
+    if (!perm.granted) { notify.error(t("Нет доступа к галерее", "Galereyaga ruxsat yo'q")); return; }
     await uploadPicked(await ImagePicker.launchImageLibraryAsync(PICKER_OPTS));
   };
 
@@ -90,10 +92,10 @@ export default function NewShopScreen() {
    * gallery to choose.
    */
   const pickPhoto = () => {
-    Alert.alert("Фото магазина", undefined, [
-      { text: "Сделать фото", onPress: () => { void takePhoto(); } },
-      { text: "Выбрать из галереи", onPress: () => { void pickFromLibrary(); } },
-      { text: "Отмена", style: "cancel" },
+    Alert.alert(t("Фото магазина", "Do'kon rasmi"), undefined, [
+      { text: t("Сделать фото", "Rasmga olish"), onPress: () => { void takePhoto(); } },
+      { text: t("Выбрать из галереи", "Galereyadan tanlash"), onPress: () => { void pickFromLibrary(); } },
+      { text: t("Отмена", "Bekor"), style: "cancel" },
     ]);
   };
 
@@ -108,7 +110,7 @@ export default function NewShopScreen() {
         ({ status } = await Location.requestForegroundPermissionsAsync());
       }
       if (status !== "granted") {
-        notify.error("Разрешение на геолокацию не выдано. Разрешите в настройках.");
+        notify.error(t("Разрешение на геолокацию не выдано. Разрешите в настройках.", "Joylashuvga ruxsat berilmagan. Sozlamalardan ruxsat bering."));
         setGpsLoading(false);
         return;
       }
@@ -122,7 +124,7 @@ export default function NewShopScreen() {
       ]);
 
       if (!pos?.coords) {
-        notify.error("Не удалось определить координаты");
+        notify.error(t("Не удалось определить координаты", "Koordinatalar aniqlanmadi"));
         setGpsLoading(false);
         return;
       }
@@ -130,11 +132,11 @@ export default function NewShopScreen() {
       setGpsLat(pos.coords.latitude.toFixed(8));
       setGpsLng(pos.coords.longitude.toFixed(8));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Координаты сохранены");
+      notify.success(t("Координаты сохранены", "Koordinatalar saqlandi"));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Unknown error";
       if (__DEV__) console.warn("[GPS] captureGPS failed:", msg);
-      notify.error(`Не удалось определить местоположение: ${msg}`);
+      notify.error(t(`Не удалось определить местоположение: ${msg}`, `Joylashuv aniqlanmadi: ${msg}`));
     }
     setGpsLoading(false);
   };
@@ -168,7 +170,7 @@ export default function NewShopScreen() {
       qc.invalidateQueries({ queryKey: ["availableShops"] });
       router.back();
       // Повтор после оборванной связи — не ошибка и не второй магазин.
-      notify.success(res?.idempotent ? "Магазин уже был создан" : "Магазин создан");
+      notify.success(res?.idempotent ? t("Магазин уже был создан", "Do'kon allaqachon yaratilgan") : t("Магазин создан", "Do'kon yaratildi"));
     },
     onError: (e: Error) => {
       // "timeout of 15000ms exceeded" агенту не говорит ничего, а нажать кнопку
@@ -177,8 +179,8 @@ export default function NewShopScreen() {
       const msg = e.message ?? "";
       const network = /timeout|network|econn|aborted/i.test(msg);
       notify.error(network
-        ? "Связь пропала. Нажмите «Создать» ещё раз — повтор не создаст второй магазин."
-        : msg || "Не удалось создать магазин");
+        ? t("Связь пропала. Нажмите «Создать» ещё раз — повтор не создаст второй магазин.", "Aloqa uzildi. «Yaratish»ni yana bosing — ikkinchi do'kon yaratilmaydi.")
+        : msg || t("Не удалось создать магазин", "Do'kon yaratilmadi"));
     },
   });
 
@@ -197,11 +199,11 @@ export default function NewShopScreen() {
       return;
     }
     Alert.alert(
-      "Выйти без сохранения?",
-      "Заполненное пропадёт.",
+      t("Выйти без сохранения?", "Saqlamasdan chiqilsinmi?"),
+      t("Заполненное пропадёт.", "Kiritilganlar yo'qoladi."),
       [
-        { text: "Остаться", style: "cancel" },
-        { text: "Выйти", style: "destructive", onPress: () => router.back() },
+        { text: t("Остаться", "Qolish"), style: "cancel" },
+        { text: t("Выйти", "Chiqish"), style: "destructive", onPress: () => router.back() },
       ],
     );
   }
@@ -222,7 +224,7 @@ export default function NewShopScreen() {
           >
             <Feather name="x" size={20} color="#fff" />
           </TouchableOpacity>
-          <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: "#fff" }}>Новый магазин</Text>
+          <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: "#fff" }}>{t("Новый магазин", "Yangi do'kon")}</Text>
           <View style={{ width: 36 }} />
         </View>
       </LinearGradient>
@@ -239,8 +241,8 @@ export default function NewShopScreen() {
                 <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent.primary + "22", alignItems: "center", justifyContent: "center" }}>
                   <Feather name="camera" size={26} color={colors.accent.primary} />
                 </View>
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 14, color: colors.text.primary }}>Добавить фото</Text>
-                <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.secondary, textAlign: "center" }}>Чтобы доставщики не потерялись</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 14, color: colors.text.primary }}>{t("Добавить фото", "Rasm qo'shish")}</Text>
+                <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.secondary, textAlign: "center" }}>{t("Чтобы доставщики не потерялись", "Kuryerlar adashmasligi uchun")}</Text>
               </View>
             )}
           </Card>
@@ -250,32 +252,32 @@ export default function NewShopScreen() {
           <TouchableOpacity onPress={() => setPhoto(null)}
             style={{ alignSelf: "center", marginTop: -12, marginBottom: 16, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.status.dangerDim, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radii.full }}>
             <Feather name="trash-2" size={13} color={colors.status.danger} />
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.status.danger }}>Удалить фото</Text>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.status.danger }}>{t("Удалить фото", "Rasmni o'chirish")}</Text>
           </TouchableOpacity>
         )}
 
-        <Field label="Название магазина *" colors={colors}>
-          <TextInput style={inputStyle} value={name} onChangeText={setName} placeholder="Продукты 24" placeholderTextColor={colors.text.tertiary} />
+        <Field label={t("Название магазина *", "Do'kon nomi *")} colors={colors}>
+          <TextInput style={inputStyle} value={name} onChangeText={setName} placeholder={t("Продукты 24", "Oziq-ovqat 24")} placeholderTextColor={colors.text.tertiary} />
         </Field>
-        <Field label="Владелец" colors={colors}>
-          <TextInput style={inputStyle} value={owner} onChangeText={setOwner} placeholder="Имя владельца" placeholderTextColor={colors.text.tertiary} />
+        <Field label={t("Владелец", "Egasi")} colors={colors}>
+          <TextInput style={inputStyle} value={owner} onChangeText={setOwner} placeholder={t("Имя владельца", "Egasining ismi")} placeholderTextColor={colors.text.tertiary} />
         </Field>
-        <Field label="Телефон" colors={colors}>
+        <Field label={t("Телефон", "Telefon")} colors={colors}>
           <TextInput style={inputStyle} value={phone} onChangeText={setPhone} placeholder="+998901234567" keyboardType="phone-pad" placeholderTextColor={colors.text.tertiary} />
         </Field>
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <View style={{ flex: 1 }}><Field label="Город" colors={colors}><TextInput style={inputStyle} value={city} onChangeText={setCity} placeholder="Ургенч" placeholderTextColor={colors.text.tertiary} /></Field></View>
-          <View style={{ flex: 1 }}><Field label="Район" colors={colors}><TextInput style={inputStyle} value={district} onChangeText={setDistrict} placeholder="Центр" placeholderTextColor={colors.text.tertiary} /></Field></View>
+          <View style={{ flex: 1 }}><Field label={t("Город", "Shahar")} colors={colors}><TextInput style={inputStyle} value={city} onChangeText={setCity} placeholder={t("Ургенч", "Urganch")} placeholderTextColor={colors.text.tertiary} /></Field></View>
+          <View style={{ flex: 1 }}><Field label={t("Район", "Tuman")} colors={colors}><TextInput style={inputStyle} value={district} onChangeText={setDistrict} placeholder={t("Центр", "Markaz")} placeholderTextColor={colors.text.tertiary} /></Field></View>
         </View>
-        <Field label="Адрес" colors={colors}>
-          <TextInput style={inputStyle} value={address} onChangeText={setAddress} placeholder="ул. Ал-Хорезми, 12" placeholderTextColor={colors.text.tertiary} />
+        <Field label={t("Адрес", "Manzil")} colors={colors}>
+          <TextInput style={inputStyle} value={address} onChangeText={setAddress} placeholder={t("ул. Ал-Хорезми, 12", "Al-Xorazmiy ko'chasi, 12")} placeholderTextColor={colors.text.tertiary} />
         </Field>
         {territories.length > 0 && (
-          <Field label="Территория" colors={colors}>
+          <Field label={t("Территория", "Territoriya")} colors={colors}>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               <TouchableOpacity onPress={() => setTerritoryId(undefined)}
                 style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, ...((!territoryId) ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: !territoryId ? colors.accent.primary + "15" : colors.bg.input }}>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: !territoryId ? colors.accent.primary : colors.text.secondary }}>Без территории</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: !territoryId ? colors.accent.primary : colors.text.secondary }}>{t("Без территории", "Territoriyasiz")}</Text>
               </TouchableOpacity>
               {territories.map((ter: Territory) => (
                 <TouchableOpacity key={ter.id} onPress={() => setTerritoryId(ter.id)}
@@ -287,24 +289,24 @@ export default function NewShopScreen() {
             </View>
           </Field>
         )}
-        <Field label="Заметки" colors={colors}>
-          <TextInput style={[inputStyle, { height: 80, textAlignVertical: "top" }]} multiline value={notes} onChangeText={setNotes} placeholder="Дополнительная информация…" placeholderTextColor={colors.text.tertiary} />
+        <Field label={t("Заметки", "Izoh")} colors={colors}>
+          <TextInput style={[inputStyle, { height: 80, textAlignVertical: "top" }]} multiline value={notes} onChangeText={setNotes} placeholder={t("Дополнительная информация…", "Qo'shimcha ma'lumot…")} placeholderTextColor={colors.text.tertiary} />
         </Field>
 
         {/* GPS */}
-        <Field label="Геолокация (опционально)" colors={colors}>
+        <Field label={t("Геолокация (опционально)", "Joylashuv (ixtiyoriy)")} colors={colors}>
           <PressableScale onPress={captureGPS} disabled={gpsLoading} haptic="medium"
             style={{ backgroundColor: gpsLat ? colors.accent.success + "15" : colors.bg.input, ...(gpsLat ? soft(isDark).raisedSm : soft(isDark).inset), borderRadius: Radii.md, padding: 12, flexDirection: "row", alignItems: "center", gap: 8, opacity: gpsLoading ? 0.6 : 1 }}>
             {gpsLoading ? <ActivityIndicator size="small" color={colors.accent.primary} /> : <Feather name={gpsLat ? "check-circle" : "crosshair"} size={16} color={gpsLat ? colors.accent.success : colors.accent.primary} />}
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.primary }}>{gpsLat ? "Координаты сохранены" : "Определить местоположение"}</Text>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.primary }}>{gpsLat ? t("Координаты сохранены", "Koordinatalar saqlandi") : t("Определить местоположение", "Joylashuvni aniqlash")}</Text>
           </PressableScale>
           {gpsLat && gpsLng && <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.secondary, marginTop: 6 }}>{gpsLat}, {gpsLng}</Text>}
         </Field>
 
         {/* Submit */}
         <Button variant="primary" size="lg" fullWidth loading={mutation.isPending} disabled={mutation.isPending || !name.trim()}
-          onPress={() => { if (!name.trim()) { notify.error("Введите название"); return; } Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); mutation.mutate(); }}>
-          Создать магазин
+          onPress={() => { if (!name.trim()) { notify.error(t("Введите название", "Nom kiriting")); return; } Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); mutation.mutate(); }}>
+          {t("Создать магазин", "Do'kon yaratish")}
         </Button>
         </FadeInItem>
       </ScrollView>

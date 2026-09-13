@@ -13,6 +13,7 @@ import { Typography, Spacing, Radii, ThemeColors, soft } from "../../src/theme";
 import { ScreenHeader, SearchInput, Card } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
+import { useT } from "../../src/i18n";
 
 function ShopCard({
   shop, isDark: _isDark, colors, index, distance, estimatedTime, onView, onOrder }: {
@@ -21,6 +22,7 @@ function ShopCard({
 }) {
   const hasDebt = Number(shop.debt ?? 0) > 0;
   const isActive = shop.status !== "inactive";
+  const t = useT();
 
   return (
     <FadeInItem delay={index * 40} style={{ marginBottom: Spacing.sm }}>
@@ -49,7 +51,7 @@ function ShopCard({
                   </View>
                 )}
                 <View style={{ backgroundColor: isActive ? colors.status.successDim : colors.bg.elevated, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 3 }}>
-                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: isActive ? colors.status.success : colors.text.secondary }}>{isActive ? "Актив" : "Неактив"}</Text>
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: isActive ? colors.status.success : colors.text.secondary }}>{isActive ? t("Актив", "Faol") : t("Неактив", "Nofaol")}</Text>
                 </View>
                 <Feather name="chevron-right" size={16} color={colors.text.secondary} />
               </View>
@@ -67,7 +69,7 @@ function ShopCard({
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: distance < 1 ? colors.status.successDim : colors.status.warningDim, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 3 }}>
                   <Feather name="navigation" size={10} color={distance < 1 ? colors.status.success : colors.status.warning} />
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: distance < 1 ? colors.status.success : colors.status.warning }}>
-                    {distance < 1 ? `${Math.round(distance * 1000)} м` : `${distance.toFixed(1)} км`}
+                    {distance < 1 ? t(`${Math.round(distance * 1000)} м`, `${Math.round(distance * 1000)} m`) : t(`${distance.toFixed(1)} км`, `${distance.toFixed(1)} km`)}
                   </Text>
                 </View>
                 {estimatedTime && <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.tertiary }}>~{estimatedTime}</Text>}
@@ -98,6 +100,7 @@ export default function ShopsScreen() {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
+  const t = useT();
   const { user } = useAuthStore();
   const isSupervisor = user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator";
   const isAgent = user?.role === "agent";
@@ -180,17 +183,17 @@ export default function ShopsScreen() {
 
   // Group by territory (district || city)
   const territories = useMemo<TerritoryGroup[]>(() => {
-    if (sortByDistance && location) return [{ territory: "По расстоянию", shops: filtered }];
+    if (sortByDistance && location) return [{ territory: t("По расстоянию", "Masofa bo'yicha"), shops: filtered }];
     const map = new Map<string, ShopWithDistance[]>();
     for (const s of filtered) {
-      const territory = s.district || s.city || "Другие";
+      const territory = s.district || s.city || t("Другие", "Boshqalar");
       if (!map.has(territory)) map.set(territory, []);
       map.get(territory)!.push(s);
     }
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b, "ru"))
       .map(([territory, shops]) => ({ territory, shops }));
-  }, [filtered, sortByDistance, location]);
+  }, [filtered, sortByDistance, location, t]);
 
   const selectedShops = useMemo(() => {
     if (!selectedTerritory) return [];
@@ -211,9 +214,9 @@ export default function ShopsScreen() {
             </PressableScale>
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xl, color: colors.text.primary }} numberOfLines={1}>
-                {selectedTerritory === "__all__" ? "Все магазины" : selectedTerritory}
+                {selectedTerritory === "__all__" ? t("Все магазины", "Barcha do'konlar") : selectedTerritory}
               </Text>
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{selectedShops.length} магазинов</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{selectedShops.length} {t("магазинов", "ta do'kon")}</Text>
             </View>
           </View>
         </View>
@@ -251,7 +254,7 @@ export default function ShopsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       <ScreenHeader
-        title="Магазины"
+        title={t("Магазины", "Do'konlar")}
         right={
           <View style={{ flexDirection: "row", gap: Spacing.sm }}>
             {isAgent && (workZones ?? []).length > 0 && (
@@ -277,7 +280,7 @@ export default function ShopsScreen() {
         }
       />
       <View style={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.md }}>
-        <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск магазинов…" />
+        <SearchInput value={search} onChangeText={setSearch} placeholder={t("Поиск магазинов…", "Do'kon qidirish…")} />
       </View>
       {isLoading ? (
         <View style={{ flex: 1, paddingTop: Spacing.lg, paddingHorizontal: 16, gap: Spacing.md }}>
@@ -286,10 +289,10 @@ export default function ShopsScreen() {
       ) : isError ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: Spacing.lg, paddingHorizontal: 32 }}>
           <Feather name="wifi-off" size={28} color={colors.status.danger} />
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.lg, color: colors.text.primary, textAlign: "center" }}>Не удалось загрузить</Text>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.lg, color: colors.text.primary, textAlign: "center" }}>{t("Не удалось загрузить", "Yuklab bo'lmadi")}</Text>
           <PressableScale onPress={() => refetch()} haptic="light">
             <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingVertical: 10, paddingHorizontal: 20 }}>
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>Повторить</Text>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>{t("Повторить", "Qayta urinish")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -322,8 +325,8 @@ export default function ShopsScreen() {
                   <Feather name="globe" size={20} color={colors.accent.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>Все магазины</Text>
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{filtered.length} магазинов</Text>
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Все магазины", "Barcha do'konlar")}</Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{filtered.length} {t("магазинов", "ta do'kon")}</Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.text.secondary} />
               </View>
@@ -341,7 +344,7 @@ export default function ShopsScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{group.territory}</Text>
-                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{group.shops.length} магазинов</Text>
+                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{group.shops.length} {t("магазинов", "ta do'kon")}</Text>
                     </View>
                     <Feather name="chevron-right" size={18} color={colors.text.secondary} />
                   </View>
@@ -362,7 +365,7 @@ export default function ShopsScreen() {
             <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
             </View>
-            <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.lg }}>Мои рабочие зоны</Text>
+            <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.lg }}>{t("Мои рабочие зоны", "Mening ish hududlarim")}</Text>
             <FlatList
               data={workZones ?? []}
               keyExtractor={z => String(z.id)}
@@ -380,7 +383,7 @@ export default function ShopsScreen() {
               ListEmptyComponent={
                 <View style={{ alignItems: "center", paddingVertical: 40 }}>
                   <Feather name="map" size={32} color={colors.text.muted} />
-                  <Text style={{ color: colors.text.secondary, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, marginTop: Spacing.md }}>Нет рабочих зон</Text>
+                  <Text style={{ color: colors.text.secondary, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, marginTop: Spacing.md }}>{t("Нет рабочих зон", "Ish hududlari yo'q")}</Text>
                 </View>
               }
             />
