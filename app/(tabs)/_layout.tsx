@@ -39,7 +39,7 @@ const tabLabels = (t: (ru: string, uz: string) => string): Record<string, string
   targets: t("Нормы", "Normalar"),
   deliveries: t("Доставки", "Yetkazish"),
   profile: t("Профиль", "Profil"),
-  tracking: t("Слежение", "Kuzatuv"),
+  tracking: t("Карта", "Xarita"),
   debtors: t("Долги", "Qarzlar"),
 });
 

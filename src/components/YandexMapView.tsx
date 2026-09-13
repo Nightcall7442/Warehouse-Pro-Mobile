@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useImperativeHandle } from "react";
-import { View, Text } from "react-native";
+import { View, Text, Platform } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import Constants from "expo-constants";
 import { useT } from "../i18n";
@@ -250,6 +250,30 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
       webRef.current?.injectJavaScript(`updateMarkers(${JSON.stringify(markersJsRef.current)}); true;`);
     }
   }, []);
+
+  /*
+    Веб-сборка (Expo web — снимки для руководства и предпросмотр): WebView на
+    этой платформе не живёт и рисовал красную строку «does not support this
+    platform» вместо карты. Здесь та же страница — обычным iframe, метки
+    вписаны в неё сразу; нажатие по метке в вебе не пробрасывается.
+  */
+  // Стенды jest тоже «web» (react-native-web под jsdom), но проверяют WebView —
+  // им iframe не нужен: настоящий браузер отличаем по user agent.
+  const browserBuild = Platform.OS === "web" && typeof navigator !== "undefined" && !/jsdom/i.test(navigator.userAgent ?? "");
+  if (browserBuild) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { unstable_createElement } = require("react-native-web") as { unstable_createElement: (type: string, props: Record<string, unknown>) => React.ReactElement };
+    const markersJson = JSON.stringify(markers.map(m => ({ ...m, svg: buildMarkerSvg(m) })));
+    const html = (htmlRef.current as string).replace(
+      "</body>",
+      `<script>window.addEventListener("load", function () { try { updateMarkers(${JSON.stringify(markersJson)}); } catch (e) {} });</script></body>`,
+    );
+    return (
+      <View style={[{ flex: 1, overflow: "hidden" }, style]}>
+        {unstable_createElement("iframe", { srcDoc: html, title: "map", style: { border: 0, width: "100%", height: "100%" } })}
+      </View>
+    );
+  }
 
   // A map with no key renders as a blank rectangle, which reads as a broken
   // screen rather than as a missing setting. Say which it is.

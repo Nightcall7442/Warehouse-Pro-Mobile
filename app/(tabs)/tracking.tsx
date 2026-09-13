@@ -149,7 +149,7 @@ export default function TrackingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       <ScreenHeader
-        title={t("Трекинг", "Kuzatuv")}
+        title={t("Карта", "Xarita")}
         right={
           <PressableScale onPress={fitAll} haptic="light">
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.bg.elevated, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radii.full, ...soft(isDark).raised}}>
