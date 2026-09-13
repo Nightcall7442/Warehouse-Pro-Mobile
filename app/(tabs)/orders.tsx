@@ -5,7 +5,8 @@ import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
-import { ru } from "date-fns/locale";
+import { ru, uz } from "date-fns/locale";
+import { useT, useLang, tt, type Lang } from "../../src/i18n";
 import { Feather } from "@expo/vector-icons";
 import { getMyOrders, Order } from "../../src/api";
 import { offlineOrderTotal } from "../../src/lib/order-money";
@@ -31,12 +32,12 @@ type ListItem =
   /** Заказ из очереди на телефоне: сервер о нём ещё не знает. */
   | { type: "pending"; order: OfflineOrder; key: string };
 
-function dayLabel(dateStr: string): string {
+function dayLabel(dateStr: string, lang: Lang): string {
   try {
     const d = parseISO(dateStr);
-    if (isToday(d)) return "Сегодня";
-    if (isYesterday(d)) return "Вчера";
-    return format(d, "d MMMM", { locale: ru });
+    if (isToday(d)) return tt("Сегодня", "Bugun");
+    if (isYesterday(d)) return tt("Вчера", "Kecha");
+    return format(d, "d MMMM", { locale: lang === "uz" ? uz : ru });
   } catch { return ""; }
 }
 
@@ -50,11 +51,11 @@ function dayKey(dateStr: string): string {
  */
 function confirmDiscard(what: string, onConfirm: () => void) {
   Alert.alert(
-    "Удалить из очереди?",
-    `${what} не будет отправлено на сервер. Отменить это действие нельзя.`,
+    tt("Удалить из очереди?", "Navbatdan o'chirasizmi?"),
+    tt(`${what} не будет отправлено на сервер. Отменить это действие нельзя.`, `${what} serverga yuborilmaydi. Bu amalni qaytarib bo'lmaydi.`),
     [
-      { text: "Отмена", style: "cancel" },
-      { text: "Удалить", style: "destructive", onPress: onConfirm },
+      { text: tt("Отмена", "Bekor"), style: "cancel" },
+      { text: tt("Удалить", "O'chirish"), style: "destructive", onPress: onConfirm },
     ]
   );
 }
@@ -63,6 +64,8 @@ export default function OrdersScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const t = useT();
+  const lang = useLang();
   const { user } = useAuthStore();
   const offline = useOfflineStore();
   const { orders: offlineOrders, deliveryActions, syncAll, retry, retryDeliveryAction, syncingOrders, syncingActions } = offline;
@@ -111,7 +114,7 @@ export default function OrdersScreen() {
       заново — второй такой же. Полоса остаётся: в ней «повторить» и «убрать».
     */
     if (pendingOffline.length > 0) {
-      result.push({ type: "title", title: "ОЖИДАЮТ ОТПРАВКИ", key: "h-pending" });
+      result.push({ type: "title", title: t("ОЖИДАЮТ ОТПРАВКИ", "YUBORISH KUTILMOQDA"), key: "h-pending" });
       for (const order of pendingOffline) result.push({ type: "pending", order, key: `p-${order.id}` });
     }
     let lastKey = "";
@@ -124,7 +127,7 @@ export default function OrdersScreen() {
       result.push({ type: "order", order, key: `o-${order.id}` });
     }
     return result;
-  }, [orders, pendingOffline]);
+  }, [orders, pendingOffline, t]);
 
   const stats = useMemo(() => {
     const arr = Array.isArray(orders) ? orders : [];
@@ -141,16 +144,16 @@ export default function OrdersScreen() {
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.sm }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <View>
-            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: colors.text.primary }}>Заказы</Text>
+            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: colors.text.primary }}>{t("Заказы", "Buyurtmalar")}</Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
-              {stats.total} заказов · {stats.newCount} новых
+              {t(`${stats.total} заказов · ${stats.newCount} новых`, `${stats.total} ta buyurtma · ${stats.newCount} ta yangi`)}
             </Text>
           </View>
           <PressableScale onPress={() => router.push("/order/new")} haptic="light">
             <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radii.md }}>
               <Feather name="plus" size={14} color="#fff" />
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff" }}>Новый</Text>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff" }}>{t("Новый", "Yangi")}</Text>
             </LinearGradient>
           </PressableScale>
         </View>
@@ -164,17 +167,17 @@ export default function OrdersScreen() {
               <Feather name="wifi-off" size={18} color={colors.status.warning} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
-                  {pendingOffline.length} {pendingOffline.length === 1 ? "заказ" : "заказов"} не отправлен{pendingOffline.length === 1 ? "" : "ы"}
+                  {t(`${pendingOffline.length} ${pendingOffline.length === 1 ? "заказ" : "заказов"} не отправлен${pendingOffline.length === 1 ? "" : "ы"}`, `${pendingOffline.length} ta buyurtma yuborilmadi`)}
                 </Text>
                 {syncingOrders ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
                     <ActivityIndicator size="small" color={colors.accent.primary} />
-                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary }}>Отправка...</Text>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary }}>{t("Отправка...", "Yuborilmoqda...")}</Text>
                   </View>
                 ) : (
                   <TouchableOpacity onPress={() => syncAll()} style={{ marginTop: 4 }}>
                     <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontSemibold }}>
-                      Нажмите для повторной отправки
+                      {t("Нажмите для повторной отправки", "Qayta yuborish uchun bosing")}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -205,11 +208,11 @@ export default function OrdersScreen() {
                   ) : null}
                 </View>
                 {retryingId === o.id ? (
-                  <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>Отправка...</Text>
+                  <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>{t("Отправка...", "Yuborilmoqda...")}</Text>
                 ) : (
                   <>
                     <Feather name="refresh-cw" size={14} color={colors.accent.primary} />
-                    <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>Повтор</Text>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>{t("Повтор", "Qayta")}</Text>
                     {/* Only offered once the server has actually refused the order.
                         Retrying that will never help, and without a way out the
                         row stays red forever — which is what pushes agents into
@@ -218,7 +221,7 @@ export default function OrdersScreen() {
                       <TouchableOpacity
                         onPress={() => confirmDiscard(o.shopName, () => offline.remove(o.id))}
                         hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-                        accessibilityLabel="Удалить заказ из очереди"
+                        accessibilityLabel={t("Удалить заказ из очереди", "Buyurtmani navbatdan o'chirish")}
                       >
                         <Feather name="x" size={16} color={colors.text.muted} />
                       </TouchableOpacity>
@@ -239,17 +242,17 @@ export default function OrdersScreen() {
               <Feather name="truck" size={18} color={colors.status.warning} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
-                  {pendingActions.length} {pendingActions.length === 1 ? "действие" : "действий"} ожидают отправки
+                  {t(`${pendingActions.length} ${pendingActions.length === 1 ? "действие" : "действий"} ожидают отправки`, `${pendingActions.length} ta amal yuborishni kutmoqda`)}
                 </Text>
                 {syncingActions ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
                     <ActivityIndicator size="small" color={colors.accent.primary} />
-                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary }}>Отправка...</Text>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary }}>{t("Отправка...", "Yuborilmoqda...")}</Text>
                   </View>
                 ) : (
                   <TouchableOpacity onPress={() => offline.syncDeliveryActions()} style={{ marginTop: 4 }}>
                     <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontSemibold }}>
-                      Нажмите для повторной отправки
+                      {t("Нажмите для повторной отправки", "Qayta yuborish uchun bosing")}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -263,18 +266,18 @@ export default function OrdersScreen() {
               >
                 <Feather name="alert-circle" size={14} color={colors.status.danger} />
                 <Text style={{ flex: 1, fontSize: Typography.size.xs, color: colors.text.secondary }} numberOfLines={1}>
-                  {a.action.type === "markOutForDelivery" ? "Выезд"
-                    : a.action.type === "markDelivered" ? "Доставлен"
-                    : a.action.type === "completeDelivery" ? "Доставка завершена"
-                    : "Проблема"} #{a.action.type === "completeDelivery" ? a.action.input.orderId : a.action.orderId}
+                  {a.action.type === "markOutForDelivery" ? t("Выезд", "Yo'lga chiqdi")
+                    : a.action.type === "markDelivered" ? t("Доставлен", "Yetkazildi")
+                    : a.action.type === "completeDelivery" ? t("Доставка завершена", "Yetkazish yakunlandi")
+                    : t("Проблема", "Muammo")} #{a.action.type === "completeDelivery" ? a.action.input.orderId : a.action.orderId}
                 </Text>
                 <Feather name="refresh-cw" size={14} color={colors.accent.primary} />
-                <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>Повтор</Text>
+                <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary }}>{t("Повтор", "Qayta")}</Text>
                 {a.retryable === false ? (
                   <TouchableOpacity
-                    onPress={() => confirmDiscard("это действие", () => offline.discardDeliveryAction(a.id))}
+                    onPress={() => confirmDiscard(t("это действие", "bu amal"), () => offline.discardDeliveryAction(a.id))}
                     hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-                    accessibilityLabel="Удалить действие из очереди"
+                    accessibilityLabel={t("Удалить действие из очереди", "Amalni navbatdan o'chirish")}
                   >
                     <Feather name="x" size={16} color={colors.text.muted} />
                   </TouchableOpacity>
@@ -300,19 +303,19 @@ export default function OrdersScreen() {
               <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
                 <ProgressRing value={stats.total > 0 ? 100 : 0} size={56} strokeWidth={6} color={KpiColors.blue} />
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{stats.total}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Всего</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>{t("Всего", "Jami")}</Text>
               </Card>
               {/* New ring */}
               <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
                 <ProgressRing value={stats.total > 0 ? Math.round(stats.newCount / Math.max(stats.total, 1) * 100) : 0} size={56} strokeWidth={6} color={KpiColors.teal} />
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{stats.newCount}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Новые</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>{t("Новые", "Yangi")}</Text>
               </Card>
               {/* Completed ring */}
               <Card style={{ flex: 1, alignItems: "center", padding: Spacing.md }}>
                 <ProgressRing value={stats.total > 0 ? Math.round(stats.completedCount / Math.max(stats.total, 1) * 100) : 0} size={56} strokeWidth={6} color={KpiColors.green} />
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{stats.completedCount}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>Выполнены</Text>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 8, color: colors.text.tertiary, letterSpacing: 0.5, textTransform: "uppercase" }}>{t("Выполнены", "Bajarildi")}</Text>
               </Card>
             </>
           )}
@@ -344,18 +347,18 @@ export default function OrdersScreen() {
                 нет». Агент решал, что за день ничего не оформил, и заказывал
                 заново — а первый заказ при этом лежал на сервере. */}
             <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.secondary }}>
-              {isError ? "Не удалось загрузить заказы" : "Заказов пока нет"}
+              {isError ? t("Не удалось загрузить заказы", "Buyurtmalarni yuklab bo'lmadi") : t("Заказов пока нет", "Hozircha buyurtma yo'q")}
             </Text>
             {isError && (
               <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 6, textAlign: "center", paddingHorizontal: 32 }}>
-                Это сбой связи, а не пустой день. Потяните вниз, чтобы обновить.
+                {t("Это сбой связи, а не пустой день. Потяните вниз, чтобы обновить.", "Bu aloqa uzilishi, bo'sh kun emas. Yangilash uchun pastga torting.")}
               </Text>
             )}
           </View>
         ) : null}
         renderItem={({ item }) => {
           if (item.type === "header" || item.type === "title") {
-            const title = item.type === "title" ? item.title : dayLabel(item.date).toUpperCase();
+            const title = item.type === "title" ? item.title : dayLabel(item.date, lang).toUpperCase();
             return (
               <View style={{ paddingTop: Spacing.md, paddingBottom: Spacing.xs }}>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.muted, letterSpacing: 0.5 }}>{title}</Text>
@@ -381,7 +384,7 @@ export default function OrdersScreen() {
                   </Text>
                 </View>
                 <Badge variant={o.status === "failed" ? "danger" : "warning"} style={{ marginTop: Spacing.sm }}>
-                  {o.status === "failed" ? "Сервер отклонил" : "Ожидает отправки"}
+                  {o.status === "failed" ? t("Сервер отклонил", "Server rad etdi") : t("Ожидает отправки", "Yuborish kutilmoqda")}
                 </Badge>
               </Card>
             );

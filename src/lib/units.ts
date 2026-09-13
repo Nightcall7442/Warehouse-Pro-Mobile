@@ -30,14 +30,17 @@
  * беды.
  */
 
+// Строки — уже пары ru/uz, выбор языка ниже в unitLabel/unitShort.
+import { currentLang } from "../i18n";
+
 export const UNITS = [
-  { value: "kg",    ru: "кг",       uz: "kg",       shortRu: "кг",   shortUz: "kg" },
-  { value: "l",     ru: "литр",     uz: "litr",     shortRu: "л",    shortUz: "l" },
-  { value: "pcs",   ru: "штук",     uz: "dona",     shortRu: "шт",   shortUz: "dona" },
-  { value: "box",   ru: "ящик",     uz: "quti",     shortRu: "ящ",   shortUz: "quti" },
-  { value: "pack",  ru: "упаковка", uz: "pachka",   shortRu: "упак", shortUz: "pach" },
-  { value: "m",     ru: "метр",     uz: "metr",     shortRu: "м",    shortUz: "m" },
-  { value: "block", ru: "блок",     uz: "blok",     shortRu: "бл",   shortUz: "blok" },
+  { value: "kg",    ru: "кг",       uz: "kg",       shortRu: "кг",   shortUz: "kg" },   // i18n-ignore: пара ru/uz
+  { value: "l",     ru: "литр",     uz: "litr",     shortRu: "л",    shortUz: "l" },    // i18n-ignore: пара ru/uz
+  { value: "pcs",   ru: "штук",     uz: "dona",     shortRu: "шт",   shortUz: "dona" }, // i18n-ignore: пара ru/uz
+  { value: "box",   ru: "ящик",     uz: "quti",     shortRu: "ящ",   shortUz: "quti" }, // i18n-ignore: пара ru/uz
+  { value: "pack",  ru: "упаковка", uz: "pachka",   shortRu: "упак", shortUz: "pach" }, // i18n-ignore: пара ru/uz
+  { value: "m",     ru: "метр",     uz: "metr",     shortRu: "м",    shortUz: "m" },    // i18n-ignore: пара ru/uz
+  { value: "block", ru: "блок",     uz: "blok",     shortRu: "бл",   shortUz: "blok" }, // i18n-ignore: пара ru/uz
 ] as const;
 
 /** Единицы, которые принимает сервер. */
@@ -54,8 +57,8 @@ function codeOf(unit: string | null | undefined): string {
   return (unit ?? "").trim() || "pcs";
 }
 
-/** Полное название: для выпадающих списков и карточек. */
-export function unitLabel(unit: string | null | undefined, lang: string = "ru"): string {
+/** Полное название: для выпадающих списков и карточек. Язык — телефона, если не сказан. */
+export function unitLabel(unit: string | null | undefined, lang: string = currentLang()): string {
   const code = codeOf(unit);
   const u = BY_VALUE.get(code);
   // Незнакомый код показываем как есть. Молчаливая подмена хуже: по коду видно,
@@ -65,7 +68,7 @@ export function unitLabel(unit: string | null | undefined, lang: string = "ru"):
 }
 
 /** Короткое название: для строк, где рядом стоит число. */
-export function unitShort(unit: string | null | undefined, lang: string = "ru"): string {
+export function unitShort(unit: string | null | undefined, lang: string = currentLang()): string {
   const code = codeOf(unit);
   const u = BY_VALUE.get(code);
   if (!u) return code;

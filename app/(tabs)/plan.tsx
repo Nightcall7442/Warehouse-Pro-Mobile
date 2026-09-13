@@ -22,11 +22,13 @@ import { useVisitQueue } from "../../src/store/visit-queue";
 import { isRetryableError } from "../../src/store/offline";
 import { sendVisitPing } from "../../src/lib/visit-ping";
 import { formatMoney } from "../../src/store/branding";
+import { useT, useLang } from "../../src/i18n";
 
 type IconName = keyof typeof Feather.glyphMap;
 
 // ── Quota Card (monthly norms) ───────────────────────────────────────────────
 function QuotaCard({ colors }: { colors: ReturnType<typeof useThemeColors> }) {
+  const t = useT();
   const { data: quota, isLoading } = useQuery({
     queryKey: ["myQuota"],
     queryFn: () => getMyQuota().catch(() => null),
@@ -40,15 +42,15 @@ function QuotaCard({ colors }: { colors: ReturnType<typeof useThemeColors> }) {
   const progressColor = (pct: number) => pct >= 100 ? colors.status.success : pct >= 70 ? colors.status.warning : colors.status.danger;
 
   const metrics = [
-    { icon: "dollar-sign" as IconName, label: "Выручка", actual: `${(quota.revenue.actual / 1000).toFixed(0)}K`, target: `${(quota.revenue.target / 1000).toFixed(0)}K`, pct: quota.revenue.pct },
-    { icon: "shopping-cart" as IconName, label: "Заказы", actual: String(quota.orders.actual), target: String(quota.orders.target), pct: quota.orders.pct },
-    { icon: "map-pin" as IconName, label: "Визиты", actual: `${Math.round(quota.visits.actual)}%`, target: `${Math.round(quota.visits.target)}%`, pct: quota.visits.pct },
+    { icon: "dollar-sign" as IconName, label: t("Выручка", "Tushum"), actual: `${(quota.revenue.actual / 1000).toFixed(0)}K`, target: `${(quota.revenue.target / 1000).toFixed(0)}K`, pct: quota.revenue.pct },
+    { icon: "shopping-cart" as IconName, label: t("Заказы", "Buyurtmalar"), actual: String(quota.orders.actual), target: String(quota.orders.target), pct: quota.orders.pct },
+    { icon: "map-pin" as IconName, label: t("Визиты", "Tashriflar"), actual: `${Math.round(quota.visits.actual)}%`, target: `${Math.round(quota.visits.target)}%`, pct: quota.visits.pct },
   ];
 
   return (
     <Card style={{ marginBottom: Spacing.base }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
-        <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>ПЛАН МЕСЯЦА</Text>
+        <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>{t("ПЛАН МЕСЯЦА", "OYLIK REJA")}</Text>
         <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: progressColor(overall) }}>{overall}%</Text>
       </View>
 
@@ -83,10 +85,11 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index, isPending }: {
   plan: Plan; colors: ReturnType<typeof useThemeColors>; isDark: boolean;
   onDone: () => void; onSkip: () => void; index: number; isPending: boolean;
 }) {
+  const t = useT();
   const STATUS_META: Record<string, { icon: IconName; color: string; bg: string; label: string }> = {
-    visited: { icon: "check-circle", color: colors.status.success, bg: colors.status.successDim, label: "Посещён" },
-    skipped: { icon: "clock", color: colors.status.warning, bg: colors.status.warningDim, label: "Пропущен" },
-    planned: { icon: "circle", color: colors.status.info, bg: colors.status.infoDim, label: "Запланирован" },
+    visited: { icon: "check-circle", color: colors.status.success, bg: colors.status.successDim, label: t("Посещён", "Tashrif qilindi") },
+    skipped: { icon: "clock", color: colors.status.warning, bg: colors.status.warningDim, label: t("Пропущен", "O'tkazildi") },
+    planned: { icon: "circle", color: colors.status.info, bg: colors.status.infoDim, label: t("Запланирован", "Rejalangan") },
   };
   // То же правило: незнакомое состояние показывается кодом, а не «Запланирован».
   const cfg = STATUS_META[plan.status] ?? { ...STATUS_META.planned, label: plan.status };
@@ -108,14 +111,14 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index, isPending }: {
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>
-            {plan.shopName ?? "Магазин"}
+            {plan.shopName ?? t("Магазин", "Do'kon")}
           </Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 1 }} numberOfLines={1}>
-            {plan.shopAddress ?? "Адрес не указан"}
+            {plan.shopAddress ?? t("Адрес не указан", "Manzil ko'rsatilmagan")}
           </Text>
           {hasDebt && (
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.status.danger, marginTop: 2 }}>
-              Долг: {formatMoney(plan.shopDebt)}
+              {t("Долг", "Qarz")}: {formatMoney(plan.shopDebt)}
             </Text>
           )}
         </View>
@@ -132,13 +135,13 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index, isPending }: {
               */}
               <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingVertical: 6, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Feather name="clock" size={14} color={colors.status.warning} />
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: colors.status.warning }}>Отложить</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: colors.status.warning }}>{t("Отложить", "Keyinga")}</Text>
               </View>
             </PressableScale>
             <PressableScale disabled={isPending} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDone(); }} haptic="none" scaleTo={0.9}>
               <View style={{ backgroundColor: colors.status.success, borderRadius: Radii.sm, paddingVertical: 6, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Feather name="check" size={14} color="#fff" />
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: "#fff" }}>Готово</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: "#fff" }}>{t("Готово", "Tayyor")}</Text>
               </View>
             </PressableScale>
           </View>
@@ -154,6 +157,7 @@ function VisitCard({ plan, colors, isDark, onDone, onSkip, index, isPending }: {
 
 // ── KPI Summary Card ─────────────────────────────────────────────────────────
 function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> }) {
+  const t = useT();
   const { data: kpi, isLoading } = useQuery({
     queryKey: ["agentKpi", "month"],
     queryFn: () => getAgentKpi("month").catch(() => null),
@@ -184,7 +188,7 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
   return (
     <Card style={{ marginBottom: Spacing.base }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
-        <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>ПОКАЗАТЕЛИ</Text>
+        <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>{t("ПОКАЗАТЕЛИ", "KO'RSATKICHLAR")}</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View style={{ width: 28, height: 28, borderRadius: Radii.sm, backgroundColor: gradeColor + "20", alignItems: "center", justifyContent: "center" }}>
             <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 14, color: gradeColor }}>{kpi.kpiGrade}</Text>
@@ -195,11 +199,11 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
 
       {/* Score breakdown bars */}
       {[
-        { label: "Визиты", pct: kpi.visitCompletionRate, weight: "30%", color: KpiColors.teal },
-        { label: "Выручка", pct: Math.min(100, kpi.revenue / 10_000_000 * 100), weight: "25%", color: KpiColors.blue },
-        { label: "Конверсия", pct: kpi.orderCount > 0 && kpi.totalPlans > 0 ? Math.min(100, (kpi.orderCount / kpi.totalPlans) * 100) : 0, weight: "20%", color: KpiColors.amber },
-        { label: "Без возвратов", pct: Math.max(0, 100 - kpi.returnRate), weight: "15%", color: KpiColors.green },
-        { label: "Долги", pct: kpi.debtCollectionRate, weight: "10%", color: KpiColors.coral },
+        { label: t("Визиты", "Tashriflar"), pct: kpi.visitCompletionRate, weight: "30%", color: KpiColors.teal },
+        { label: t("Выручка", "Tushum"), pct: Math.min(100, kpi.revenue / 10_000_000 * 100), weight: "25%", color: KpiColors.blue },
+        { label: t("Конверсия", "Konversiya"), pct: kpi.orderCount > 0 && kpi.totalPlans > 0 ? Math.min(100, (kpi.orderCount / kpi.totalPlans) * 100) : 0, weight: "20%", color: KpiColors.amber },
+        { label: t("Без возвратов", "Qaytarishsiz"), pct: Math.max(0, 100 - kpi.returnRate), weight: "15%", color: KpiColors.green },
+        { label: t("Долги", "Qarz"), pct: kpi.debtCollectionRate, weight: "10%", color: KpiColors.coral },
       ].map(item => (
         <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
           <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.muted, width: 80 }}>{item.label} ({item.weight})</Text>
@@ -226,7 +230,7 @@ function KpiSummaryCard({ colors }: { colors: ReturnType<typeof useThemeColors> 
         <PressableScale onPress={() => router.push("/salary")} haptic="light">
           <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>Зарплата</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.secondary }}>{t("Зарплата", "Oylik")}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
                   {formatMoney(salary)}
@@ -254,6 +258,8 @@ export default function PlanScreen() {
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const t = useT();
+  const lang = useLang();
 
   const { data: plans, isLoading: plansLoading, isError: plansError, refetch: refetchPlans } = useQuery({
     queryKey: ["plans"],
@@ -288,12 +294,12 @@ export default function PlanScreen() {
     onError: async (e: Error, variables) => {
       if (!isRetryableError(e)) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        notify.error(`Отметка не сохранена: ${e.message}`);
+        notify.error(t(`Отметка не сохранена: ${e.message}`, `Belgi saqlanmadi: ${e.message}`));
         return;
       }
       const ok = await queueVisit.add({ planId: variables.planId, status: variables.status });
-      if (ok) notify.info("Нет связи — отметка сохранена и уйдёт сама");
-      else notify.error(`Отметка не сохранена: ${e.message}. Повторите, когда появится связь.`);
+      if (ok) notify.info(t("Нет связи — отметка сохранена и уйдёт сама", "Aloqa yo'q — belgi saqlandi, o'zi yuboriladi"));
+      else notify.error(t(`Отметка не сохранена: ${e.message}. Повторите, когда появится связь.`, `Belgi saqlanmadi: ${e.message}. Aloqa paydo bo'lganda qayta urining.`));
     },
   });
 
@@ -307,7 +313,7 @@ export default function PlanScreen() {
     if (isMerchandiser) {
       router.push({
         pathname: "/merchandiser/visit",
-        params: { planId: String(plan.id), shopId: String(plan.shopId ?? ""), shopName: plan.shopName ?? "Магазин" },
+        params: { planId: String(plan.id), shopId: String(plan.shopId ?? ""), shopName: plan.shopName ?? t("Магазин", "Do'kon") },
       });
       return;
     }
@@ -327,13 +333,13 @@ export default function PlanScreen() {
   const totalDebt = debtShops.reduce((s, p) => s + Number(p.shopDebt ?? 0), 0);
 
   const now = new Date();
-  const monthName = now.toLocaleDateString("ru", { month: "long", year: "numeric" });
+  const monthName = now.toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru", { month: "long", year: "numeric" });
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       {/* Header */}
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md, backgroundColor: colors.bg.secondary, borderBottomWidth: 1, borderBottomColor: colors.border.default }}>
-        <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 22, color: colors.text.primary }}>План</Text>
+        <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 22, color: colors.text.primary }}>{t("План", "Reja")}</Text>
         <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2, textTransform: "capitalize" }}>{monthName}</Text>
       </View>
 
@@ -352,7 +358,7 @@ export default function PlanScreen() {
         {/* Today's visits */}
         <FadeInItem delay={80}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm }}>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>ВИЗИТЫ НА СЕГОДНЯ</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>{t("ВИЗИТЫ НА СЕГОДНЯ", "BUGUNGI TASHRIFLAR")}</Text>
             <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: pct >= 80 ? colors.status.success : colors.brand.primary }}>
               {visited}/{total} · {pct}%
             </Text>
@@ -372,11 +378,11 @@ export default function PlanScreen() {
             // назначено.
             <EmptyState
               icon="alert-circle"
-              title="Не удалось загрузить план"
-              description="Это сбой связи, а не пустой день. Потяните вниз, чтобы повторить."
+              title={t("Не удалось загрузить план", "Rejani yuklab bo'lmadi")}
+              description={t("Это сбой связи, а не пустой день. Потяните вниз, чтобы повторить.", "Bu aloqa xatosi, bo'sh kun emas. Qayta urinish uchun pastga torting.")}
             />
           ) : !plans?.length ? (
-            <EmptyState icon="calendar" title="На сегодня визитов нет" description="Планы визитов появятся здесь" />
+            <EmptyState icon="calendar" title={t("На сегодня визитов нет", "Bugun tashrif yo'q")} description={t("Планы визитов появятся здесь", "Tashrif rejalari shu yerda chiqadi")} />
           ) : (
             plans.map((plan, idx) => (
               <VisitCard
@@ -403,19 +409,19 @@ export default function PlanScreen() {
         <FadeInItem delay={160}>
           <Card style={{ marginTop: Spacing.base, marginBottom: Spacing.base }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>ДОЛГИ</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.tertiary, letterSpacing: 1 }}>{t("ДОЛГИ", "QARZLAR")}</Text>
               {debtShops.length > 0 ? (
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.danger }}>
-                  {debtShops.length} маг. · {formatMoney(totalDebt)}
+                  {t(`${debtShops.length} маг.`, `${debtShops.length} ta do'kon`)} · {formatMoney(totalDebt)}
                 </Text>
               ) : (
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.success }}>Нет долгов</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.success }}>{t("Нет долгов", "Qarz yo'q")}</Text>
               )}
             </View>
             {debtShops.length > 0 ? debtShops.slice(0, 5).map(p => (
               <View key={p.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }} numberOfLines={1}>{p.shopName ?? "Магазин"}</Text>
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }} numberOfLines={1}>{p.shopName ?? t("Магазин", "Do'kon")}</Text>
                 </View>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.status.danger }}>
                   {formatMoney(p.shopDebt)}
@@ -424,7 +430,7 @@ export default function PlanScreen() {
             )) : (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 }}>
                 <Feather name="check-circle" size={16} color={colors.status.success} />
-                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted }}>Все магазины без задолженности</Text>
+                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted }}>{t("Все магазины без задолженности", "Hech bir do'konda qarz yo'q")}</Text>
               </View>
             )}
           </Card>

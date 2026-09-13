@@ -3,6 +3,8 @@ import { clampDiscountText } from "../../lib/discount";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable, ScrollView, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useThemeStore } from "../../store/theme";
+import { unitShort } from "../../lib/units";
+import { useT, useLang } from "../../i18n";
 import {
   Typography,
   Spacing,
@@ -65,15 +67,13 @@ interface OrderEditModalProps {
   colors: ThemeColors;
 }
 
-const UNIT_LABELS: Record<string, string> = {
-  kg: "кг", l: "л", pcs: "шт", box: "блок", pack: "упак", m: "м", block: "блок",
-};
-
 export function OrderEditModal({
   visible, notes, discount, items, saving, catalog, onNeedCatalog,
   onNotesChange, onDiscountChange, onSaveItems, onSave, onClose, colors,
 }: OrderEditModalProps) {
   const { isDark } = useThemeStore();
+  const t = useT();
+  const lang = useLang();
   const [editItems, setEditItems] = useState<EditableItem[]>([]);
   const [activeTab, setActiveTab] = useState<"items" | "details">("items");
   /*
@@ -202,7 +202,7 @@ export function OrderEditModal({
     */
     const left = editItems.filter(it => it.newQuantity > 0);
     if (left.length === 0) {
-      Alert.alert("Пустой заказ", "В заказе должна остаться хотя бы одна позиция. Если заказ не нужен — отмените его целиком.");
+      Alert.alert(t("Пустой заказ", "Bo'sh buyurtma"), t("В заказе должна остаться хотя бы одна позиция. Если заказ не нужен — отмените его целиком.", "Buyurtmada kamida bitta pozitsiya qolishi kerak. Buyurtma kerak bo'lmasa — uni butunlay bekor qiling."));
       return;
     }
 
@@ -232,11 +232,11 @@ export function OrderEditModal({
       return;
     }
     Alert.alert(
-      "Закрыть без сохранения?",
-      "Изменённые количества пропадут.",
+      t("Закрыть без сохранения?", "Saqlamasdan yopasizmi?"),
+      t("Изменённые количества пропадут.", "O'zgartirilgan miqdorlar yo'qoladi."),
       [
-        { text: "Остаться", style: "cancel" },
-        { text: "Закрыть", style: "destructive", onPress: onClose },
+        { text: t("Остаться", "Qolish"), style: "cancel" },
+        { text: t("Закрыть", "Yopish"), style: "destructive", onPress: onClose },
       ],
     );
   }
@@ -254,7 +254,7 @@ export function OrderEditModal({
           {/* Крестика в этом окне не было вовсе: единственным выходом
               оставалось нажатие мимо панели. */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.md }}>
-            <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold }}>Редактировать заказ</Text>
+            <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold }}>{t("Редактировать заказ", "Buyurtmani tahrirlash")}</Text>
             <TouchableOpacity
               onPress={requestClose}
               // Область нажатия — не меньше 44 точек: попасть пальцем в
@@ -279,7 +279,7 @@ export function OrderEditModal({
               <Text style={{
                 fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold,
                 color: activeTab === "items" ? "#fff" : colors.text.tertiary,
-              }}>Товары</Text>
+              }}>{t("Товары", "Mahsulotlar")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setActiveTab("details")}
@@ -292,7 +292,7 @@ export function OrderEditModal({
               <Text style={{
                 fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold,
                 color: activeTab === "details" ? "#fff" : colors.text.tertiary,
-              }}>Детали</Text>
+              }}>{t("Детали", "Tafsilotlar")}</Text>
             </TouchableOpacity>
           </View>
 
@@ -300,7 +300,7 @@ export function OrderEditModal({
             {activeTab === "items" ? (
               <View style={{ gap: 12 }}>
                 {editItems.map((item, idx) => {
-                  const unitLabel = UNIT_LABELS[item.unit ?? "pcs"] ?? "шт";
+                  const unitLabel = unitShort(item.unit, lang);
                   const removed = !item.isNew && item.newQuantity === 0;
                   const changed = item.isNew || item.newQuantity !== item.quantity;
                   return (
@@ -323,14 +323,14 @@ export function OrderEditModal({
                             </Text>
                           )}
                           <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.xs, marginTop: 4 }}>
-                            {item.quantity} {unitLabel} × {item.unitPrice.toLocaleString("ru")} сум
+                            {item.quantity} {unitLabel} × {item.unitPrice.toLocaleString("ru")} {t("сум", "so'm")}
                           </Text>
                         </View>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                           {changed && (
                             <View style={{ backgroundColor: colors.accent.primary + "15", paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.sm }}>
                               <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontSemibold }}>
-                                {item.isNew ? "Добавлено" : removed ? "Убрано" : "Изменено"}
+                                {item.isNew ? t("Добавлено", "Qo'shildi") : removed ? t("Убрано", "Olib tashlandi") : t("Изменено", "O'zgartirildi")}
                               </Text>
                             </View>
                           )}
@@ -343,7 +343,7 @@ export function OrderEditModal({
                           <TouchableOpacity
                             onPress={() => (removed ? restoreItem(idx) : removeItem(idx))}
                             accessibilityRole="button"
-                            accessibilityLabel={removed ? `Вернуть ${item.productName}` : `Убрать ${item.productName}`}
+                            accessibilityLabel={removed ? t(`Вернуть ${item.productName}`, `${item.productName} ni qaytarish`) : t(`Убрать ${item.productName}`, `${item.productName} ni olib tashlash`)}
                             hitSlop={8}
                             style={{ width: 32, height: 32, alignItems: "center", justifyContent: "center" }}
                           >
@@ -396,10 +396,10 @@ export function OrderEditModal({
                       {changed && (
                         <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
                           <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>
-                            Было: {item.quantity} {unitLabel}
+                            {t("Было", "Avval")}: {item.quantity} {unitLabel}
                           </Text>
                           <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>
-                            Сумма: {(item.unitPrice * item.newQuantity).toLocaleString("ru")} сум
+                            {t("Сумма", "Summa")}: {(item.unitPrice * item.newQuantity).toLocaleString("ru")} {t("сум", "so'm")}
                           </Text>
                         </View>
                       )}
@@ -413,7 +413,7 @@ export function OrderEditModal({
                     <TextInput
                       value={search}
                       onChangeText={setSearch}
-                      placeholder="Название или код товара"
+                      placeholder={t("Название или код товара", "Mahsulot nomi yoki kodi")}
                       placeholderTextColor={colors.text.muted}
                       autoFocus
                       style={{
@@ -424,7 +424,7 @@ export function OrderEditModal({
                     {(catalog ?? []).length === 0 ? (
                       <ActivityIndicator size="small" color={colors.accent.primary} />
                     ) : found.length === 0 ? (
-                      <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm }}>Ничего не нашлось</Text>
+                      <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm }}>{t("Ничего не нашлось", "Hech narsa topilmadi")}</Text>
                     ) : (
                       found.slice(0, 30).map(p => (
                         <TouchableOpacity
@@ -439,7 +439,7 @@ export function OrderEditModal({
                             {p.name}
                           </Text>
                           <Text style={{ color: colors.text.muted, fontSize: Typography.size.xs, marginTop: 2 }}>
-                            {p.code ? `${p.code} · ` : ""}{Number(p.unitPrice ?? 0).toLocaleString("ru")} сум
+                            {p.code ? `${p.code} · ` : ""}{Number(p.unitPrice ?? 0).toLocaleString("ru")} {t("сум", "so'm")}
                           </Text>
                         </TouchableOpacity>
                       ))
@@ -448,7 +448,7 @@ export function OrderEditModal({
                       onPress={() => { setPicking(false); setSearch(""); }}
                       style={{ padding: 12, alignItems: "center", minHeight: Sizes.touchTarget, justifyContent: "center" }}
                     >
-                      <Text style={{ color: colors.text.secondary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }}>Отмена</Text>
+                      <Text style={{ color: colors.text.secondary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }}>{t("Отмена", "Bekor")}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -462,7 +462,7 @@ export function OrderEditModal({
                   >
                     <Feather name="plus" size={16} color={colors.text.secondary} />
                     <Text style={{ color: colors.text.secondary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }}>
-                      Добавить товар
+                      {t("Добавить товар", "Mahsulot qo'shish")}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -475,7 +475,7 @@ export function OrderEditModal({
                       /* Было «Сохранить количество» — теперь меняется и состав:
                          подпись, называющая треть действия, вводит в
                          заблуждение ровно там, где двигается склад. */
-                      : <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Сохранить состав</Text>
+                      : <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>{t("Сохранить состав", "Tarkibni saqlash")}</Text>
                     }
                   </TouchableOpacity>
                 )}
@@ -483,13 +483,13 @@ export function OrderEditModal({
             ) : (
               <View style={{ gap: 16 }}>
                 <View>
-                  <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>Заметки</Text>
-                  <TextInput value={notes} onChangeText={onNotesChange} placeholder="Заметки к заказу..."
+                  <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>{t("Заметки", "Izohlar")}</Text>
+                  <TextInput value={notes} onChangeText={onNotesChange} placeholder={t("Заметки к заказу...", "Buyurtmaga izoh...")}
                     placeholderTextColor={colors.text.muted}
                     style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base, minHeight: 60, textAlignVertical: "top" }} multiline />
                 </View>
                 <View>
-                  <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>Скидка (%)</Text>
+                  <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.sm, marginBottom: 6 }}>{t("Скидка (%)", "Chegirma (%)")}</Text>
                   <TextInput value={discount} onChangeText={v => onDiscountChange(clampDiscountText(v))} placeholder="0" keyboardType="decimal-pad"
                     placeholderTextColor={colors.text.muted}
                     style={{ backgroundColor: colors.bg.card, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, color: colors.text.primary, fontSize: Typography.size.base }} />
@@ -498,7 +498,7 @@ export function OrderEditModal({
                   style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
                   {saving
                     ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Сохранить детали</Text>
+                    : <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>{t("Сохранить детали", "Tafsilotlarni saqlash")}</Text>
                   }
                 </TouchableOpacity>
               </View>

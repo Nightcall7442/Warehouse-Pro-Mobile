@@ -3,6 +3,8 @@
   адреса и причины, а не карточки.
 */
 
+import { tt } from "../i18n";
+
 /**
  * Куда ведёт кнопка «На карте».
  *
@@ -37,7 +39,17 @@ export function mapUrl(point: { shopGpsLat?: string | null; shopGpsLng?: string 
  * узнать, что случилось. Три причины покрывают почти всё; «Другое» —
  * свободный текст.
  */
-export const FAIL_REASONS = ["Магазин закрыт", "Нет денег", "Отказался от товара"] as const;
+export const FAIL_REASONS = ["Магазин закрыт", "Нет денег", "Отказался от товара"] as const; // i18n-ignore: уходит на сервер как есть, читает оператор; подпись на экране — failReasonLabel
+
+/**
+ * Подпись причины на экране. На сервер уходит русский текст из FAIL_REASONS:
+ * его читает оператор в офисе, и там причина должна быть одной на всех.
+ */
+const FAIL_REASONS_UZ = ["Do'kon yopiq", "Pul yo'q", "Tovarni olmadi"];
+export function failReasonLabel(reason: string): string {
+  const i = (FAIL_REASONS as readonly string[]).indexOf(reason);
+  return tt(reason, FAIL_REASONS_UZ[i] ?? reason);
+}
 
 /** Предел сервера (courier.markFailed: reason ≤ 500). */
 export const FAIL_REASON_MAX = 500;

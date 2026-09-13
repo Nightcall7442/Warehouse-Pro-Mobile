@@ -3,6 +3,7 @@ import { errorText } from "../lib/error-text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "./auth";
 import { notify } from "./toast";
+import { tt } from "../i18n";
 import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed, completeDelivery, CompleteDeliveryInput } from "../api";
 
 const S4 = () => ((1 + Math.random()) * 0x10000 | 0).toString(16).substring(1);
@@ -107,12 +108,15 @@ export function deliveryActionOrderId(action: DeliveryAction): number {
   return action.type === "completeDelivery" ? action.input.orderId : action.orderId;
 }
 
-const ACTION_LABEL: Record<DeliveryAction["type"], string> = {
-  markOutForDelivery: "Выезд",
-  markDelivered: "Доставлен",
-  completeDelivery: "Доставка завершена",
-  markFailed: "Проблема",
-};
+/** Слово отметки на языке телефона — считается при обращении, а не при загрузке. */
+function actionLabel(type: DeliveryAction["type"]): string {
+  switch (type) {
+    case "markOutForDelivery": return tt("Выезд", "Yo'lga chiqish");
+    case "markDelivered": return tt("Доставлен", "Yetkazildi");
+    case "completeDelivery": return tt("Доставка завершена", "Yetkazish yakunlandi");
+    case "markFailed": return tt("Проблема", "Muammo");
+  }
+}
 
 /**
  * Как назвать строку очереди человеку.
@@ -124,7 +128,7 @@ const ACTION_LABEL: Record<DeliveryAction["type"], string> = {
  * undefined.
  */
 export function deliveryActionTitle(entry: OfflineDeliveryAction): string {
-  const what = ACTION_LABEL[entry.action.type];
+  const what = actionLabel(entry.action.type);
   const which = entry.orderNumber ?? `#${deliveryActionOrderId(entry.action)}`;
   return entry.shopName ? `${what} · ${which} · ${entry.shopName}` : `${what} · ${which}`;
 }
@@ -187,7 +191,7 @@ async function writeQueue(orders: OfflineOrder[]): Promise<boolean> {
     return true;
   } catch (e) {
     if (__DEV__) console.warn("[OfflineStore] Failed to write queue:", e);
-    notify.error("Не удалось сохранить заказ на телефон — освободите место и передайте заказ в офис");
+    notify.error(tt("Не удалось сохранить заказ на телефон — освободите место и передайте заказ в офис", "Buyurtmani telefonga saqlab bo'lmadi — joy bo'shating va buyurtmani ofisga yetkazing"));
     return false;
   }
 }
@@ -208,7 +212,7 @@ async function writeDeliveryActionsQueue(actions: OfflineDeliveryAction[]): Prom
     return true;
   } catch (e) {
     if (__DEV__) console.warn("[OfflineStore] Failed to write delivery actions queue:", e);
-    notify.error("Не удалось сохранить отметку о доставке — освободите место на телефоне");
+    notify.error(tt("Не удалось сохранить отметку о доставке — освободите место на телефоне", "Yetkazish belgisini saqlab bo'lmadi — telefonda joy bo'shating"));
     return false;
   }
 }
@@ -510,11 +514,11 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
         // Копейки не в счёт: расхождение в округлении не повод тревожить
         // человека.
         if (Math.abs(actual - quoted) < 1) continue;
-        notify.warning(
-          `${pendingOrders[i].shopName}: сумма изменилась — называли ` +
-          `${Math.round(quoted).toLocaleString("ru")}, к оплате ` +
-          `${Math.round(actual).toLocaleString("ru")} сум. Цены поменялись, пока заказ ждал отправки.`,
-        );
+        const shop = pendingOrders[i].shopName;
+        const was = Math.round(quoted).toLocaleString("ru");
+        const now = Math.round(actual).toLocaleString("ru");
+        notify.warning(tt(`${shop}: сумма изменилась — называли ${was}, к оплате ${now} сум. Цены поменялись, пока заказ ждал отправки.`,
+          `${shop}: summa o'zgardi — aytilgani ${was}, to'lovga ${now} so'm. Buyurtma yuborishni kutganda narxlar o'zgardi.`));
       }
 
       let synced = 0;

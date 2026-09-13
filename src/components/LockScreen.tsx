@@ -7,6 +7,7 @@ import { useAuthStore } from "../store/auth";
 import { useThemeColors } from "../store/theme";
 import { Typography, Spacing } from "../theme";
 import { Button } from "./ui";
+import { useT } from "../i18n";
 
 /**
  * Экран поверх приложения, когда сессия заперта по простою.
@@ -25,6 +26,7 @@ export function LockScreen() {
   const unlock = useLockStore((s) => s.unlock);
   const logout = useAuthStore((s) => s.logout);
   const colors = useThemeColors();
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
@@ -32,10 +34,10 @@ export function LockScreen() {
     setBusy(true);
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Подтвердите, что это вы",
+        promptMessage: t("Подтвердите, что это вы", "Bu siz ekaningizni tasdiqlang"),
         // Раньше здесь стояло «Выйти», и человек, желавший просто закрыть окно,
         // сам выбирал выход из аккаунта. Отмена должна называться отменой.
-        cancelLabel: "Отмена",
+        cancelLabel: t("Отмена", "Bekor"),
         disableDeviceFallback: false,
       });
       if (result.success) {
@@ -47,17 +49,17 @@ export function LockScreen() {
       const err = (result as { error?: string }).error;
       setHint(
         err === "lockout" || err === "lockout_permanent"
-          ? "Слишком много попыток. Подождите немного или войдите заново."
+          ? t("Слишком много попыток. Подождите немного или войдите заново.", "Urinishlar ko'p bo'ldi. Biroz kuting yoki qaytadan kiring.")
           : err === "not_enrolled" || err === "not_available"
-            ? "Отпечаток или код устройства сейчас недоступны. Можно выйти и войти по паролю."
-            : "Не подтвердилось. Попробуйте ещё раз.",
+            ? t("Отпечаток или код устройства сейчас недоступны. Можно выйти и войти по паролю.", "Barmoq izi yoki qurilma kodi hozir ishlamayapti. Chiqib, parol bilan kirish mumkin.")
+            : t("Не подтвердилось. Попробуйте ещё раз.", "Tasdiqlanmadi. Yana urinib ko'ring."),
       );
     } catch {
-      setHint("Не удалось запросить подтверждение. Попробуйте ещё раз.");
+      setHint(t("Не удалось запросить подтверждение. Попробуйте ещё раз.", "Tasdiqlash so'rovi yuborilmadi. Yana urinib ko'ring."));
     } finally {
       setBusy(false);
     }
-  }, [unlock]);
+  }, [unlock, t]);
 
   // Первая попытка сразу при появлении экрана — чтобы в обычном случае человек
   // приложил палец и не увидел ничего лишнего.
@@ -73,10 +75,10 @@ export function LockScreen() {
   }, [locked, authenticate]);
 
   const confirmLogout = () => {
-    Alert.alert("Выйти из аккаунта?", "Несинхронизированные заказы останутся в очереди и уйдут, когда вы войдёте снова.", [
-      { text: "Отмена", style: "cancel" },
+    Alert.alert(t("Выйти из аккаунта?", "Hisobdan chiqilsinmi?"), t("Несинхронизированные заказы останутся в очереди и уйдут, когда вы войдёте снова.", "Yuborilmagan buyurtmalar navbatda qoladi va qayta kirganingizda ketadi."), [
+      { text: t("Отмена", "Bekor"), style: "cancel" },
       {
-        text: "Выйти",
+        text: t("Выйти", "Chiqish"),
         style: "destructive",
         onPress: () => {
           void logout().then(unlock);
@@ -112,7 +114,7 @@ export function LockScreen() {
         fontFamily: Typography.fontBold, fontSize: Typography.size.xl,
         color: colors.text.primary, textAlign: "center", marginBottom: 8,
       }}>
-        Приложение заперто
+        {t("Приложение заперто", "Ilova qulflangan")}
       </Text>
 
       <Text style={{
@@ -120,17 +122,17 @@ export function LockScreen() {
         color: colors.text.secondary, textAlign: "center", marginBottom: Spacing.base * 1.5,
         maxWidth: 320, lineHeight: 22,
       }}>
-        {hint ?? "Подтвердите, что телефон у вас, — и вернётесь туда же, где остановились."}
+        {hint ?? t("Подтвердите, что телефон у вас, — и вернётесь туда же, где остановились.", "Telefon sizda ekanini tasdiqlang — to'xtagan joyingizga qaytasiz.")}
       </Text>
 
       <Button variant="primary" size="lg" fullWidth loading={busy} onPress={() => void authenticate()}>
-        Разблокировать
+        {t("Разблокировать", "Qulfni ochish")}
       </Button>
 
       <View style={{ height: Spacing.base }} />
 
       <Button variant="ghost" size="md" fullWidth onPress={confirmLogout}>
-        Выйти из аккаунта
+        {t("Выйти из аккаунта", "Hisobdan chiqish")}
       </Button>
     </View>
   );

@@ -13,6 +13,7 @@ import { formatMoney } from "../src/store/branding";
 import { errorText } from "../src/lib/error-text";
 import { notify } from "../src/store/toast";
 import * as Haptics from "expo-haptics";
+import { useLang, useT } from "../src/i18n";
 
 /**
  * Моя зарплата.
@@ -40,16 +41,16 @@ import * as Haptics from "expo-haptics";
  * «не подтверждено» — спокойное состояние, без красного.
  */
 
-const PERIODS = [
-  { key: "month" as const, label: "Месяц" },
-  { key: "week" as const, label: "Неделя" },
-  { key: "quarter" as const, label: "Квартал" },
-];
-
 export default function SalaryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
+  const t = useT();
+  const PERIODS = [
+    { key: "month" as const, label: t("Месяц", "Oy") },
+    { key: "week" as const, label: t("Неделя", "Hafta") },
+    { key: "quarter" as const, label: t("Квартал", "Chorak") },
+  ];
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const [period, setPeriod] = useState<"week" | "month" | "quarter">("month");
@@ -80,7 +81,7 @@ export default function SalaryScreen() {
     mutationFn: (id: number) => confirmPayout(id),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      notify.success("Получение подтверждено");
+      notify.success(t("Получение подтверждено", "Olinganligi tasdiqlandi"));
       qc.invalidateQueries({ queryKey: ["myPayouts"] });
     },
     onError: (e) => notify.error(errorText(e)),
@@ -109,13 +110,13 @@ export default function SalaryScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Назад"
+          accessibilityLabel={t("Назад", "Orqaga")}
           style={{ width: 36, height: 36, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.card }}
         >
           <Feather name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 22, color: colors.text.primary }}>Моя зарплата</Text>
+          <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 22, color: colors.text.primary }}>{t("Моя зарплата", "Mening oyligim")}</Text>
           {salary?.period ? (
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.secondary, marginTop: 2 }}>
               {salary.period}
@@ -158,7 +159,7 @@ export default function SalaryScreen() {
           <Card><ActivityIndicator color={colors.brand.primary} /></Card>
         ) : salaryQ.isError ? (
           <Card>
-            <EmptyState icon="alert-circle" title="Не удалось загрузить зарплату" description={errorText(salaryQ.error)} />
+            <EmptyState icon="alert-circle" title={t("Не удалось загрузить зарплату", "Oylikni yuklab bo'lmadi")} description={errorText(salaryQ.error)} />
           </Card>
         ) : salary ? (
           <>
@@ -169,7 +170,7 @@ export default function SalaryScreen() {
                 letterSpacing: Typography.letterSpacing.wider, textTransform: "uppercase",
                 color: colors.text.secondary,
               }}>
-                Начислено за период
+                {t("Начислено за период", "Davr uchun hisoblangan")}
               </Text>
               <Text style={{
                 fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxxl,
@@ -187,8 +188,8 @@ export default function SalaryScreen() {
                 flexDirection: "row", gap: Spacing.lg, marginTop: Spacing.lg,
                 paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle,
               }}>
-                <Money label="Выдано" value={paid} colors={colors} />
-                <Money label="Остаток" value={due} colors={colors} accent={due > 0} />
+                <Money label={t("Выдано", "Berilgan")} value={paid} colors={colors} />
+                <Money label={t("Остаток", "Qoldiq")} value={due} colors={colors} accent={due > 0} />
               </View>
             </Card>
 
@@ -199,10 +200,10 @@ export default function SalaryScreen() {
                 letterSpacing: Typography.letterSpacing.wider, textTransform: "uppercase",
                 color: colors.text.secondary, marginBottom: Spacing.md,
               }}>
-                Из чего сложилось
+                {t("Из чего сложилось", "Nimadan tashkil topgan")}
               </Text>
 
-              <Line label="Оклад" value={formatMoney(salary.baseSalary)} colors={colors} />
+              <Line label={t("Оклад", "Maosh")} value={formatMoney(salary.baseSalary)} colors={colors} />
 
               {isCourier ? (
                 <>
@@ -211,7 +212,7 @@ export default function SalaryScreen() {
                     проверяет в уме, а «180 000» — нет.
                   */}
                   <Line
-                    label={salary.courierPayMode === "percent" ? "Сумма довезённого × процент" : "Довезено × ставка"}
+                    label={salary.courierPayMode === "percent" ? t("Сумма довезённого × процент", "Yetkazilgan summa × foiz") : t("Довезено × ставка", "Yetkazildi × stavka")}
                     note={salary.courierPayMode === "percent"
                       ? `${formatMoney(salary.deliveredAmount)} × ${salary.commissionRate}%`
                       : `${salary.deliveredCount} × ${formatMoney(salary.deliveryRate)}`}
@@ -220,8 +221,8 @@ export default function SalaryScreen() {
                   />
                   {salary.allowancePay > 0 && (
                     <Line
-                      label="Обед и дорожные"
-                      note={`${salary.workDays} раб. дн. × ${formatMoney(salary.mealAllowance + salary.travelAllowance)}`}
+                      label={t("Обед и дорожные", "Tushlik va yo'l")}
+                      note={t(`${salary.workDays} раб. дн. × ${formatMoney(salary.mealAllowance + salary.travelAllowance)}`, `${salary.workDays} ish kuni × ${formatMoney(salary.mealAllowance + salary.travelAllowance)}`)}
                       value={formatMoney(salary.allowancePay)}
                       colors={colors}
                     />
@@ -230,7 +231,7 @@ export default function SalaryScreen() {
               ) : (
                 <>
                   <Line
-                    label="Комиссия"
+                    label={t("Комиссия", "Komissiya")}
                     /*
                       Как только у товаров появляются свои проценты, «продажи ×
                       процент» перестаёт сходиться с суммой, и человек читает
@@ -238,14 +239,14 @@ export default function SalaryScreen() {
                       показывается ЧТО произошло, а не выдуманное умножение.
                     */
                     note={salary.productRateCount > 0
-                      ? `по ${salary.productRateCount} товарам свой процент`
+                      ? t(`по ${salary.productRateCount} товарам свой процент`, `${salary.productRateCount} ta tovarda o'z foizi`)
                       : `${formatMoney(salary.salesAmount)} × ${salary.commissionRate}%`}
                     value={formatMoney(salary.commissionAmount)}
                     colors={colors}
                   />
                   {salary.breakdown.fraudDeduction < 0 && (
                     <Line
-                      label="Вычет за подозрительные визиты"
+                      label={t("Вычет за подозрительные визиты", "Shubhali tashriflar uchun ushlanma")}
                       value={formatMoney(salary.breakdown.fraudDeduction)}
                       colors={colors}
                       danger
@@ -259,7 +260,7 @@ export default function SalaryScreen() {
                 paddingTop: Spacing.md, marginTop: Spacing.xs,
                 borderTopWidth: 1, borderTopColor: colors.border.subtle,
               }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>ИТОГО</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("ИТОГО", "JAMI")}</Text>
                 <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.status.success }}>
                   {formatMoney(salary.totalSalary)}
                 </Text>
@@ -275,14 +276,14 @@ export default function SalaryScreen() {
             letterSpacing: Typography.letterSpacing.wider, textTransform: "uppercase",
             color: colors.text.secondary, marginBottom: Spacing.md,
           }}>
-            Выдано на руки за месяц
+            {t("Выдано на руки за месяц", "Oy davomida qo'lga berilgan")}
           </Text>
 
           {payoutsQ.isLoading ? (
             <ActivityIndicator color={colors.brand.primary} />
           ) : payouts.length === 0 ? (
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary }}>
-              В этом месяце выдач не было
+              {t("В этом месяце выдач не было", "Bu oyda to'lovlar bo'lmadi")}
             </Text>
           ) : (
             payouts.map((p) => (
@@ -347,8 +348,10 @@ function PayoutRow({ payout, colors, busy, onConfirm }: {
   busy: boolean;
   onConfirm: () => void;
 }) {
+  const t = useT();
+  const lang = useLang();
   const confirmed = Boolean(payout.confirmedAt);
-  const day = payout.paidAt ? new Date(payout.paidAt).toLocaleDateString("ru-RU") : "—";
+  const day = payout.paidAt ? new Date(payout.paidAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru-RU") : "—";
 
   return (
     <View style={{
@@ -363,7 +366,7 @@ function PayoutRow({ payout, colors, busy, onConfirm }: {
           {day}
           {/* Аванс выдан до конца периода: показать его как полный расчёт
               значило бы закрыть месяц, который ещё не закрыт. */}
-          {payout.kind === "advance" ? " · аванс" : ""}
+          {payout.kind === "advance" ? t(" · аванс", " · avans") : ""}
           {payout.note ? ` · ${payout.note}` : ""}
         </Text>
       </View>
@@ -372,7 +375,7 @@ function PayoutRow({ payout, colors, busy, onConfirm }: {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Feather name="check-circle" size={15} color={colors.status.success} />
           <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.status.success }}>
-            подтверждено
+            {t("подтверждено", "tasdiqlandi")}
           </Text>
         </View>
       ) : (
@@ -380,7 +383,7 @@ function PayoutRow({ payout, colors, busy, onConfirm }: {
           onPress={onConfirm}
           disabled={busy}
           accessibilityRole="button"
-          accessibilityLabel="Подтвердить получение денег"
+          accessibilityLabel={t("Подтвердить получение денег", "Pul olinganini tasdiqlash")}
           style={{
             // Цель касания — в точках, а не «на глаз»: у проекта на это есть
             // своя величина, и 44 — платформенный минимум.
@@ -391,7 +394,7 @@ function PayoutRow({ payout, colors, busy, onConfirm }: {
         >
           {busy ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="check" size={14} color="#fff" />}
           <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>
-            Получил
+            {t("Получил", "Oldim")}
           </Text>
         </Pressable>
       )}

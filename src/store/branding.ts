@@ -41,7 +41,7 @@ const DEFAULT_BRANDING: TenantBranding = {
   primaryColor: null,
   mobileTheme: "auto",
   currency: "UZS",
-  currencySymbol: "сум",
+  currencySymbol: "сум", // i18n-ignore: знак валюты — настройка арендатора с сервера, умолчание совпадает с ней
   symbolPosition: "after",
 };
 

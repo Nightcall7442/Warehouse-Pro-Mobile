@@ -12,6 +12,7 @@ import { useThemeColors, useThemeStore } from "../store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { formatMoney } from "../store/branding";
+import { useT } from "../i18n";
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 // Neumorphic card: bg.card bg, dual shadow, top highlight line.
@@ -247,8 +248,9 @@ interface SearchInputProps {
   autoFocus?: boolean;
 }
 
-export function SearchInput({ value, onChangeText, placeholder = "Поиск…", autoFocus }: SearchInputProps) {
+export function SearchInput({ value, onChangeText, placeholder, autoFocus }: SearchInputProps) {
   const colors = useThemeColors();
+  const t = useT();
   const { isDark } = useThemeStore();
   const shadowColor = isDark ? DarkShadowColor : Shadows.inner.shadowColor;
   return (
@@ -268,7 +270,7 @@ export function SearchInput({ value, onChangeText, placeholder = "Поиск…"
       <Feather name="search" size={16} color={colors.text.muted} />
       <TextInput
         style={{ flex: 1, fontSize: Typography.size.base, color: colors.text.primary, fontFamily: Typography.fontBody }}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t("Поиск…", "Qidiruv…")}
         placeholderTextColor={colors.text.muted}
         value={value}
         onChangeText={onChangeText}
@@ -283,7 +285,7 @@ export function SearchInput({ value, onChangeText, placeholder = "Поиск…"
         <TouchableOpacity
           onPress={() => onChangeText("")}
           hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-          accessibilityLabel="Очистить поиск"
+          accessibilityLabel={t("Очистить поиск", "Qidiruvni tozalash")}
         >
           <Feather name="x" size={15} color={colors.text.muted} />
         </TouchableOpacity>
@@ -359,13 +361,14 @@ export function IconCircle({ name, size = 22, variant = "brand" }: { name: keyof
 
 // ── Plan Card (compact) ─────────────────────────────────────────────────────
 type PlanStatus = "planned" | "visited" | "skipped";
-const STATUS_LABEL: Record<PlanStatus, string> = { planned: "Запланирован", visited: "Посещён", skipped: "Пропущен" };
+const statusLabel = (t: (ru: string, uz: string) => string): Record<PlanStatus, string> => ({ planned: t("Запланирован", "Rejalashtirilgan"), visited: t("Посещён", "Tashrif"), skipped: t("Пропущен", "O'tkazildi") });
 
 export function PlanCard({ plan, showCity, dimmed, loading, onVisit, onSkip }: {
   plan: { id: number; shopName?: string; shopAddress?: string; shopCity?: string; shopDebt?: string; status: string };
   showCity?: boolean; dimmed?: boolean; loading?: boolean; onVisit?: () => void; onSkip?: () => void;
 }) {
   const colors = useThemeColors();
+  const t = useT();
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
   const statusColor = plan.status === "visited" ? colors.accent.success : plan.status === "skipped" ? colors.accent.warning : colors.accent.info;
   const doneInk = readableInk(colors.accent.success);
@@ -374,14 +377,14 @@ export function PlanCard({ plan, showCity, dimmed, loading, onVisit, onSkip }: {
     <View style={{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, padding: 14, marginBottom: 10, ...Shadows.panel, opacity: dimmed ? 0.6 : 1 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 15, color: colors.text.primary }}>{plan.shopName ?? "Магазин"}</Text>
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 15, color: colors.text.primary }}>{plan.shopName ?? t("Магазин", "Do'kon")}</Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.secondary, marginTop: 2 }} numberOfLines={1}>
-            {plan.shopAddress ?? "Адрес не указан"}{showCity && plan.shopCity ? ` · ${plan.shopCity}` : ""}
+            {plan.shopAddress ?? t("Адрес не указан", "Manzil ko'rsatilmagan")}{showCity && plan.shopCity ? ` · ${plan.shopCity}` : ""}
           </Text>
-          {hasDebt && <Text style={{ fontFamily: Typography.fontMono, fontSize: 12, color: colors.accent.danger, marginTop: 4 }}>Долг: {formatMoney(plan.shopDebt)}</Text>}
+          {hasDebt && <Text style={{ fontFamily: Typography.fontMono, fontSize: 12, color: colors.accent.danger, marginTop: 4 }}>{t("Долг", "Qarz")}: {formatMoney(plan.shopDebt)}</Text>}
         </View>
         <View style={{ backgroundColor: statusColor + "18", paddingHorizontal: 9, paddingVertical: 4, borderRadius: Radii.full }}>
-          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: statusColor }}>{STATUS_LABEL[plan.status as PlanStatus] ?? plan.status}</Text>
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: statusColor }}>{statusLabel(t)[plan.status as PlanStatus] ?? plan.status}</Text>
         </View>
       </View>
       {plan.status === "planned" && (onVisit || onSkip) && (
@@ -393,14 +396,14 @@ export function PlanCard({ plan, showCity, dimmed, loading, onVisit, onSkip }: {
                   зелёный, а надпись была прописана белым. Контраст около 2:1,
                   на солнце подпись не читается вовсе. */}
               {loading ? <ActivityIndicator size={13} color={doneInk} /> : <Feather name="check-circle" size={13} color={doneInk} />}
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, color: doneInk }}>Готово</Text>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, color: doneInk }}>{t("Готово", "Tayyor")}</Text>
             </TouchableOpacity>
           )}
           {onSkip && (
             <TouchableOpacity onPress={onSkip} disabled={!!loading}
               style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, paddingVertical: 9 }}>
               <Feather name="clock" size={13} color={colors.accent.warning} />
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, color: colors.accent.warning }}>Пропустить</Text>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, color: colors.accent.warning }}>{t("Пропустить", "O'tkazish")}</Text>
             </TouchableOpacity>
           )}
         </View>

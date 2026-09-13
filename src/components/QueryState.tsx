@@ -5,6 +5,7 @@ import { Spacing, Radii } from "../theme";
 import { Button, EmptyState } from "./ui";
 import { ShimmerSkeleton } from "./Animated";
 import { isRetryableError } from "../store/offline";
+import { useT } from "../i18n";
 
 /**
  * Почему это общий кусок, а не ветка в каждом экране.
@@ -35,7 +36,7 @@ export function ErrorState({
   onRetry,
   retrying,
 }: {
-  /** Что не загрузилось, в винительном падеже: «план», «заказы», «нормы». */
+  /** Что не загрузилось, в винительном падеже: «план», «заказы», «нормы». По-узбекски — в именительном, как есть. */
   what: string;
   error?: unknown;
   /** Чем «пусто» отличалось бы от отказа именно на этом экране. */
@@ -47,23 +48,25 @@ export function ErrorState({
   // сервер ответил «нет доступа», совет «проверьте подключение» не поможет —
   // он будет искать сеть там, где дело в правах. isRetryableError различает их
   // по конверту tRPC: он есть только у запроса, который дошёл до обработчика.
+  const t = useT();
   const refused = error != null && !isRetryableError(error);
   const refusal = refused && error instanceof Error ? error.message : null;
+  const whatUz = what.charAt(0).toUpperCase() + what.slice(1);
 
   return (
     <View>
       <EmptyState
         icon="alert-circle"
-        title={`Не удалось загрузить ${what}`}
+        title={t(`Не удалось загрузить ${what}`, `${whatUz} yuklab bo'lmadi`)}
         description={
           refusal ??
           description ??
-          "Это сбой связи, а не пустой список. Проверьте подключение и попробуйте снова."
+          t("Это сбой связи, а не пустой список. Проверьте подключение и попробуйте снова.", "Bu aloqa uzilishi, bo'sh ro'yxat emas. Ulanishni tekshirib, yana urinib ko'ring.")
         }
       />
       <View style={{ paddingHorizontal: Spacing.xl }}>
         <Button onPress={onRetry} loading={retrying} variant="secondary" fullWidth>
-          Повторить
+          {t("Повторить", "Qayta urinish")}
         </Button>
       </View>
     </View>

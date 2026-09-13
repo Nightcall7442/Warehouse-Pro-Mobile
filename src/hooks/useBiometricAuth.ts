@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import * as LocalAuthentication from "expo-local-authentication";
 import { SecureStore } from "../storage";
+import { tt } from "../i18n";
 
 const BIOMETRIC_ENABLED_KEY = "biometric_enabled";
 
@@ -46,8 +47,8 @@ export function useBiometricAuth() {
     if (!hasHardware) return false;
 
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Подтвердите для включения биометрии",
-      cancelLabel: "Отмена",
+      promptMessage: tt("Подтвердите для включения биометрии", "Biometriyani yoqish uchun tasdiqlang"),
+      cancelLabel: tt("Отмена", "Bekor"),
     });
 
     if (result.success) {
@@ -64,8 +65,8 @@ export function useBiometricAuth() {
     if (!hasHardware || !isEnrolled) return false;
 
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Войти с Face ID",
-      cancelLabel: "Отмена",
+      promptMessage: tt("Войти с Face ID", "Face ID bilan kirish"),
+      cancelLabel: tt("Отмена", "Bekor"),
       disableDeviceFallback: false,
     });
 

@@ -26,10 +26,12 @@ import { PressableScale } from "../../src/components/Animated";
 import { SecureImage } from "../../src/components/SecureImage";
 import { useBiometricAuth } from "../../src/hooks/useBiometricAuth";
 import Constants from "expo-constants";
+import { useT } from "../../src/i18n";
 
 export default function LoginScreen() {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
+  const t = useT();
   const branding = useBrandingStore(s => s.branding);
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
@@ -77,7 +79,7 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async (tenantId?: number) => {
-    if (!email.trim() || !password) { setError("Введите email и пароль"); return; }
+    if (!email.trim() || !password) { setError(t("Введите email и пароль", "Email va parolni kiriting")); return; }
     setError(""); setLoading(true);
     try {
       await login(email.trim().toLowerCase(), password, tenantId, code.trim() || undefined);
@@ -103,11 +105,11 @@ export default function LoginScreen() {
     setBiometricLoading(true); setError("");
     try {
       const biometricOk = await biometricAuth();
-      if (!biometricOk) { setError("Биометрия не удалась"); return; }
+      if (!biometricOk) { setError(t("Биометрия не удалась", "Biometriya o'tmadi")); return; }
       const ok = await loginWithBiometric();
-      if (!ok) setError("Сессия истекла");
+      if (!ok) setError(t("Сессия истекла", "Sessiya muddati tugadi"));
     }
-    catch { setError("Ошибка биометрии"); }
+    catch { setError(t("Ошибка биометрии", "Biometriya xatosi")); }
     finally { setBiometricLoading(false); }
   };
 
@@ -130,8 +132,8 @@ export default function LoginScreen() {
     if (biometricOffered.current) return;
     if (!capabilities.hasHardware || !capabilities.isEnrolled || !biometricEnabled) return;
     biometricOffered.current = true;
-    const t = setTimeout(() => { void handleBiometricLogin(); }, 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => { void handleBiometricLogin(); }, 0);
+    return () => clearTimeout(timer);
   }, [capabilities.hasHardware, capabilities.isEnrolled, biometricEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -171,10 +173,10 @@ export default function LoginScreen() {
 
             {/* Hero text */}
             <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 32, color: "#fff", lineHeight: 38, letterSpacing: -1 }}>
-              Управляйте{"\n"}бизнесом{"\n"}из кармана
+              {t("Управляйте\nбизнесом\nиз кармана", "Biznesni\ncho'ntakdan\nboshqaring")}
             </Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: 14, color: "rgba(255,255,255,0.88)", marginTop: Spacing.lg, lineHeight: 22 }}>
-              Заказы, склад, агенты и аналитика — всё в одном приложении
+              {t("Заказы, склад, агенты и аналитика — всё в одном приложении", "Buyurtmalar, ombor, agentlar va tahlil — hammasi bitta ilovada")}
             </Text>
           </LinearGradient>
 
@@ -190,8 +192,8 @@ export default function LoginScreen() {
             }}>
               {/* Header */}
               <View style={{ marginBottom: Spacing.xxl }}>
-                <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 26, color: C.text, letterSpacing: -0.6 }}>Добро пожаловать</Text>
-                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.base, color: C.textSec, marginTop: Spacing.xs + 2 }}>Войдите, чтобы начать рабочий день</Text>
+                <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 26, color: C.text, letterSpacing: -0.6 }}>{t("Добро пожаловать", "Xush kelibsiz")}</Text>
+                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.base, color: C.textSec, marginTop: Spacing.xs + 2 }}>{t("Войдите, чтобы начать рабочий день", "Ish kunini boshlash uchun kiring")}</Text>
               </View>
 
               {/* Error.
@@ -222,7 +224,7 @@ export default function LoginScreen() {
 
               {/* Password */}
               <View style={{ marginBottom: Spacing.lg + 2 }}>
-                <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: Spacing.sm }}>Пароль</Text>
+                <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: Spacing.sm }}>{t("Пароль", "Parol")}</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: Radii.lg, ...soft(isDark).inset }}>
                   <Feather name="lock" size={16} color={C.textMuted} style={{ marginLeft: Spacing.base }} />
                   <TextInput
@@ -239,7 +241,7 @@ export default function LoginScreen() {
 
               {needCode ? (
                 <View style={{ marginBottom: Spacing.lg + 2 }}>
-                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: Spacing.sm }}>Код из приложения</Text>
+                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text, marginBottom: Spacing.sm }}>{t("Код из приложения", "Ilovadagi kod")}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: C.inputBg, borderRadius: Radii.lg, ...soft(isDark).inset }}>
                     <Feather name="shield" size={16} color={C.textMuted} style={{ marginLeft: Spacing.base }} />
                     <TextInput
@@ -299,7 +301,7 @@ export default function LoginScreen() {
                       кнопке, и это читалось как «зависло», а не «идёт». */}
                   {loading && <ActivityIndicator size="small" color="#fff" />}
                   <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>
-                    {loading ? "Вход..." : "Войти"}
+                    {loading ? t("Вход...", "Kirilmoqda...") : t("Войти", "Kirish")}
                   </Text>
                 </LinearGradient>
               </PressableScale>
@@ -315,7 +317,7 @@ export default function LoginScreen() {
                       <Feather name={Platform.OS === "ios" ? "smartphone" : "key"} size={16} color={C.accent} />
                     </View>
                     <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: C.text }}>
-                      {biometricLoading ? "Проверка..." : Platform.OS === "ios" ? "Войти с Face ID" : "Войти с отпечатком"}
+                      {biometricLoading ? t("Проверка...", "Tekshirilmoqda...") : Platform.OS === "ios" ? t("Войти с Face ID", "Face ID bilan kirish") : t("Войти с отпечатком", "Barmoq izi bilan kirish")}
                     </Text>
                   </View>
                 </PressableScale>
@@ -324,7 +326,7 @@ export default function LoginScreen() {
               {/* Hint */}
               <View style={{ flexDirection: "row", alignItems: "flex-start", gap: Spacing.sm, marginTop: Spacing.xl, paddingHorizontal: Spacing.xs }}>
                 <Feather name="info" size={13} color={C.textMuted} style={{ marginTop: 2 }} />
-                <Text style={{ flex: 1, fontSize: Typography.size.xs + 1, fontFamily: Typography.fontRegular, color: C.textMuted, lineHeight: 18 }}>Используйте данные от веб-версии {branding.companyName}</Text>
+                <Text style={{ flex: 1, fontSize: Typography.size.xs + 1, fontFamily: Typography.fontRegular, color: C.textMuted, lineHeight: 18 }}>{t("Используйте данные от веб-версии", "Veb-versiyadagi login va parolni ishlating")} {branding.companyName}</Text>
               </View>
             </View>
 

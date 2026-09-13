@@ -22,6 +22,8 @@
    срывом, которого не было.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { currentLang, type Lang } from "../i18n";
+
 /** Один день в выборе: чем подписан и на какую дату указывает. */
 export interface DayChoice {
   /** Ключ и он же значение: «2026-09-11». */
@@ -30,7 +32,15 @@ export interface DayChoice {
   label: string;
 }
 
-const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"]; // i18n-ignore: пара — WEEKDAYS_UZ
+const WEEKDAYS_UZ = ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"];
+
+/**
+ * Пара по ЯВНОМУ языку, а не по текущему: экран передаёт язык параметром,
+ * чтобы пересчитать подписи при его смене, а проверки — чтобы не зависеть от
+ * телефона.
+ */
+const pick = (lang: Lang) => (ru: string, uz: string) => (lang === "uz" ? uz : ru);
 
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -45,11 +55,13 @@ const iso = (d: Date) =>
  * `now` параметром: иначе «сегодня» в проверке зависело бы от того, в какой
  * день её запустили.
  */
-export function dayChoices(now: Date = new Date(), count = 7): DayChoice[] {
+export function dayChoices(now: Date = new Date(), count = 7, lang: Lang = currentLang()): DayChoice[] {
+  const t = pick(lang);
   const out: DayChoice[] = [];
   for (let i = 0; i < count; i++) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-    const label = i === 0 ? "Сегодня" : i === 1 ? "Завтра" : `${WEEKDAYS[d.getDay()]} ${d.getDate()}`;
+    const label = i === 0 ? t("Сегодня", "Bugun") : i === 1 ? t("Завтра", "Ertaga")
+      : `${(lang === "uz" ? WEEKDAYS_UZ : WEEKDAYS)[d.getDay()]} ${d.getDate()}`;
     out.push({ date: iso(d), label });
   }
   return out;
@@ -83,24 +95,29 @@ export function splitLocal(v: Date | string | null | undefined): { date: string;
 }
 
 /** Как показать обещание человеку: «Завтра, 13:00» или «12 сентября, 13:00». */
-const MONTHS = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+const MONTHS = [ // i18n-ignore: пара — MONTHS_UZ
+  "января", "февраля", "марта", "апреля", "мая", "июня", // i18n-ignore: пара — MONTHS_UZ
+  "июля", "августа", "сентября", "октября", "ноября", "декабря", // i18n-ignore: пара — MONTHS_UZ
+];
+const MONTHS_UZ = [
+  "yanvar", "fevral", "mart", "aprel", "may", "iyun",
+  "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr",
 ];
 
-export function formatPromise(v: Date | string | null | undefined, now: Date = new Date()): string {
+export function formatPromise(v: Date | string | null | undefined, now: Date = new Date(), lang: Lang = currentLang()): string {
+  const t = pick(lang);
   const d = v instanceof Date ? v : v == null ? null : new Date(v);
-  if (!d || Number.isNaN(d.getTime())) return "Срок не называли";
+  if (!d || Number.isNaN(d.getTime())) return t("Срок не называли", "Muddat aytilmagan");
   const p = (n: number) => String(n).padStart(2, "0");
   const time = `${p(d.getHours())}:${p(d.getMinutes())}`;
   const days = Math.round(
     (new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() -
       new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86_400_000,
   );
-  if (days === 0) return `Сегодня, ${time}`;
-  if (days === 1) return `Завтра, ${time}`;
-  if (days === -1) return `Вчера, ${time}`;
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${time}`;
+  if (days === 0) return t(`Сегодня, ${time}`, `Bugun, ${time}`);
+  if (days === 1) return t(`Завтра, ${time}`, `Ertaga, ${time}`);
+  if (days === -1) return t(`Вчера, ${time}`, `Kecha, ${time}`);
+  return `${d.getDate()} ${(lang === "uz" ? MONTHS_UZ : MONTHS)[d.getMonth()]}, ${time}`;
 }
 
 export type PromiseState =

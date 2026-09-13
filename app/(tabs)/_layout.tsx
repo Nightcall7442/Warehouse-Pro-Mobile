@@ -10,6 +10,7 @@ import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Spacing, Radii, soft, raisedFaces } from "../../src/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { isTabVisible } from "../../src/lib/tabs";
+import { useT } from "../../src/i18n";
 
 type IconName = keyof typeof Feather.glyphMap;
 
@@ -27,22 +28,25 @@ const TAB_ICONS: Record<string, IconName> = {
   debtors: "alert-circle",
 };
 
-const TAB_LABELS: Record<string, string> = {
-  index: "Главная",
-  shops: "Магазины",
-  catalog: "Каталог",
-  orders: "Заказы",
-  plan: "План",
-  plans: "Планы",
-  targets: "Нормы",
-  deliveries: "Доставки",
-  profile: "Профиль",
-  tracking: "Слежение",
-  debtors: "Долги",
-};
+// Подписи — функцией от t: язык выбирают на телефоне, а не при сборке.
+const tabLabels = (t: (ru: string, uz: string) => string): Record<string, string> => ({
+  index: t("Главная", "Bosh sahifa"),
+  shops: t("Магазины", "Do'konlar"),
+  catalog: t("Каталог", "Katalog"),
+  orders: t("Заказы", "Buyurtmalar"),
+  plan: t("План", "Reja"),
+  plans: t("Планы", "Rejalar"),
+  targets: t("Нормы", "Normalar"),
+  deliveries: t("Доставки", "Yetkazish"),
+  profile: t("Профиль", "Profil"),
+  tracking: t("Слежение", "Kuzatuv"),
+  debtors: t("Долги", "Qarzlar"),
+});
 
 function CustomTabBar(props: BottomTabBarProps) {
   const { isDark } = useThemeStore();
+  const t = useT();
+  const TAB_LABELS = tabLabels(t);
   const { state, descriptors, navigation } = props;
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -160,6 +164,7 @@ function CustomTabBar(props: BottomTabBarProps) {
 
 export default function TabsLayout() {
   const colors = useThemeColors();
+  const t = useT();
   const { user } = useAuthStore();
   void user;
 
@@ -180,43 +185,43 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: "Главная", headerShown: false }}
+        options={{ title: t("Главная", "Bosh sahifa"), headerShown: false }}
       />
       <Tabs.Screen
         name="shops"
-        options={{ title: "Магазины", headerShown: false }}
+        options={{ title: t("Магазины", "Do'konlar"), headerShown: false }}
       />
       <Tabs.Screen
         name="catalog"
-        options={{ title: "Каталог", headerShown: false }}
+        options={{ title: t("Каталог", "Katalog"), headerShown: false }}
       />
-      <Tabs.Screen name="orders" options={{ title: "Заказы" }} />
+      <Tabs.Screen name="orders" options={{ title: t("Заказы", "Buyurtmalar") }} />
       <Tabs.Screen
         name="plan"
-        options={{ title: "План", headerShown: false }}
+        options={{ title: t("План", "Reja"), headerShown: false }}
       />
       <Tabs.Screen
         name="plans"
-        options={{ title: "Планы", headerShown: false }}
+        options={{ title: t("Планы", "Rejalar"), headerShown: false }}
       />
       <Tabs.Screen
         name="targets"
-        options={{ title: "Нормы", headerShown: false }}
+        options={{ title: t("Нормы", "Normalar"), headerShown: false }}
       />
       <Tabs.Screen
         name="deliveries"
-        options={{ title: "Доставки", headerShown: false }}
+        options={{ title: t("Доставки", "Yetkazish"), headerShown: false }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: "Профиль", headerShown: false }}
+        options={{ title: t("Профиль", "Profil"), headerShown: false }}
       />
       <Tabs.Screen
         name="debtors"
-        options={{ title: "Долги", headerShown: false }}
+        options={{ title: t("Долги", "Qarzlar"), headerShown: false }}
       />
       <Tabs.Screen name="gps" options={{ tabBarButton: () => null }} />
-      <Tabs.Screen name="tracking" options={{ title: "Карта", headerShown: false }} />
+      <Tabs.Screen name="tracking" options={{ title: t("Карта", "Xarita"), headerShown: false }} />
       <Tabs.Screen name="barcode" options={{ tabBarButton: () => null }} />
     </Tabs>
   );

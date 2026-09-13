@@ -93,7 +93,7 @@ describe("кнопку видно при любом содержимом", () =>
     const scrollEnds = sheet.indexOf("</ScrollView>");
     // Подпись берём вместе с разметкой: те же слова стоят в объяснении выше
     // по файлу, и без этого проверка искала бы их в рассказе о прошлой беде.
-    const button = sheet.indexOf('{outOfStock ? "Нет в наличии" : "Добавить в заказ"}');
+    const button = sheet.indexOf(`{outOfStock ? t("Нет в наличии", "Omborda yo'q") : t("Добавить в заказ", "Buyurtmaga qo'shish")}`);
 
     expect(scrollEnds).toBeGreaterThan(0); // прокрутка в карточке товара пропала
     expect(button).toBeGreaterThan(0); // кнопка добавления пропала

@@ -20,21 +20,37 @@
  * ничего, а место занимает.
  */
 
+import { tt } from "../i18n";
+
 interface MaybeAxios {
   response?: { status?: number; data?: { message?: string; error?: { message?: string } } };
   trpcMessage?: string;
   message?: string;
   code?: string;
+  forHumans?: boolean;
 }
 
-const NO_CONNECTION = "Нет связи с сервером. Проверьте интернет и попробуйте снова.";
-const TOO_LONG = "Сервер не ответил вовремя. Попробуйте ещё раз.";
-const SERVER_BUSY = "Сервер сейчас недоступен. Попробуйте через минуту.";
-const UNKNOWN = "Не получилось. Попробуйте ещё раз.";
+// Функции, а не константы: язык выбирают на телефоне, и текст должен
+// браться в момент отказа, а не при загрузке модуля.
+const NO_CONNECTION = () => tt("Нет связи с сервером. Проверьте интернет и попробуйте снова.", "Server bilan aloqa yo'q. Internetni tekshirib, qayta urinib ko'ring.");
+const TOO_LONG = () => tt("Сервер не ответил вовремя. Попробуйте ещё раз.", "Server o'z vaqtida javob bermadi. Qayta urinib ko'ring.");
+const SERVER_BUSY = () => tt("Сервер сейчас недоступен. Попробуйте через минуту.", "Server hozir ishlamayapti. Bir daqiqadan so'ng urinib ko'ring.");
+const UNKNOWN = () => tt("Не получилось. Попробуйте ещё раз.", "Bo'lmadi. Qayta urinib ko'ring.");
 
 /** В строке есть кириллица — значит её писали для человека, а не для журнала. */
 function forHumans(text: string): boolean {
   return /[а-яё]/i.test(text);
+}
+
+/**
+ * Наша собственная ошибка с текстом для человека — на любом языке.
+ *
+ * По кириллице узнаются только русские тексты; узбекский латиницей от строки
+ * axios не отличить. Поэтому свои сообщения помечаются явно, и errorText
+ * показывает их как есть.
+ */
+export function humanError(message: string): Error {
+  return Object.assign(new Error(message), { forHumans: true });
 }
 
 export function errorText(e: unknown): string {
@@ -46,8 +62,8 @@ export function errorText(e: unknown): string {
 
   const status = err.response?.status;
   if (typeof status === "number") {
-    if (status === 408) return TOO_LONG;
-    if (status >= 500) return SERVER_BUSY;
+    if (status === 408) return TOO_LONG();
+    if (status >= 500) return SERVER_BUSY();
   }
 
   const raw = typeof err.message === "string" ? err.message : "";
@@ -55,12 +71,12 @@ export function errorText(e: unknown): string {
   // Ответа не было вовсе: запрос не доехал, и решать было нечему.
   if (!err.response) {
     const low = raw.toLowerCase();
-    if (low.includes("timeout") || err.code === "ECONNABORTED") return TOO_LONG;
-    if (low.includes("network") || low.includes("failed to fetch") || err.code === "ERR_NETWORK") return NO_CONNECTION;
+    if (low.includes("timeout") || err.code === "ECONNABORTED") return TOO_LONG();
+    if (low.includes("network") || low.includes("failed to fetch") || err.code === "ERR_NETWORK") return NO_CONNECTION();
   }
 
-  // Наше собственное русское сообщение (например, из подготовки фото).
-  if (raw && forHumans(raw)) return raw;
+  // Наше собственное сообщение (например, из подготовки фото).
+  if (raw && (err.forHumans || forHumans(raw))) return raw;
 
-  return UNKNOWN;
+  return UNKNOWN();
 }

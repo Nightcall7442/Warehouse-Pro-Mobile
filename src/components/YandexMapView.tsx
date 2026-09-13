@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useImperativeHandle } 
 import { View, Text } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import Constants from "expo-constants";
+import { useT } from "../i18n";
 
 /**
  * The map key, from whichever source actually has one.
@@ -189,6 +190,7 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
   ref
 ) {
   const webRef = useRef<WebView>(null);
+  const t = useT();
   useImperativeHandle(ref, () => webRef.current as WebView);
 
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -255,7 +257,7 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
     return (
       <View style={[{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, style]}>
         <Text style={{ textAlign: "center", fontSize: 13, opacity: 0.7 }}>
-          Карта недоступна: не задан ключ Яндекс.Карт. Его нужно передать сборке как EXPO_PUBLIC_YANDEX_MAPS_API_KEY.
+          {t("Карта недоступна: не задан ключ Яндекс.Карт. Его нужно передать сборке как EXPO_PUBLIC_YANDEX_MAPS_API_KEY.", "Xarita mavjud emas: Yandex.Xarita kaliti berilmagan. Uni yig'ishga EXPO_PUBLIC_YANDEX_MAPS_API_KEY sifatida berish kerak.")}
         </Text>
       </View>
     );
@@ -268,8 +270,8 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
       <View style={[{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }, style]}>
         <Text style={{ textAlign: "center", fontSize: 13, opacity: 0.7 }}>
           {loadError === "timeout"
-            ? "Карта не открылась: нет связи с Яндекс.Картами. Проверьте интернет и потяните экран вниз."
-            : "Карта не открылась: ключ Яндекс.Карт отклонён. Задайте свой ключ переменной EXPO_PUBLIC_YANDEX_MAPS_API_KEY при сборке."}
+            ? t("Карта не открылась: нет связи с Яндекс.Картами. Проверьте интернет и потяните экран вниз.", "Xarita ochilmadi: Yandex.Xarita bilan aloqa yo'q. Internetni tekshiring va ekranni pastga torting.")
+            : t("Карта не открылась: ключ Яндекс.Карт отклонён. Задайте свой ключ переменной EXPO_PUBLIC_YANDEX_MAPS_API_KEY при сборке.", "Xarita ochilmadi: Yandex.Xarita kaliti rad etildi. Yig'ishda EXPO_PUBLIC_YANDEX_MAPS_API_KEY o'zgaruvchisi bilan o'z kalitingizni bering.")}
         </Text>
       </View>
     );

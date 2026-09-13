@@ -52,7 +52,7 @@ describe("возраст долга", () => {
 
   it("корзин ровно четыре и все названы", () => {
     expect(BUCKETS.map(b => b.key)).toEqual(["d0_7", "d8_30", "d31_60", "d60plus"]);
-    for (const b of BUCKETS) must(b.label.length > 0, `у корзины ${b.key} нет подписи`);
+    for (const b of BUCKETS) must(b.ru.length > 0 && b.uz.length > 0, `у корзины ${b.key} нет подписи на обоих языках`);
   });
 });
 
@@ -190,7 +190,8 @@ describe("экран доступен", () => {
   it("вкладка объявлена и подписана", () => {
     // Экран без записи в навигаторе не появится в панели вовсе.
     expect(LAYOUT).toContain('name="debtors"');
-    expect(LAYOUT).toContain("debtors: \"Долги\"");
+    // Подпись — парой t(ru, uz): русское слово остаётся первым доводом.
+    expect(LAYOUT).toContain("debtors: t(\"Долги\", \"Qarzlar\")");
     expect(LAYOUT).toMatch(/debtors: "[a-z-]+"/);
   });
 

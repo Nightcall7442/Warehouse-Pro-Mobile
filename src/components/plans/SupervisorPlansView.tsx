@@ -20,6 +20,7 @@ import { notify } from "../../store/toast";
 import { errorText } from "../../lib/error-text";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCurrencySymbol } from "../../store/branding";
+import { useT, useLang } from "../../i18n";
 
 export function SupervisorPlansView() {
   const insets = useSafeAreaInsets();
@@ -31,6 +32,7 @@ export function SupervisorPlansView() {
   const [showCreate, setShowCreate] = useState(false);
   const [showCreateTarget, setShowCreateTarget] = useState(false);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const t = useT();
 
   const dateStr = fmtDate(date);
   const isToday = dateStr === fmtDate(new Date());
@@ -79,12 +81,12 @@ export function SupervisorPlansView() {
     if (filterAgentId || !plans || plans.length === 0) return null;
     const groups: Record<string, Plan[]> = {};
     for (const plan of plans) {
-      const key = plan.agentName ?? `Агент #${plan.agentId}`;
+      const key = plan.agentName ?? t(`Агент #${plan.agentId}`, `Agent #${plan.agentId}`);
       if (!groups[key]) groups[key] = [];
       groups[key].push(plan);
     }
     return Object.entries(groups).map(([agentName, items]) => ({ title: agentName, data: items }));
-  }, [plans, filterAgentId]);
+  }, [plans, filterAgentId, t]);
 
   const visited = (plans ?? []).filter(p => p.status === "visited").length;
   const total = plans?.length ?? 0;
@@ -93,7 +95,7 @@ export function SupervisorPlansView() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       <ScreenHeader
-        title="Планы"
+        title={t("Планы", "Rejalar")}
         right={
           <View style={{ flexDirection: "row", gap: 8 }}>
             <PressableScale onPress={() => setShowCreateTarget(true)} haptic="light">
@@ -118,7 +120,7 @@ export function SupervisorPlansView() {
         <PressableScale onPress={() => setShowAgentPicker(true)} haptic="selection">
           <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, backgroundColor: colors.bg.card, borderRadius: Radii.md, ...(filterAgentId ? soft(isDark).raisedSm : soft(isDark).inset), padding: 10 }}>
             <Feather name="user" size={15} color={filterAgentId ? colors.accent.primary : colors.text.muted} />
-            <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: filterAgentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? "Все агенты"}</Text>
+            <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: filterAgentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? t("Все агенты", "Barcha agentlar")}</Text>
             <Feather name="chevron-down" size={16} color={colors.text.muted} />
           </View>
         </PressableScale>
@@ -149,7 +151,7 @@ export function SupervisorPlansView() {
           renderItem={({ item: plan, index }) => (
             <FadeInItem delay={index * 30}><PlanRow plan={plan} showCity colors={colors} isDark={isDark} /></FadeInItem>
           )}
-          ListEmptyComponent={<EmptyState icon="calendar" title="На этот день планов нет" />}
+          ListEmptyComponent={<EmptyState icon="calendar" title={t("На этот день планов нет", "Bu kun uchun reja yo'q")} />}
         />
       ) : (
         <FlatList data={plans ?? []} keyExtractor={p => String(p.id)}
@@ -162,14 +164,14 @@ export function SupervisorPlansView() {
             // доехали. Отказ должен называться отказом.
             isError ? (
               <ErrorState
-                what="планы"
+                what={t("планы", "rejalarni")}
                 error={error}
-                description="Это сбой связи, а не пустой день. Проверьте подключение и попробуйте снова."
+                description={t("Это сбой связи, а не пустой день. Проверьте подключение и попробуйте снова.", "Bu aloqa xatosi, bo'sh kun emas. Ulanishni tekshirib, qayta urinib ko'ring.")}
                 onRetry={() => { void refetch(); }}
                 retrying={refreshing}
               />
             ) : (
-              <EmptyState icon="calendar" title="На этот день планов нет" description="Нажмите «+», чтобы назначить маршрут" />
+              <EmptyState icon="calendar" title={t("На этот день планов нет", "Bu kun uchun reja yo'q")} description={t("Нажмите «+», чтобы назначить маршрут", "Yo'nalish berish uchun «+» bosing")} />
             )
           }
           renderItem={({ item: plan, index }) => (
@@ -178,15 +180,15 @@ export function SupervisorPlansView() {
         />
       )}
 
-      <BottomSheet visible={showAgentPicker} onClose={() => setShowAgentPicker(false)} title="Выберите агента" colors={colors}>
+      <BottomSheet visible={showAgentPicker} onClose={() => setShowAgentPicker(false)} title={t("Выберите агента", "Agent tanlang")} colors={colors}>
         <FlatList data={agents ?? []} keyExtractor={a => String(a.id)}
           contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingBottom: insets.bottom + Spacing.lg }}
-          ListHeaderComponent={<SelectRow label="Все агенты" icon="users" selected={!filterAgentId} colors={colors} isDark={isDark} onPress={() => { setFilterAgentId(null); setShowAgentPicker(false); }} />}
+          ListHeaderComponent={<SelectRow label={t("Все агенты", "Barcha agentlar")} icon="users" selected={!filterAgentId} colors={colors} isDark={isDark} onPress={() => { setFilterAgentId(null); setShowAgentPicker(false); }} />}
           ListEmptyComponent={
             // «Нет агентов» — утверждение о штате. При отказе список тоже
             // пуст, и супервайзер решал бы, что агентов ему не завели.
-            agentsError ? <EmptyState icon="alert-circle" title="Не удалось загрузить агентов" description="Закройте список и откройте снова." />
-            : !agentsLoading ? <EmptyState icon="user" title="Нет агентов" />
+            agentsError ? <EmptyState icon="alert-circle" title={t("Не удалось загрузить агентов", "Agentlarni yuklab bo'lmadi")} description={t("Закройте список и откройте снова.", "Ro'yxatni yopib, qayta oching.")} />
+            : !agentsLoading ? <EmptyState icon="user" title={t("Нет агентов", "Agentlar yo'q")} />
             : null
           }
           renderItem={({ item: agent }) => (
@@ -216,6 +218,8 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
   const [targetAmount, setTargetAmount] = useState("");
   const [visitTarget, setVisitTarget] = useState("");
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const t = useT();
+  const lang = useLang();
 
   const selectedAgent = agents.find(a => a.id === agentId);
   const now = new Date();
@@ -225,7 +229,7 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
 
   const mutation = useMutation({
     mutationFn: () => createSalesTarget({ userId: agentId!, periodType: "monthly", periodStart, periodEnd, targetAmount: Number(targetAmount.replace(/\s/g, "")), visitTarget: visitTarget ? Number(visitTarget) : undefined }),
-    onSuccess: () => { notify.success("Норма создана"); onCreated(); setAgentId(null); setTargetAmount(""); setVisitTarget(""); },
+    onSuccess: () => { notify.success(t("Норма создана", "Norma yaratildi")); onCreated(); setAgentId(null); setTargetAmount(""); setVisitTarget(""); },
     // e.message — это текст axios: супервайзер, у которого в кабинете моргнул
     // интернет, читал «Network Error» вместо «нет связи». Слова самого сервера
     // errorText пропускает как есть — они русские и по делу.
@@ -239,40 +243,40 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: insets.top + 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: 20, color: colors.text.primary }}>Месячная норма</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: 20, color: colors.text.primary }}>{t("Месячная норма", "Oylik norma")}</Text>
             <PressableScale onPress={onClose} haptic="light">
               <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={colors.text.muted} /></View>
             </PressableScale>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Агент</Text>
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>{t("Агент", "Agent")}</Text>
             <PressableScale onPress={() => setShowAgentPicker(true)} haptic="light">
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.bg.input, borderRadius: 12, ...(agentId ? soft(isDark).raisedSm : soft(isDark).inset), padding: 14, marginBottom: 20 }}>
                 {selectedAgent ? <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}><Text style={{ fontFamily: Typography.fontBold, fontSize: 14, color: colors.brand.primary }}>{selectedAgent.name.charAt(0)}</Text></View> : <Feather name="user" size={18} color={colors.text.muted} />}
-                <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 15, color: agentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? "Выберите агента"}</Text>
+                <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 15, color: agentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? t("Выберите агента", "Agent tanlang")}</Text>
                 <Feather name="chevron-down" size={18} color={colors.text.muted} />
               </View>
             </PressableScale>
-            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Норма выручки ({currencySymbol})</Text>
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>{t("Норма выручки", "Tushum normasi")} ({currencySymbol})</Text>
             <TextInput style={{ backgroundColor: colors.bg.input, borderRadius: 12, ...soft(isDark).inset, padding: 14, fontFamily: Typography.fontMedium, fontSize: 18, color: colors.text.primary, marginBottom: 20 }}
               placeholder="5 000 000" placeholderTextColor={colors.text.muted} value={targetAmount} onChangeText={setTargetAmount} keyboardType="numeric" returnKeyType="done" />
-            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>Норма визитов (%)</Text>
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary, marginBottom: 8 }}>{t("Норма визитов", "Tashrif normasi")} (%)</Text>
             <TextInput style={{ backgroundColor: colors.bg.input, borderRadius: 12, ...soft(isDark).inset, padding: 14, fontFamily: Typography.fontMedium, fontSize: 18, color: colors.text.primary, marginBottom: 24 }}
               placeholder="80" placeholderTextColor={colors.text.muted} value={visitTarget} onChangeText={setVisitTarget} keyboardType="numeric" returnKeyType="done" />
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 24, padding: 12, backgroundColor: colors.bg.elevated, borderRadius: 12 }}>
               <Feather name="calendar" size={16} color={colors.text.muted} />
-              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.tertiary }}>{new Date(periodStart).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} — {new Date(periodEnd).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}</Text>
+              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.tertiary }}>{new Date(periodStart).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru-RU", { day: "numeric", month: "short" })} — {new Date(periodEnd).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru-RU", { day: "numeric", month: "short" })}</Text>
             </View>
-            <PressableScale onPress={() => { if (!agentId) { notify.error("Выберите агента"); return; } if (!targetAmount) { notify.error("Введите норму"); return; } mutation.mutate(); }} disabled={mutation.isPending} haptic="medium">
+            <PressableScale onPress={() => { if (!agentId) { notify.error(t("Выберите агента", "Agent tanlang")); return; } if (!targetAmount) { notify.error(t("Введите норму", "Normani kiriting")); return; } mutation.mutate(); }} disabled={mutation.isPending} haptic="medium">
               <LinearGradient colors={Gradients.primary} style={{ borderRadius: 12, paddingVertical: 16, alignItems: "center", opacity: mutation.isPending ? 0.7 : 1 }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: "#fff" }}>{mutation.isPending ? "Создание..." : "Создать норму"}</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: "#fff" }}>{mutation.isPending ? t("Создание...", "Yaratilmoqda...") : t("Создать норму", "Norma yaratish")}</Text>
               </LinearGradient>
             </PressableScale>
           </ScrollView>
           <Modal visible={showAgentPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAgentPicker(false)}>
             <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: insets.top + 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: 20, color: colors.text.primary }}>Выберите агента</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: 20, color: colors.text.primary }}>{t("Выберите агента", "Agent tanlang")}</Text>
                 <PressableScale onPress={() => setShowAgentPicker(false)} haptic="light">
                   <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={16} color={colors.text.muted} /></View>
                 </PressableScale>

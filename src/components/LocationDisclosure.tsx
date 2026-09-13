@@ -2,6 +2,7 @@ import { View, Text, Modal, Pressable, ScrollView } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useThemeColors } from "../store/theme";
 import { Typography, Spacing, Radii, Sizes } from "../theme";
+import { useT } from "../i18n";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Предварительное раскрытие: что мы собираем и кто это видит.
@@ -43,6 +44,7 @@ interface Props {
 
 export function LocationDisclosure({ visible, onAccept, onDecline }: Props) {
   const colors = useThemeColors();
+  const t = useT();
 
   const line = (icon: keyof typeof Feather.glyphMap, text: string) => (
     <View style={{ flexDirection: "row", gap: Spacing.md, alignItems: "flex-start" }}>
@@ -78,30 +80,30 @@ export function LocationDisclosure({ visible, onAccept, onDecline }: Props) {
                 fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xl,
                 color: colors.text.primary, marginTop: Spacing.md, textAlign: "center",
               }}>
-                Ваше местоположение увидит руководитель
+                {t("Ваше местоположение увидит руководитель", "Joylashuvingizni rahbar ko'radi")}
               </Text>
             </View>
 
             <View style={{ gap: Spacing.md, marginBottom: Spacing.lg }}>
               {line(
                 "navigation",
-                "Приложение будет записывать, где вы находитесь, — в том числе когда оно свёрнуто или экран выключен.",
+                t("Приложение будет записывать, где вы находитесь, — в том числе когда оно свёрнуто или экран выключен.", "Ilova qayerda ekaningizni yozib boradi — u yig'ilgan yoki ekran o'chiq bo'lganda ham."),
               )}
               {line(
                 "clock",
-                "Точка снимается при перемещении, не чаще одного раза в две минуты. Пока вы стоите на месте, не записывается ничего.",
+                t("Точка снимается при перемещении, не чаще одного раза в две минуты. Пока вы стоите на месте, не записывается ничего.", "Nuqta harakatlanganda olinadi, ikki daqiqada bir martadan ko'p emas. Bir joyda tursangiz, hech narsa yozilmaydi."),
               )}
               {line(
                 "eye",
-                "След за рабочий день видят супервайзер и руководитель вашей организации — на карте и в отчётах. Больше он не передаётся никому.",
+                t("След за рабочий день видят супервайзер и руководитель вашей организации — на карте и в отчётах. Больше он не передаётся никому.", "Ish kunidagi yo'lingizni tashkilotingiz supervayzeri va rahbari ko'radi — xaritada va hisobotlarda. Boshqa hech kimga berilmaydi."),
               )}
               {line(
                 "shield",
-                "Вместе с точкой отправляется уровень заряда телефона — чтобы в офисе понимали, почему связь пропала.",
+                t("Вместе с точкой отправляется уровень заряда телефона — чтобы в офисе понимали, почему связь пропала.", "Nuqta bilan birga telefon zaryadi ham yuboriladi — ofis aloqa nega uzilganini tushunishi uchun."),
               )}
               {line(
                 "toggle-left",
-                "Выключить можно в любой момент этим же переключателем: запись прекращается сразу.",
+                t("Выключить можно в любой момент этим же переключателем: запись прекращается сразу.", "Istalgan vaqtda shu tugma bilan o'chirish mumkin: yozish darhol to'xtaydi."),
               )}
             </View>
 
@@ -109,13 +111,12 @@ export function LocationDisclosure({ visible, onAccept, onDecline }: Props) {
               fontFamily: Typography.fontRegular, fontSize: Typography.size.xs,
               lineHeight: 18, color: colors.text.tertiary, marginBottom: Spacing.lg,
             }}>
-              Данные о местоположении собираются для учёта рабочих визитов и подтверждения
-              доставок. Подробнее — в политике конфиденциальности на сайте warehouse-pro.uz.
+              {t("Данные о местоположении собираются для учёта рабочих визитов и подтверждения доставок. Подробнее — в политике конфиденциальности на сайте warehouse-pro.uz.", "Joylashuv ma'lumotlari ish tashriflarini hisobga olish va yetkazishni tasdiqlash uchun yig'iladi. Batafsil — warehouse-pro.uz saytidagi maxfiylik siyosatida.")}
             </Text>
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Разрешаю записывать местоположение"
+              accessibilityLabel={t("Разрешаю записывать местоположение", "Joylashuvni yozishga ruxsat beraman")}
               onPress={onAccept}
               style={{
                 minHeight: Sizes.touchTarget, alignItems: "center", justifyContent: "center",
@@ -124,7 +125,7 @@ export function LocationDisclosure({ visible, onAccept, onDecline }: Props) {
               }}
             >
               <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: "#fff" }}>
-                Разрешаю
+                {t("Разрешаю", "Ruxsat beraman")}
               </Text>
             </Pressable>
 
@@ -134,7 +135,7 @@ export function LocationDisclosure({ visible, onAccept, onDecline }: Props) {
             */}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Не разрешать запись местоположения"
+              accessibilityLabel={t("Не разрешать запись местоположения", "Joylashuvni yozishga ruxsat bermaslik")}
               onPress={onDecline}
               style={{
                 minHeight: Sizes.touchTarget, alignItems: "center", justifyContent: "center",
@@ -142,7 +143,7 @@ export function LocationDisclosure({ visible, onAccept, onDecline }: Props) {
               }}
             >
               <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.secondary }}>
-                Не сейчас
+                {t("Не сейчас", "Hozir emas")}
               </Text>
             </Pressable>
           </ScrollView>

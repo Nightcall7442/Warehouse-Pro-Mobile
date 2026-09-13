@@ -7,6 +7,7 @@ import { Button } from "../ui";
 import { getStatusMeta } from "./PlanHelpers";
 import { formatMoney } from "../../store/branding";
 import { SecureImage } from "../SecureImage";
+import { useT } from "../../i18n";
 
 export function PlanRow({
   plan,
@@ -29,6 +30,7 @@ export function PlanRow({
   onSkip?: () => void;
   loading?: boolean;
 }) {
+  const t = useT();
   const hasDebt = Number(plan.shopDebt ?? 0) > 0;
   const meta = getStatusMeta(plan.status, colors);
   const canAct = plan.status === "planned" && (onVisit || onSkip);
@@ -79,7 +81,7 @@ export function PlanRow({
                 }}
                 numberOfLines={1}
               >
-                {plan.shopName ?? "Магазин"}
+                {plan.shopName ?? t("Магазин", "Do'kon")}
               </Text>
               {showAgent && plan.agentName && (
                 <Text
@@ -191,7 +193,7 @@ export function PlanRow({
                 loading={loading}
                 style={{ width: "100%" }}
               >
-                Готово
+                {t("Готово", "Tayyor")}
               </Button>
             </View>
           )}
@@ -205,7 +207,7 @@ export function PlanRow({
                 disabled={loading}
                 style={{ width: "100%" }}
               >
-                Пропустить
+                {t("Пропустить", "O'tkazish")}
               </Button>
             </View>
           )}

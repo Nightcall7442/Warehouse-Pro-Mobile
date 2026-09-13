@@ -8,11 +8,13 @@ import { Typography } from "../theme";
 import { useThemeColors } from "../store/theme";
 import { plural } from "../lib/plural";
 import { readableInk } from "../lib/contrast";
+import { useT } from "../i18n";
 
 const BANNER_HEIGHT = 36;
 
 export function OfflineBanner() {
   const colors = useThemeColors();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(true);
   const [animVal] = useState(new Animated.Value(0));
@@ -61,14 +63,15 @@ export function OfflineBanner() {
   // экране заказов, и человеку незачем догадываться, что это одно и то же.
   // Глагол согласуется с общим числом: при одной записи выходило «1 заказ
   // ожидают синхронизации».
+  // По-узбекски число не склоняет слово: «3 ta buyurtma» — одна форма на всё.
   const queued = [
-    pendingOrders > 0 ? `${pendingOrders} ${plural(pendingOrders, "заказ", "заказа", "заказов")}` : null,
-    pendingActions > 0 ? `${pendingActions} ${plural(pendingActions, "отметка", "отметки", "отметок")} доставки` : null,
-  ].filter(Boolean).join(" и ");
+    pendingOrders > 0 ? t(`${pendingOrders} ${plural(pendingOrders, "заказ", "заказа", "заказов")}`, `${pendingOrders} ta buyurtma`) : null,
+    pendingActions > 0 ? t(`${pendingActions} ${plural(pendingActions, "отметка", "отметки", "отметок")} доставки`, `${pendingActions} ta yetkazish belgisi`) : null,
+  ].filter(Boolean).join(t(" и ", " va "));
 
   const text = !isOnline
-    ? "Нет подключения к интернету"
-    : `${queued} ${plural(pendingCount, "ожидает", "ожидают", "ожидают")} отправки`;
+    ? t("Нет подключения к интернету", "Internet aloqasi yo'q")
+    : t(`${queued} ${plural(pendingCount, "ожидает", "ожидают", "ожидают")} отправки`, `${queued} yuborishni kutmoqda`);
 
   if (isOnline && pendingCount === 0) return null;
 

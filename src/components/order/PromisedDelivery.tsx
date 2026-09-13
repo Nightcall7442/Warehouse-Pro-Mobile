@@ -11,6 +11,7 @@ import {
   formatPromise,
   promiseState,
 } from "../../lib/promised-delivery";
+import { useLang, useT } from "../../i18n";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Обещанный срок доставки — выбор двумя рядами кнопок.
@@ -49,7 +50,9 @@ export function PromisedDelivery({
   value, onChange, status = "new", deliveredAt = null, editable = true, disabled = false,
 }: Props) {
   const colors = useThemeColors();
-  const days = useMemo(() => dayChoices(), []);
+  const t = useT();
+  const lang = useLang();
+  const days = useMemo(() => dayChoices(new Date(), 7, lang), [lang]);
   const picked = splitLocal(value);
   const state = promiseState(value, status, deliveredAt);
 
@@ -79,30 +82,30 @@ export function PromisedDelivery({
           fontFamily: Typography.fontMedium, fontSize: Typography.size.xs,
           letterSpacing: 1.5, textTransform: "uppercase", color: colors.text.muted,
         }}>
-          Обещанный срок
+          {t("Обещанный срок", "Va'da qilingan muddat")}
         </Text>
         {!value && (
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>
-            необязательно
+            {t("необязательно", "ixtiyoriy")}
           </Text>
         )}
       </View>
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" }}>
         <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
-          {formatPromise(value)}
+          {formatPromise(value, new Date(), lang)}
         </Text>
         {state.kind === "late" && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Feather name="alert-triangle" size={12} color={colors.status.danger} />
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.status.danger }}>
-              Просрочен
+              {t("Просрочен", "Muddati o'tgan")}
             </Text>
           </View>
         )}
         {state.kind === "late_delivered" && (
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>
-            Довезли позже обещанного
+            {t("Довезли позже обещанного", "Va'dadan kech yetkazildi")}
           </Text>
         )}
       </View>
@@ -117,7 +120,7 @@ export function PromisedDelivery({
                   key={d.date}
                   disabled={disabled}
                   accessibilityRole="button"
-                  accessibilityLabel={`День доставки: ${d.label}`}
+                  accessibilityLabel={t(`День доставки: ${d.label}`, `Yetkazish kuni: ${d.label}`)}
                   // Времени ещё нет — берём первое из ряда, чтобы одно касание
                   // уже дало осмысленный срок, а не половину выбора.
                   onPress={() => choose(d.date, picked?.time ?? TIME_CHOICES[0])}
@@ -130,19 +133,19 @@ export function PromisedDelivery({
           </ScrollView>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 2 }}>
-            {TIME_CHOICES.map(t => {
-              const active = picked?.time === t;
+            {TIME_CHOICES.map(tm => {
+              const active = picked?.time === tm;
               return (
                 <Pressable
-                  key={t}
+                  key={tm}
                   disabled={disabled}
                   accessibilityRole="button"
-                  accessibilityLabel={`Время доставки: ${t}`}
+                  accessibilityLabel={t(`Время доставки: ${tm}`, `Yetkazish vaqti: ${tm}`)}
                   // День ещё не выбран — значит «сегодня»: так это и говорят.
-                  onPress={() => choose(picked?.date ?? days[0].date, t)}
+                  onPress={() => choose(picked?.date ?? days[0].date, tm)}
                   style={chip(active)}
                 >
-                  <Text style={chipText(active)}>{t}</Text>
+                  <Text style={chipText(active)}>{tm}</Text>
                 </Pressable>
               );
             })}
@@ -152,7 +155,7 @@ export function PromisedDelivery({
             <Pressable
               disabled={disabled}
               accessibilityRole="button"
-              accessibilityLabel="Убрать обещанный срок"
+              accessibilityLabel={t("Убрать обещанный срок", "Va'da muddatini olib tashlash")}
               /*
                 Снять обещание — отдельная возможность, а не «оставить пустым».
                 Ошибочно поставленный срок иначе остаётся навсегда, и вместе с
@@ -162,7 +165,7 @@ export function PromisedDelivery({
               style={{ minHeight: Sizes.touchTarget, justifyContent: "center", alignSelf: "flex-start", paddingHorizontal: Spacing.sm }}
             >
               <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary }}>
-                Убрать срок
+                {t("Убрать срок", "Muddatni olib tashlash")}
               </Text>
             </Pressable>
           )}

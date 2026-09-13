@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from "react";
+import { useLangStore, useT } from "../src/i18n";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider, useQueryClient, focusManager } from "@tanstack/react-query";
@@ -163,6 +164,7 @@ export default function RootLayout() {
   const { load } = useOfflineStore();
   const { loadTheme, isDark, colors } = useThemeStore();
   const { load: loadBranding } = useBrandingStore();
+  const t = useT();
 
   const [fontsLoaded] = useFonts({
     Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold,
@@ -170,7 +172,7 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    load(); loadTheme(); loadBranding();
+    load(); loadTheme(); loadBranding(); void useLangStore.getState().loadLang();
     void useVisitQueue.getState().load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -199,14 +201,14 @@ export default function RootLayout() {
                 headerTitleStyle: { fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary },
                 contentStyle: { backgroundColor: colors.bg.primary },
                 headerShadowVisible: false,
-                headerBackTitle: "Назад",
+                headerBackTitle: t("Назад", "Orqaga"),
                 animation: "slide_from_right",
                 animationDuration: 300,
               }}
             >
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="order/new" options={{ title: "Новый заказ", presentation: "modal" }} />
+              <Stack.Screen name="order/new" options={{ title: t("Новый заказ", "Yangi buyurtma"), presentation: "modal" }} />
               <Stack.Screen name="shop/new" options={{ headerShown: false, presentation: "modal" }} />
               <Stack.Screen name="shop/[id]" options={{ headerShown: false }} />
               <Stack.Screen name="shop/nearby" options={{ headerShown: false, presentation: "modal" }} />
