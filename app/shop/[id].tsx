@@ -18,6 +18,7 @@ import { SecureImage } from "../../src/components/SecureImage";
 import { preparePhoto } from "../../src/lib/prepare-photo";
 import { PressableScale, FadeInItem, ShimmerSkeleton } from "../../src/components/Animated";
 import { formatMoney } from "../../src/store/branding";
+import { useT } from "../../src/i18n";
 
 function InfoRow({ icon, label, value, onPress, colors }: { icon: string; label: string; value: string; onPress?: () => void; colors: ThemeColors }) {
   const content = (
@@ -37,6 +38,7 @@ function InfoRow({ icon, label, value, onPress, colors }: { icon: string; label:
 
 export default function ShopDetailScreen() {
   const { isDark } = useThemeStore();
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -73,13 +75,13 @@ export default function ShopDetailScreen() {
     // "availableShops" backs the order-creation picker and catalog screen —
     // a separate endpoint from "shops", so it needs its own invalidation or
     // an edited shop's debt/name/status stays stale there.
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); qc.invalidateQueries({ queryKey: ["availableShops"] }); setEditing(false); notify.success("Сохранено"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); qc.invalidateQueries({ queryKey: ["availableShops"] }); setEditing(false); notify.success(t("Сохранено", "Saqlandi")); },
     onError: (e: Error) => notify.error(e.message),
   });
 
   const photoMutation = useMutation({
     mutationFn: (url: string) => uploadShopPhoto(Number(id), url),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); qc.invalidateQueries({ queryKey: ["availableShops"] }); notify.success("Фото обновлено"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["shop", id] }); qc.invalidateQueries({ queryKey: ["shops"] }); qc.invalidateQueries({ queryKey: ["availableShops"] }); notify.success(t("Фото обновлено", "Rasm yangilandi")); },
     onError: (e: Error) => notify.error(e.message),
   });
 
@@ -93,31 +95,31 @@ export default function ShopDetailScreen() {
       const { dataUrl } = await preparePhoto(res.assets[0].uri);
       const url = await uploadFile(dataUrl, "shops");
       photoMutation.mutate(url);
-    } catch (e) { notify.error(e instanceof Error ? e.message : "Ошибка загрузки"); }
+    } catch (e) { notify.error(e instanceof Error ? e.message : t("Ошибка загрузки", "Yuklashda xato")); }
   };
 
   // Same reason as the new-shop screen: updating a shop's photo is something
   // an agent does while standing at it, and gallery-only left them no way to
   // actually take the picture.
   const pickPhoto = () => {
-    Alert.alert("Фото магазина", undefined, [
+    Alert.alert(t("Фото магазина", "Do'kon rasmi"), undefined, [
       {
-        text: "Сделать фото",
+        text: t("Сделать фото", "Rasmga olish"),
         onPress: () => { void (async () => {
           const cam = await ImagePicker.requestCameraPermissionsAsync();
-          if (!cam.granted) { notify.error("Нет доступа к камере"); return; }
+          if (!cam.granted) { notify.error(t("Нет доступа к камере", "Kameraga ruxsat yo'q")); return; }
           await uploadPicked(await ImagePicker.launchCameraAsync(PICKER_OPTS));
         })(); },
       },
       {
-        text: "Выбрать из галереи",
+        text: t("Выбрать из галереи", "Galereyadan tanlash"),
         onPress: () => { void (async () => {
           const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!perm.granted) { notify.error("Нет доступа к галерее"); return; }
+          if (!perm.granted) { notify.error(t("Нет доступа к галерее", "Galereyaga ruxsat yo'q")); return; }
           await uploadPicked(await ImagePicker.launchImageLibraryAsync(PICKER_OPTS));
         })(); },
       },
-      { text: "Отмена", style: "cancel" },
+      { text: t("Отмена", "Bekor"), style: "cancel" },
     ]);
   };
 
@@ -132,7 +134,7 @@ export default function ShopDetailScreen() {
         ({ status } = await Location.requestForegroundPermissionsAsync());
       }
       if (status !== "granted") {
-        notify.error("Разрешение на геолокацию не выдано. Разрешите в настройках.");
+        notify.error(t("Разрешение на геолокацию не выдано. Разрешите в настройках.", "Joylashuvga ruxsat berilmagan. Sozlamalardan ruxsat bering."));
         setGpsLoading(false);
         return;
       }
@@ -146,18 +148,18 @@ export default function ShopDetailScreen() {
       ]);
 
       if (!pos?.coords) {
-        notify.error("Не удалось определить координаты");
+        notify.error(t("Не удалось определить координаты", "Koordinatalar aniqlanmadi"));
         setGpsLoading(false);
         return;
       }
 
       setEditData(d => ({ ...d, gpsLat: pos.coords.latitude.toFixed(8), gpsLng: pos.coords.longitude.toFixed(8) }));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Координаты обновлены");
+      notify.success(t("Координаты обновлены", "Koordinatalar yangilandi"));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Unknown error";
       if (__DEV__) console.warn("[GPS] captureGPS failed:", msg);
-      notify.error(`Не удалось определить местоположение: ${msg}`);
+      notify.error(t(`Не удалось определить местоположение: ${msg}`, `Joylashuv aniqlanmadi: ${msg}`));
     }
     setGpsLoading(false);
   };
@@ -174,11 +176,11 @@ export default function ShopDetailScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg.primary, alignItems: "center", justifyContent: "center", gap: Spacing.lg, paddingHorizontal: 32 }}>
       <Feather name={isError ? "wifi-off" : "search"} size={32} color={colors.text.muted} />
       <Text style={{ color: colors.text.secondary, fontFamily: Typography.fontMedium, textAlign: "center" }}>
-        {isError ? "Ошибка загрузки" : "Магазин не найден"}
+        {isError ? t("Ошибка загрузки", "Yuklashda xato") : t("Магазин не найден", "Do'kon topilmadi")}
       </Text>
       <PressableScale onPress={() => refetch()} haptic="light">
         <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingVertical: 10, paddingHorizontal: 20 }}>
-          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>Повторить</Text>
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>{t("Повторить", "Qayta urinish")}</Text>
         </View>
       </PressableScale>
     </View>
@@ -237,7 +239,7 @@ export default function ShopDetailScreen() {
         }}>
           <View>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: hasDebt ? colors.accent.danger : colors.accent.success, marginBottom: 4 }}>
-              {hasDebt ? "ТЕКУЩИЙ ДОЛГ" : "ЗАДОЛЖЕННОСТЬ"}
+              {hasDebt ? t("ТЕКУЩИЙ ДОЛГ", "JORIY QARZ") : t("ЗАДОЛЖЕННОСТЬ", "QARZ")}
             </Text>
             <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size["2xl"], color: hasDebt ? colors.accent.danger : colors.accent.success }}>
               {formatMoney(shop.debt ?? 0)}
@@ -251,11 +253,11 @@ export default function ShopDetailScreen() {
           <Card style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
             {editing ? (
               <View style={{ padding: 16, gap: 10 }}>
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.accent.primary, letterSpacing: 0.5, marginBottom: 4 }}>РЕДАКТИРОВАНИЕ</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.accent.primary, letterSpacing: 0.5, marginBottom: 4 }}>{t("РЕДАКТИРОВАНИЕ", "TAHRIRLASH")}</Text>
                 {[
-                  { key: "name", label: "Название" }, { key: "ownerName", label: "Владелец" }, { key: "phone", label: "Телефон" },
-                  { key: "city", label: "Город" }, { key: "district", label: "Район" }, { key: "address", label: "Адрес" },
-                  { key: "notes", label: "Заметки" },
+                  { key: "name", label: t("Название", "Nomi") }, { key: "ownerName", label: t("Владелец", "Egasi") }, { key: "phone", label: t("Телефон", "Telefon") },
+                  { key: "city", label: t("Город", "Shahar") }, { key: "district", label: t("Район", "Tuman") }, { key: "address", label: t("Адрес", "Manzil") },
+                  { key: "notes", label: t("Заметки", "Izoh") },
                 ].map(f => (
                   <TextInput key={f.key} value={editData[f.key] ?? (shop as unknown as Record<string, string>)[f.key] ?? ""} onChangeText={v => setEditData(d => ({ ...d, [f.key]: v }))}
                     placeholder={f.label} placeholderTextColor={colors.text.tertiary}
@@ -266,21 +268,21 @@ export default function ShopDetailScreen() {
                 ))}
                 {/* GPS */}
                 <View style={{ marginTop: 8 }}>
-                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, marginBottom: 6 }}>ГЕОЛОКАЦИЯ</Text>
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, marginBottom: 6 }}>{t("ГЕОЛОКАЦИЯ", "JOYLASHUV")}</Text>
                   <PressableScale onPress={captureGPS} disabled={gpsLoading} haptic="medium"
                     style={{ backgroundColor: (editData.gpsLat || shop.gpsLat) ? colors.accent.success + "15" : colors.bg.input, ...(((editData.gpsLat || shop.gpsLat)) ? soft(isDark).raisedSm : soft(isDark).inset), borderRadius: Radii.md, padding: 12, flexDirection: "row", alignItems: "center", gap: 8, opacity: gpsLoading ? 0.6 : 1 }}>
                     {gpsLoading ? <ActivityIndicator size="small" color={colors.accent.primary} /> : <Feather name={(editData.gpsLat || shop.gpsLat) ? "check-circle" : "crosshair"} size={16} color={(editData.gpsLat || shop.gpsLat) ? colors.accent.success : colors.accent.primary} />}
-                    <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.primary }}>{(editData.gpsLat || shop.gpsLat) ? "Координаты сохранены" : "Определить местоположение"}</Text>
+                    <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.primary }}>{(editData.gpsLat || shop.gpsLat) ? t("Координаты сохранены", "Koordinatalar saqlandi") : t("Определить местоположение", "Joylashuvni aniqlash")}</Text>
                   </PressableScale>
                 </View>
                 {/* Territory */}
                 {territories.length > 0 && (
                   <View style={{ marginTop: 8 }}>
-                    <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, marginBottom: 6 }}>ТЕРРИТОРИЯ</Text>
+                    <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, marginBottom: 6 }}>{t("ТЕРРИТОРИЯ", "TERRITORIYA")}</Text>
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                       <TouchableOpacity onPress={() => setTerritoryId(undefined)}
                         style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radii.md, ...((!territoryId) ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: !territoryId ? colors.accent.primary + "15" : colors.bg.input }}>
-                        <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: !territoryId ? colors.accent.primary : colors.text.secondary }}>Без территории</Text>
+                        <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: !territoryId ? colors.accent.primary : colors.text.secondary }}>{t("Без территории", "Territoriyasiz")}</Text>
                       </TouchableOpacity>
                       {territories.map((ter: Territory) => (
                         <TouchableOpacity key={ter.id} onPress={() => setTerritoryId(ter.id)}
@@ -295,22 +297,22 @@ export default function ShopDetailScreen() {
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                   <Button variant="primary" size="md" fullWidth loading={updateMutation.isPending}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); updateMutation.mutate(editData as Record<string, string>); }}>
-                    Сохранить
+                    {t("Сохранить", "Saqlash")}
                   </Button>
                   <Button variant="secondary" size="md" fullWidth
                     onPress={() => { Haptics.selectionAsync(); setEditing(false); }}>
-                    Отмена
+                    {t("Отмена", "Bekor")}
                   </Button>
                 </View>
               </View>
             ) : (
               <>
-                {shop.ownerName && <InfoRow icon="user" label="Владелец" value={shop.ownerName} colors={colors} />}
-                {shop.phone && <InfoRow icon="phone" label="Телефон" value={shop.phone} onPress={() => Linking.openURL(`tel:${shop.phone}`)} colors={colors} />}
-                {shop.address && <InfoRow icon="map-pin" label="Адрес" value={shop.address} colors={colors} />}
-                {shop.city && <InfoRow icon="navigation" label="Город" value={[shop.city, shop.district].filter(Boolean).join(", ")} colors={colors} />}
-                {shop.gpsLat && shop.gpsLng && <InfoRow icon="crosshair" label="Геолокация" value={`${Number(shop.gpsLat).toFixed(6)}, ${Number(shop.gpsLng).toFixed(6)}`} colors={colors} />}
-                {shop.notes && <InfoRow icon="file-text" label="Заметки" value={shop.notes} colors={colors} />}
+                {shop.ownerName && <InfoRow icon="user" label={t("Владелец", "Egasi")} value={shop.ownerName} colors={colors} />}
+                {shop.phone && <InfoRow icon="phone" label={t("Телефон", "Telefon")} value={shop.phone} onPress={() => Linking.openURL(`tel:${shop.phone}`)} colors={colors} />}
+                {shop.address && <InfoRow icon="map-pin" label={t("Адрес", "Manzil")} value={shop.address} colors={colors} />}
+                {shop.city && <InfoRow icon="navigation" label={t("Город", "Shahar")} value={[shop.city, shop.district].filter(Boolean).join(", ")} colors={colors} />}
+                {shop.gpsLat && shop.gpsLng && <InfoRow icon="crosshair" label={t("Геолокация", "Joylashuv")} value={`${Number(shop.gpsLat).toFixed(6)}, ${Number(shop.gpsLng).toFixed(6)}`} colors={colors} />}
+                {shop.notes && <InfoRow icon="file-text" label={t("Заметки", "Izoh")} value={shop.notes} colors={colors} />}
               </>
             )}
           </Card>
@@ -319,9 +321,9 @@ export default function ShopDetailScreen() {
         {/* Status */}
         <FadeInItem delay={40}>
           <Card style={{ padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.primary }}>Статус</Text>
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Статус", "Holat")}</Text>
             <Badge variant={shop.status === "active" ? "success" : "default"}>
-              {shop.status === "active" ? "Активен" : "Неактивен"}
+              {shop.status === "active" ? t("Активен", "Faol") : t("Неактивен", "Faol emas")}
             </Badge>
           </Card>
         </FadeInItem>
@@ -336,7 +338,7 @@ export default function ShopDetailScreen() {
             >
               <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, paddingHorizontal: 20, borderRadius: Radii.xl }}>
                 <Feather name="shopping-cart" size={20} color="#fff" />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: "#fff" }}>Новый заказ</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: "#fff" }}>{t("Новый заказ", "Yangi buyurtma")}</Text>
               </LinearGradient>
             </PressableScale>
           </FadeInItem>

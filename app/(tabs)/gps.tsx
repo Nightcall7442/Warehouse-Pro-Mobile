@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LocationDisclosure } from "../../src/components/LocationDisclosure";
 import { FadeInItem } from "../../src/components/Animated";
 import { startBackgroundTracking, stopBackgroundTracking, bufferLocation } from "../../src/backgroundLocation";
+import { useT, useLang } from "../../src/i18n";
 
 /**
  * Запасной опрос — только для телефонов, где не дали фоновую геолокацию.
@@ -29,6 +30,7 @@ const FALLBACK_TRACK_MS = 5 * 60 * 1000;
 type GpsState = "idle" | "locating" | "success" | "error";
 
 function AccuracyBar({ accuracy, colors }: { accuracy: number; colors: ThemeColors }) {
+  const t = useT();
   const level = accuracy < 10 ? 4 : accuracy < 50 ? 3 : accuracy < 200 ? 2 : 1;
   const color = level === 4 ? colors.status.success : level === 3 ? colors.status.info : level === 2 ? colors.status.warning : colors.status.danger;
   return (
@@ -37,7 +39,7 @@ function AccuracyBar({ accuracy, colors }: { accuracy: number; colors: ThemeColo
         <View key={i} style={{ width: 6, height: 12, borderRadius: 3, backgroundColor: i <= level ? color : colors.bg.elevated }} />
       ))}
       <Text style={{ fontSize: Typography.size.xs, marginLeft: 4, fontFamily: Typography.fontMedium, color }}>
-        {accuracy < 10 ? "Отличный" : accuracy < 50 ? "Хороший" : accuracy < 200 ? "Нормальный" : "Слабый"} сигнал
+        {accuracy < 10 ? t("Отличный", "A'lo") : accuracy < 50 ? t("Хороший", "Yaxshi") : accuracy < 200 ? t("Нормальный", "O'rtacha") : t("Слабый", "Kuchsiz")} {t("сигнал", "signal")}
       </Text>
     </View>
   );
@@ -47,12 +49,17 @@ const AUTO_TRACK_KEY = "gps_auto_track";
 
 export default function GpsScreen() {
   const colors = useThemeColors();
+  const t = useT();
+  const lang = useLang();
   const insets = useSafeAreaInsets();
   const [state, setState] = useState<GpsState>("idle");
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
-  const [error, setError] = useState("");
+  // Код ошибки, а не текст: слово подбирается при отрисовке на текущем языке,
+  // и locate() не зависит от t — иначе смена языка перезапускала бы слежение.
+  const [error, setError] = useState<"" | "permission" | "gps" | "offline">("");
   const [autoTrack, setAutoTrack] = useState(false);
   // Фоновое слежение не дали — почему: показывается под переключателем.
+  // Хранится причина, а не текст: слово подбирается при отрисовке на текущем языке.
   const [trackNotice, setTrackNotice] = useState("");
   const [askConsent, setAskConsent] = useState(false);
   const [lastSent, setLastSent] = useState<Date | null>(null);
@@ -94,7 +101,7 @@ export default function GpsScreen() {
     let { status } = await Location.getForegroundPermissionsAsync();
     if (status === "undetermined") ({ status } = await Location.requestForegroundPermissionsAsync());
     if (status !== "granted") {
-      setError("Доступ к геолокации запрещён. Разрешите в настройках.");
+      setError("permission");
       setState("error");
       isLocating.current = false;
       return;
@@ -129,7 +136,7 @@ export default function GpsScreen() {
         batteryPct = battery !== null ? Math.round(battery * 100) : undefined;
       } catch {
         // Вот здесь виноват действительно GPS: координат нет.
-        setError("Не удалось определить местоположение. Проверьте, включён ли GPS.");
+        setError("gps");
         setState("error");
         setLastSent(null);
         return;
@@ -151,7 +158,7 @@ export default function GpsScreen() {
           recordedAt: new Date().toISOString(),
           mocked: c.mocked,
         });
-        setError("Точка снята, но не отправлена — нет связи. Она сохранена и уйдёт сама, когда связь появится.");
+        setError("offline");
         setState("error");
         setLastSent(null);
       }
@@ -205,13 +212,7 @@ export default function GpsScreen() {
       if (cancelled) return;
       if (result.success) { setTrackNotice(""); return; }
       if (__DEV__) console.log("Background location not started:", result.reason);
-      setTrackNotice(
-        result.reason === "background_unavailable_in_expo_go"
-          ? "В Expo Go на iPhone фоновое слежение недоступно — точки уходят, пока экран открыт. В установленном приложении работает в фоне."
-          : result.reason === "background_permission_denied"
-            ? "Фоновая геолокация не разрешена — точки уходят, пока экран открыт. Разрешите «Всегда» в настройках."
-            : "Фоновое слежение не запустилось — точки уходят, пока экран открыт.",
-      );
+      setTrackNotice(result.reason || "failed");
       // Запасной ход — только когда система следить отказалась.
       intervalRef.current = setInterval(locate, FALLBACK_TRACK_MS);
     });
@@ -228,15 +229,30 @@ export default function GpsScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
+  const errorText = error === "permission"
+    ? t("Доступ к геолокации запрещён. Разрешите в настройках.", "Joylashuvga ruxsat yo'q. Sozlamalardan ruxsat bering.")
+    : error === "gps"
+      ? t("Не удалось определить местоположение. Проверьте, включён ли GPS.", "Joylashuv aniqlanmadi. GPS yoqilganini tekshiring.")
+      : error === "offline"
+        ? t("Точка снята, но не отправлена — нет связи. Она сохранена и уйдёт сама, когда связь появится.", "Nuqta olindi, lekin yuborilmadi — aloqa yo'q. U saqlandi va aloqa paydo bo'lganda o'zi ketadi.")
+        : "";
+
+  const trackNoticeText = !trackNotice ? ""
+    : trackNotice === "background_unavailable_in_expo_go"
+      ? t("В Expo Go на iPhone фоновое слежение недоступно — точки уходят, пока экран открыт. В установленном приложении работает в фоне.", "iPhone'da Expo Go'da fon kuzatuvi ishlamaydi — nuqtalar ekran ochiq paytda ketadi. O'rnatilgan ilovada fonda ishlaydi.")
+      : trackNotice === "background_permission_denied"
+        ? t("Фоновая геолокация не разрешена — точки уходят, пока экран открыт. Разрешите «Всегда» в настройках.", "Fonda joylashuvga ruxsat yo'q — nuqtalar ekran ochiq paytda ketadi. Sozlamalarda «Har doim»ga ruxsat bering.")
+        : t("Фоновое слежение не запустилось — точки уходят, пока экран открыт.", "Fon kuzatuvi ishga tushmadi — nuqtalar ekran ochiq paytda ketadi.");
+
   const spinStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
 
   const handleRefresh = async () => { setRefreshing(true); await locate(); setRefreshing(false); };
 
   const statusMeta = {
-    idle: { icon: "navigation" as const, gradient: true, text: "Нажмите кнопку, чтобы поделиться геолокацией", color: colors.text.secondary },
-    locating: { icon: "loader" as const, gradient: true, text: "Определяем местоположение…", color: colors.text.secondary },
-    success: { icon: "check" as const, gradient: false, text: "Геолокация успешно отправлена", color: colors.status.success },
-    error: { icon: "alert-triangle" as const, gradient: false, text: error, color: colors.status.danger },
+    idle: { icon: "navigation" as const, gradient: true, text: t("Нажмите кнопку, чтобы поделиться геолокацией", "Joylashuvni yuborish uchun tugmani bosing"), color: colors.text.secondary },
+    locating: { icon: "loader" as const, gradient: true, text: t("Определяем местоположение…", "Joylashuv aniqlanmoqda…"), color: colors.text.secondary },
+    success: { icon: "check" as const, gradient: false, text: t("Геолокация успешно отправлена", "Joylashuv yuborildi"), color: colors.status.success },
+    error: { icon: "alert-triangle" as const, gradient: false, text: errorText, color: colors.status.danger },
   }[state];
 
   return (
@@ -274,7 +290,7 @@ export default function GpsScreen() {
       {/* Manual share button */}
       <FadeInItem delay={40}>
         <Button variant="primary" size="lg" fullWidth icon={state === "locating" ? undefined : "map-pin"} loading={state === "locating"} onPress={locate} disabled={state === "locating"}>
-          {state === "locating" ? "Определяем…" : "Поделиться геолокацией"}
+          {state === "locating" ? t("Определяем…", "Aniqlanmoqda…") : t("Поделиться геолокацией", "Joylashuvni yuborish")}
         </Button>
       </FadeInItem>
 
@@ -286,7 +302,7 @@ export default function GpsScreen() {
               <Feather name="repeat" size={18} color={colors.brand.primaryLight} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Авто-слежение</Text>
+              <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Авто-слежение", "Avto-kuzatuv")}</Text>
               {/*
                 Подпись говорит, как оно работает НА САМОМ ДЕЛЕ.
 
@@ -298,7 +314,7 @@ export default function GpsScreen() {
                 причина, по которой батарея не садится.
               */}
               <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
-                Отправка при перемещении, не чаще раза в 2 минуты
+                {t("Отправка при перемещении, не чаще раза в 2 минуты", "Harakatlanganda yuboriladi, 2 daqiqada bir martadan ko'p emas")}
               </Text>
             </View>
             {/*
@@ -326,10 +342,10 @@ export default function GpsScreen() {
           {autoTrack && (
             <View style={{ marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle, gap: 8 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Badge variant={trackNotice ? "warning" : "success"}>{trackNotice ? "Слежение только на экране" : "Авто-слежение активно"}</Badge>
+                <Badge variant={trackNotice ? "warning" : "success"}>{trackNoticeText ? t("Слежение только на экране", "Kuzatuv faqat ekranda") : t("Авто-слежение активно", "Avto-kuzatuv yoqilgan")}</Badge>
               </View>
-              {trackNotice ? (
-                <Text testID="track-notice" style={{ fontSize: Typography.size.xs, color: colors.text.secondary, lineHeight: 16 }}>{trackNotice}</Text>
+              {trackNoticeText ? (
+                <Text testID="track-notice" style={{ fontSize: Typography.size.xs, color: colors.text.secondary, lineHeight: 16 }}>{trackNoticeText}</Text>
               ) : null}
             </View>
           )}
@@ -348,13 +364,13 @@ export default function GpsScreen() {
       {lastSent && (
         <FadeInItem delay={100}>
           <Card style={{ alignItems: "center", paddingVertical: Spacing.lg }}>
-            <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.muted, letterSpacing: 1.5, marginBottom: 4 }}>ПОСЛЕДНЯЯ ОТПРАВКА</Text>
+            <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.muted, letterSpacing: 1.5, marginBottom: 4 }}>{t("ПОСЛЕДНЯЯ ОТПРАВКА", "OXIRGI YUBORISH")}</Text>
             <Text style={{ fontSize: Typography.size["2xl"], color: colors.text.primary, fontVariant: ["tabular-nums"], fontFamily: Typography.fontMono }}>
-              {lastSent.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              {lastSent.toLocaleTimeString(lang === "uz" ? "uz-Latn-UZ" : "ru", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </Text>
             {coords && (
               <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 4, fontFamily: Typography.fontMono }}>
-                {coords.lat.toFixed(5)}° N, {coords.lng.toFixed(5)}° E · ±{Math.round(coords.accuracy)} м
+                {coords.lat.toFixed(5)}° N, {coords.lng.toFixed(5)}° E · ±{Math.round(coords.accuracy)} {t("м", "m")}
               </Text>
             )}
           </Card>
@@ -366,10 +382,10 @@ export default function GpsScreen() {
         <Card variant="accent">
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <Feather name="info" size={15} color={colors.brand.primaryLight} />
-            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Как это работает</Text>
+            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Как это работает", "Bu qanday ishlaydi")}</Text>
           </View>
           <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, lineHeight: 20 }}>
-            Ваши координаты будут видны супервайзеру на карте. Это помогает планировать маршруты и подтверждать посещения магазинов.
+            {t("Ваши координаты будут видны супервайзеру на карте. Это помогает планировать маршруты и подтверждать посещения магазинов.", "Koordinatalaringiz supervayzerga xaritada ko'rinadi. Bu marshrutlarni rejalashtirish va do'kon tashriflarini tasdiqlashga yordam beradi.")}
           </Text>
         </Card>
       </FadeInItem>

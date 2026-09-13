@@ -13,6 +13,7 @@ import {
 } from "../src/api";
 import { errorText } from "../src/lib/error-text";
 import { notify } from "../src/store/toast";
+import { useT, useLang } from "../src/i18n";
 
 /**
  * Уведомления.
@@ -60,6 +61,7 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
+  const t = useT();
   const qc = useQueryClient();
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -98,7 +100,7 @@ export default function NotificationsScreen() {
 
   const markAll = useMutation({
     mutationFn: () => markAllNotificationsRead(),
-    onSuccess: () => { invalidate(); notify.success("Всё прочитано"); },
+    onSuccess: () => { invalidate(); notify.success(t("Всё прочитано", "Hammasi o'qildi")); },
     onError: (e) => notify.error(errorText(e)),
   });
 
@@ -132,15 +134,15 @@ export default function NotificationsScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Назад"
+          accessibilityLabel={t("Назад", "Orqaga")}
           style={{ width: 36, height: 36, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.card }}
         >
           <Feather name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 22, color: colors.text.primary }}>Уведомления</Text>
+          <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 22, color: colors.text.primary }}>{t("Уведомления", "Bildirishnomalar")}</Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.secondary, marginTop: 2 }}>
-            {unread > 0 ? `${unread} непрочитанных` : "Всё прочитано"}
+            {unread > 0 ? t(`${unread} непрочитанных`, `${unread} ta o'qilmagan`) : t("Всё прочитано", "Hammasi o'qilgan")}
           </Text>
         </View>
         {unread > 0 && (
@@ -148,7 +150,7 @@ export default function NotificationsScreen() {
             onPress={() => markAll.mutate()}
             disabled={markAll.isPending}
             accessibilityRole="button"
-            accessibilityLabel="Отметить всё прочитанным"
+            accessibilityLabel={t("Отметить всё прочитанным", "Hammasini o'qilgan deb belgilash")}
             hitSlop={8}
             style={{
               minHeight: Sizes.touchTarget, paddingHorizontal: Spacing.md, borderRadius: Radii.lg,
@@ -166,8 +168,8 @@ export default function NotificationsScreen() {
       {/* ── Только непрочитанные ─────────────────────────────────────── */}
       <View style={{ flexDirection: "row", gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md }}>
         {[
-          { key: false, label: "Все" },
-          { key: true, label: unread > 0 ? `Непрочитанные · ${unread}` : "Непрочитанные" },
+          { key: false, label: t("Все", "Hammasi") },
+          { key: true, label: unread > 0 ? t(`Непрочитанные · ${unread}`, `O'qilmagan · ${unread}`) : t("Непрочитанные", "O'qilmagan") },
         ].map((tab) => {
           const active = unreadOnly === tab.key;
           return (
@@ -204,12 +206,12 @@ export default function NotificationsScreen() {
           listQ.isLoading ? (
             <ActivityIndicator color={colors.brand.primary} style={{ marginTop: Spacing.xxl }} />
           ) : listQ.isError ? (
-            <EmptyState icon="alert-circle" title="Не удалось загрузить" description={errorText(listQ.error)} />
+            <EmptyState icon="alert-circle" title={t("Не удалось загрузить", "Yuklab bo'lmadi")} description={errorText(listQ.error)} />
           ) : (
             <EmptyState
               icon="bell"
-              title={unreadOnly ? "Непрочитанных нет" : "Уведомлений нет"}
-              description={unreadOnly ? "Всё, что приходило, вы уже открыли" : "Здесь появятся заказы, оплаты и остатки"}
+              title={unreadOnly ? t("Непрочитанных нет", "O'qilmaganlar yo'q") : t("Уведомлений нет", "Bildirishnomalar yo'q")}
+              description={unreadOnly ? t("Всё, что приходило, вы уже открыли", "Kelganlarning hammasini ochgansiz") : t("Здесь появятся заказы, оплаты и остатки", "Bu yerda buyurtmalar, to'lovlar va qoldiqlar chiqadi")}
             />
           )
         }
@@ -229,7 +231,8 @@ function Row({ n, colors, onPress }: {
   colors: ReturnType<typeof useThemeColors>;
   onPress: () => void;
 }) {
-  const day = n.createdAt ? new Date(n.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+  const lang = useLang();
+  const day = n.createdAt ? new Date(n.createdAt).toLocaleString(lang === "uz" ? "uz-Latn-UZ" : "ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
 
   return (
     <Pressable

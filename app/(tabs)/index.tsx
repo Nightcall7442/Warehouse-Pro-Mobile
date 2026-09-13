@@ -4,7 +4,8 @@ import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ru } from "date-fns/locale";
+import { ru, uz } from "date-fns/locale";
+import { useT, useLang } from "../../src/i18n";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
 import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, getNotificationCounts, getReceivablesAging, getMyDebts } from "../../src/api";
@@ -22,16 +23,6 @@ import { money } from "../../src/components/order/OrderStyles";
 import { LinearGradient } from "expo-linear-gradient";
 
 type IconName = keyof typeof Feather.glyphMap;
-
-/** «1 заказ», «2 заказа», «5 заказов» — число всегда рядом со словом. */
-function ordersWord(n: number): string {
-  const tens = n % 100;
-  if (tens >= 11 && tens <= 14) return "заказов";
-  const ones = n % 10;
-  if (ones === 1) return "заказ";
-  if (ones >= 2 && ones <= 4) return "заказа";
-  return "заказов";
-}
 
 // ── CardDots — 3 colored dots (cold palette) ──────────────────────────────────
 /**
@@ -100,10 +91,10 @@ type PlanStatusMeta = { icon: "check-circle" | "clock" | "circle"; color: string
 
 // Функция, а не таблица: цвет теперь берётся из темы, а тема на уровне модуля
 // ещё не выбрана — он вычисляется при отрисовке.
-const planStatusMeta = (c: ThemeColors): Record<string, PlanStatusMeta> => ({
-  visited: { icon: "check-circle", color: c.status.success, bg: c.status.successDim, label: "Посещён" },
-  skipped: { icon: "clock",        color: c.status.warning, bg: c.status.warningDim, label: "Пропущен" },
-  planned: { icon: "circle",       color: c.accent.primary, bg: c.brand.primaryDim,  label: "Запланирован" },
+const planStatusMeta = (c: ThemeColors, t: (ru: string, uz: string) => string): Record<string, PlanStatusMeta> => ({
+  visited: { icon: "check-circle", color: c.status.success, bg: c.status.successDim, label: t("Посещён", "Tashrif") },
+  skipped: { icon: "clock",        color: c.status.warning, bg: c.status.warningDim, label: t("Пропущен", "O'tkazildi") },
+  planned: { icon: "circle",       color: c.accent.primary, bg: c.brand.primaryDim,  label: t("Запланирован", "Rejalashtirilgan") },
 });
 
 /*
@@ -118,6 +109,8 @@ const planStatusMeta = (c: ThemeColors): Record<string, PlanStatusMeta> => ({
 // ── Agent Home (Premium — matching web Dashboard.tsx style) ────────────────────
 function AgentHome() {
   const router = useRouter();
+  const t = useT();
+  const lang = useLang();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
@@ -215,8 +208,8 @@ function AgentHome() {
   }, [myOrders]);
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
-  const firstName = (user?.name ?? user?.email ?? "Агент").split(" ")[0];
+  const greeting = hour < 12 ? t("Доброе утро", "Xayrli tong") : hour < 18 ? t("Добрый день", "Xayrli kun") : t("Добрый вечер", "Xayrli kech");
+  const firstName = (user?.name ?? user?.email ?? t("Агент", "Agent")).split(" ")[0];
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -237,9 +230,9 @@ function AgentHome() {
           <View style={{ flex: 1 }}>
             <CardDots />
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: 26, color: colors.text.primary, marginTop: 4, letterSpacing: -0.5 }}>Мой день</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: 26, color: colors.text.primary, marginTop: 4, letterSpacing: -0.5 }}>{t("Мой день", "Mening kunim")}</Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.secondary, marginTop: 4, textTransform: "capitalize" }}>
-              {format(new Date(), "EEEE, d MMMM yyyy", { locale: ru })}
+              {format(new Date(), "EEEE, d MMMM yyyy", { locale: lang === "uz" ? uz : ru })}
             </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
@@ -262,7 +255,7 @@ function AgentHome() {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Feather name="map-pin" size={16} color={colors.accent.primary} />
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>Визиты сегодня</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{t("Визиты сегодня", "Bugungi tashriflar")}</Text>
             {(todayPlans?.length ?? 0) > 0 && (
               <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, backgroundColor: colors.brand.primaryDim }}>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 11, color: colors.accent.primary }}>
@@ -292,9 +285,9 @@ function AgentHome() {
               <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.secondary, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="wifi-off" size={20} color={colors.text.tertiary} />
               </View>
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.primary }}>Не удалось загрузить визиты</Text>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.primary }}>{t("Не удалось загрузить визиты", "Tashriflar yuklanmadi")}</Text>
               <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.secondary, textAlign: "center" }}>
-                Это сбой связи, а не пустой маршрут. Потяните вниз, чтобы обновить.
+                {t("Это сбой связи, а не пустой маршрут. Потяните вниз, чтобы обновить.", "Bu aloqa uzilishi, marshrut bo'sh emas. Yangilash uchun pastga torting.")}
               </Text>
             </View>
           ) : (todayPlans?.length ?? 0) === 0 ? (
@@ -302,11 +295,11 @@ function AgentHome() {
               <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.secondary, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="map-pin" size={20} color={colors.text.tertiary} />
               </View>
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.secondary }}>На сегодня визитов нет</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.secondary }}>{t("На сегодня визитов нет", "Bugun tashrif yo'q")}</Text>
             </View>
           ) : (
             (todayPlans ?? []).slice(0, 5).map((plan, i) => {
-              const statuses = planStatusMeta(colors);
+              const statuses = planStatusMeta(colors, t);
               const meta = statuses[plan.status] ?? statuses.planned;
               return (
                 <PressableScale
@@ -325,7 +318,7 @@ function AgentHome() {
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text numberOfLines={1} style={{ fontFamily: Typography.fontSemibold, fontSize: 14, color: colors.text.primary }}>
-                        {plan.shopName ?? "Магазин"}
+                        {plan.shopName ?? t("Магазин", "Do'kon")}
                       </Text>
                       {plan.shopAddress ? (
                         <Text numberOfLines={1} style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.tertiary, marginTop: 2 }}>
@@ -348,8 +341,8 @@ function AgentHome() {
         <View style={{ backgroundColor: colors.bg.card, borderRadius: 24, padding: 20, marginBottom: 16, ...soft(isDark).raised }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <View>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>Динамика продаж</Text>
-              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.tertiary, marginTop: 3 }}>Выручка за 7 дней</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{t("Динамика продаж", "Sotuvlar dinamikasi")}</Text>
+              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.tertiary, marginTop: 3 }}>{t("Выручка за 7 дней", "7 kunlik tushum")}</Text>
             </View>
             <View style={{ flexDirection: "row", gap: 6 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent.secondary }} />
@@ -372,7 +365,7 @@ function AgentHome() {
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
                 <Feather name="plus-circle" size={20} color="#fff" />
               </View>
-              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>НОВЫЙ ЗАКАЗ</Text>
+              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>{t("НОВЫЙ ЗАКАЗ", "YANGI BUYURTMA")}</Text>
             </LinearGradient>
           </PressableScale>
           )}
@@ -381,7 +374,7 @@ function AgentHome() {
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="shopping-bag" size={20} color={colors.accent.primary} />
               </View>
-              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>МАГАЗИНЫ</Text>
+              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>{t("МАГАЗИНЫ", "DO'KONLAR")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -400,7 +393,7 @@ function AgentHome() {
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="maximize" size={16} color={colors.accent.primary} />
               </View>
-              <Text style={{ fontSize: 10, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>БАРКОД</Text>
+              <Text style={{ fontSize: 10, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("БАРКОД", "SHTRIX-KOD")}</Text>
             </View>
           </PressableScale>
           )}
@@ -409,7 +402,7 @@ function AgentHome() {
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="user" size={16} color={colors.status.info} />
               </View>
-              <Text style={{ fontSize: 10, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>ПРОФИЛЬ</Text>
+              <Text style={{ fontSize: 10, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("ПРОФИЛЬ", "PROFIL")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -427,9 +420,9 @@ function AgentHome() {
                 <Feather name="alert-circle" size={18} color={colors.status.danger} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, letterSpacing: 0.6, color: colors.status.danger }}>ДОЛГИ</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, letterSpacing: 0.6, color: colors.status.danger }}>{t("ДОЛГИ", "QARZLAR")}</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 15, color: colors.text.primary, marginTop: 2 }}>
-                  {debtSummary.shops} {plural(debtSummary.shops, "магазин", "магазина", "магазинов")} · {formatMoney(debtSummary.sum)}
+                  {t(`${debtSummary.shops} ${plural(debtSummary.shops, "магазин", "магазина", "магазинов")}`, `${debtSummary.shops} ta do'kon`)} · {formatMoney(debtSummary.sum)}
                 </Text>
               </View>
               <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
@@ -444,7 +437,7 @@ function AgentHome() {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Feather name="clipboard" size={16} color={colors.accent.primary} />
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>Мои заказы сегодня</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{t("Мои заказы сегодня", "Bugungi buyurtmalarim")}</Text>
           </View>
           <PressableScale onPress={() => router.push("/(tabs)/orders")} haptic="light">
             <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
@@ -471,7 +464,7 @@ function AgentHome() {
               {/* Подпись 12-м, а не восьмым: восьмой на солнце не читается, и
                   от показателя остаётся голое число без имени. */}
               <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, letterSpacing: 0.6, color: colors.accent.primary }}>
-                ВЫРУЧКА ЗА СЕГОДНЯ
+                {t("ВЫРУЧКА ЗА СЕГОДНЯ", "BUGUNGI TUSHUM")}
               </Text>
               {ordersFailed ? (
                 <>
@@ -479,7 +472,7 @@ function AgentHome() {
                     —
                   </Text>
                   <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: colors.accent.primary }}>
-                    Нет связи — потяните вниз, чтобы обновить
+                    {t("Нет связи — потяните вниз, чтобы обновить", "Aloqa yo'q — yangilash uchun pastga torting")}
                   </Text>
                 </>
               ) : ordersLoading ? (
@@ -491,8 +484,8 @@ function AgentHome() {
                   </Text>
                   <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: colors.accent.primary }}>
                     {todayTotals.count === 0
-                      ? "заказов ещё нет"
-                      : `${todayTotals.count} ${ordersWord(todayTotals.count)}`}
+                      ? t("заказов ещё нет", "hali buyurtma yo'q")
+                      : t(`${todayTotals.count} ${plural(todayTotals.count, "заказ", "заказа", "заказов")}`, `${todayTotals.count} ta buyurtma`)}
                   </Text>
                 </>
               )}
@@ -522,8 +515,8 @@ function AgentHome() {
               </View>
               <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.secondary }}>
                 {ordersFailed
-                  ? "Не удалось загрузить заказы — это сбой связи"
-                  : (myOrders?.length ?? 0) > 0 ? "Сегодня заказов ещё нет" : "Создайте первый заказ"}
+                  ? t("Не удалось загрузить заказы — это сбой связи", "Buyurtmalar yuklanmadi — aloqa uzildi")
+                  : (myOrders?.length ?? 0) > 0 ? t("Сегодня заказов ещё нет", "Bugun hali buyurtma yo'q") : t("Создайте первый заказ", "Birinchi buyurtmani yarating")}
               </Text>
             </View>
           ) : (
@@ -580,6 +573,8 @@ function AlertIcon({ severity, size = 14, colors }: { severity: string; size?: n
 // ── Supervisor Home (Premium — matching web Dashboard.tsx) ─────────────────────
 function SupervisorHome() {
   const router = useRouter();
+  const t = useT();
+  const lang = useLang();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
@@ -625,7 +620,7 @@ function SupervisorHome() {
   }));
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
+  const greeting = hour < 12 ? t("Доброе утро", "Xayrli tong") : hour < 18 ? t("Добрый день", "Xayrli kun") : t("Добрый вечер", "Xayrli kech");
   const firstName = (user?.name ?? user?.email ?? "").split(" ")[0];
 
   const handleRefresh = useCallback(async () => {
@@ -643,9 +638,9 @@ function SupervisorHome() {
           <View style={{ flex: 1 }}>
             <CardDots />
             <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
-            <Text style={{ fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, color: colors.text.primary, marginTop: 2 }}>Главная</Text>
+            <Text style={{ fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, color: colors.text.primary, marginTop: 2 }}>{t("Главная", "Bosh sahifa")}</Text>
             <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBody, color: colors.text.tertiary, marginTop: 2, textTransform: "capitalize" }}>
-              {format(new Date(), "EEEE, d MMMM yyyy", { locale: ru })}
+              {format(new Date(), "EEEE, d MMMM yyyy", { locale: lang === "uz" ? uz : ru })}
             </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
@@ -706,7 +701,7 @@ function SupervisorHome() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <Feather name="alert-circle" size={16} color={colors.status.warning} />
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>
-                  Долги магазинов
+                  {t("Долги магазинов", "Do'konlar qarzi")}
                 </Text>
                 <View style={{ flex: 1 }} />
                 <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
@@ -715,7 +710,7 @@ function SupervisorHome() {
               <View style={{ flexDirection: "row", alignItems: "flex-end", gap: Spacing.lg }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>
-                    всего
+                    {t("всего", "jami")}
                   </Text>
                   <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
                     {formatMoney(debts.totalDebt)}
@@ -723,7 +718,7 @@ function SupervisorHome() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>
-                    магазинов
+                    {t("магазинов", "do'kon")}
                   </Text>
                   <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>
                     {debts.debtorCount}
@@ -739,7 +734,7 @@ function SupervisorHome() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
                   <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.status.danger }} />
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger }}>
-                    старше месяца: {formatMoney(debts.overdue)}
+                    {t("старше месяца", "bir oydan eski")}: {formatMoney(debts.overdue)}
                   </Text>
                 </View>
               )}
@@ -753,14 +748,14 @@ function SupervisorHome() {
         <Card style={{ marginBottom: Spacing.base }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <View>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>Динамика продаж</Text>
-              <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>Выручка и заказы</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Динамика продаж", "Sotuvlar dinamikasi")}</Text>
+              <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{t("Выручка и заказы", "Tushum va buyurtmalar")}</Text>
             </View>
             <View style={{ flexDirection: "row", backgroundColor: colors.bg.elevated, borderRadius: Radii.full, padding: 2 }}>
               {(["7d", "30d", "month"] as const).map(r => (
                 <PressableScale key={r} onPress={() => setRange(r)} haptic="light" scaleTo={0.95}>
                   <View style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radii.full, backgroundColor: range === r ? colors.brand.primary : "transparent" }}>
-                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: range === r ? "#fff" : colors.text.tertiary }}>{r === "7d" ? "7д" : r === "30d" ? "30д" : "Месяц"}</Text>
+                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: range === r ? "#fff" : colors.text.tertiary }}>{r === "7d" ? t("7д", "7 k") : r === "30d" ? t("30д", "30 k") : t("Месяц", "Oy")}</Text>
                   </View>
                 </PressableScale>
               ))}
@@ -775,11 +770,11 @@ function SupervisorHome() {
           <View style={{ flexDirection: "row", justifyContent: "center", gap: 20, marginTop: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent.primary }} />
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>Выручка</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>{t("Выручка", "Tushum")}</Text>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.success }} />
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>Заказы</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>{t("Заказы", "Buyurtmalar")}</Text>
             </View>
           </View>
         </Card>
@@ -790,10 +785,10 @@ function SupervisorHome() {
         <Card style={{ marginBottom: Spacing.base }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
             <Feather name="pie-chart" size={16} color={colors.accent.primary} />
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>Статусы заказов</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Статусы заказов", "Buyurtma holatlari")}</Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-            <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel="заказов" />
+            <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel={t("заказов", "buyurtma")} />
             <View style={{ flex: 1, gap: 8 }}>
               {donutSegments.map((seg, i) => (
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -816,7 +811,7 @@ function SupervisorHome() {
               <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
                 <Feather name="map-pin" size={18} color="#fff" />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>ТРЕКИНГ</Text>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>{t("ТРЕКИНГ", "KUZATUV")}</Text>
             </LinearGradient>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/plans")} haptic="light" style={{ flex: 1 }}>
@@ -824,7 +819,7 @@ function SupervisorHome() {
               <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="calendar" size={18} color={colors.brand.primaryLight} />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>ПЛАНЫ</Text>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>{t("ПЛАНЫ", "REJALAR")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -834,7 +829,7 @@ function SupervisorHome() {
               <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="shopping-bag" size={16} color={colors.accent.primary} />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>МАГАЗИНЫ</Text>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("МАГАЗИНЫ", "DO'KONLAR")}</Text>
             </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
@@ -842,7 +837,7 @@ function SupervisorHome() {
               <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="user" size={16} color={colors.status.info} />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>ПРОФИЛЬ</Text>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("ПРОФИЛЬ", "PROFIL")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -853,9 +848,9 @@ function SupervisorHome() {
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Feather name="clipboard" size={16} color={colors.accent.primary} />
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>Последние заказы</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Последние заказы", "So'nggi buyurtmalar")}</Text>
           </View>
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{activity?.length ?? 0} заказов</Text>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{activity?.length ?? 0} {t("заказов", "ta buyurtma")}</Text>
         </View>
         <Card style={{ padding: 0, overflow: "hidden" }}>
           {!activity?.length ? (
@@ -863,7 +858,7 @@ function SupervisorHome() {
               <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="clipboard" size={20} color={colors.text.muted} />
               </View>
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.muted }}>Заказов пока нет</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.muted }}>{t("Заказов пока нет", "Hali buyurtma yo'q")}</Text>
             </View>
           ) : (
             activity.slice(0, 10).map((order, idx) => (
@@ -903,6 +898,8 @@ const courierStatusMeta = (c: ThemeColors): Record<string, { icon: IconName; lab
 
 function CourierHome() {
   const router = useRouter();
+  const t = useT();
+  const lang = useLang();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
@@ -916,8 +913,8 @@ function CourierHome() {
   const [refreshing, setRefreshing] = useState(false);
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
-  const firstName = (user?.name ?? user?.email ?? "Курьер").split(" ")[0];
+  const greeting = hour < 12 ? t("Доброе утро", "Xayrli tong") : hour < 18 ? t("Добрый день", "Xayrli kun") : t("Добрый вечер", "Xayrli kech");
+  const firstName = (user?.name ?? user?.email ?? t("Курьер", "Kuryer")).split(" ")[0];
 
   const assigned = (deliveries ?? []).filter(d => d.deliveryStatus === "assigned").length;
   const inTransit = (deliveries ?? []).filter(d => d.deliveryStatus === "out_for_delivery").length;
@@ -940,9 +937,9 @@ function CourierHome() {
           <View style={{ flex: 1 }}>
             <CardDots />
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: 26, color: colors.text.primary, marginTop: 4, letterSpacing: -0.5 }}>Доставки</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: 26, color: colors.text.primary, marginTop: 4, letterSpacing: -0.5 }}>{t("Доставки", "Yetkazish")}</Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.secondary, marginTop: 4, textTransform: "capitalize" }}>
-              {format(new Date(), "EEEE, d MMMM yyyy", { locale: ru })}
+              {format(new Date(), "EEEE, d MMMM yyyy", { locale: lang === "uz" ? uz : ru })}
             </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
@@ -976,7 +973,7 @@ function CourierHome() {
               {/* Assigned */}
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, ...soft(isDark).raised }}>
                 <CardDots />
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ОЖИДАЮТ</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>{t("ОЖИДАЮТ", "KUTILMOQDA")}</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 28, color: colors.status.info, marginTop: 8 }}>{assigned}</Text>
                 <View style={{ marginTop: 8 }}>
                   <MiniBarChart data={[assigned, inTransit, delivered]} color={colors.status.info} width={100} height={28} />
@@ -985,7 +982,7 @@ function CourierHome() {
               {/* In Transit */}
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, ...soft(isDark).raised }}>
                 <CardDots />
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>В ПУТИ</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>{t("В ПУТИ", "YO'LDA")}</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 28, color: colors.status.warning, marginTop: 8 }}>{inTransit}</Text>
                 <View style={{ marginTop: 8 }}>
                   <MiniBarChart data={[assigned, inTransit, delivered]} color={colors.status.warning} width={100} height={28} />
@@ -997,13 +994,13 @@ function CourierHome() {
               {/* Delivered */}
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, ...soft(isDark).raised }}>
                 <CardDots />
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ДОСТАВЛЕНО</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>{t("ДОСТАВЛЕНО", "YETKAZILDI")}</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 28, color: colors.status.success, marginTop: 8 }}>{delivered}</Text>
               </View>
               {/* Progress ring */}
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, alignItems: "center", justifyContent: "center", ...soft(isDark).raised }}>
                 <ProgressRing value={deliveryPct} size={64} strokeWidth={6} color={deliveryPct >= 80 ? colors.status.success : colors.accent.primary} />
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 10, color: colors.text.secondary, marginTop: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Прогресс</Text>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 10, color: colors.text.secondary, marginTop: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("Прогресс", "Jarayon")}</Text>
               </View>
             </View>
           </View>
@@ -1014,14 +1011,14 @@ function CourierHome() {
       <FadeInItem delay={120}>
         <View style={{ backgroundColor: colors.bg.card, borderRadius: 24, padding: 20, marginBottom: 16, ...soft(isDark).raised }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 10, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>ПРОГРЕСС ДНЯ</Text>
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 10, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>{t("ПРОГРЕСС ДНЯ", "KUN JARAYONI")}</Text>
             <Text style={{ fontFamily: Typography.fontBold, fontSize: 13, color: deliveryPct >= 80 ? colors.status.success : colors.accent.primary }}>
               {delivered}/{total} · {deliveryPct}%
             </Text>
           </View>
           <NeumorphicProgressBar value={deliveryPct} height={10} color={deliveryPct >= 80 ? colors.status.success : colors.accent.primary} />
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.secondary, marginTop: 10 }}>
-            {total === 0 ? "Нет заказов на сегодня" : delivered === total ? "Все доставлены!" : `Осталось ${total - delivered}`}
+            {total === 0 ? t("Нет заказов на сегодня", "Bugunga buyurtma yo'q") : delivered === total ? t("Все доставлены!", "Hammasi yetkazildi!") : t(`Осталось ${total - delivered}`, `${total - delivered} ta qoldi`)}
           </Text>
         </View>
       </FadeInItem>
@@ -1035,7 +1032,7 @@ function CourierHome() {
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
                 <Feather name="truck" size={20} color="#fff" />
               </View>
-              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>ДОСТАВКИ</Text>
+              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>{t("ДОСТАВКИ", "YETKAZISH")}</Text>
             </LinearGradient>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
@@ -1043,7 +1040,7 @@ function CourierHome() {
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="user" size={20} color={colors.status.info} />
               </View>
-              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>ПРОФИЛЬ</Text>
+              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>{t("ПРОФИЛЬ", "PROFIL")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -1054,9 +1051,9 @@ function CourierHome() {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Feather name="truck" size={16} color={colors.accent.primary} />
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>Последние доставки</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{t("Последние доставки", "So'nggi yetkazishlar")}</Text>
           </View>
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.tertiary }}>{total} заказов</Text>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.tertiary }}>{total} {t("заказов", "ta buyurtma")}</Text>
         </View>
         <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, ...soft(isDark).raised }}>
           {isLoading ? (
@@ -1068,7 +1065,7 @@ function CourierHome() {
               <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.secondary, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="truck" size={20} color={colors.text.tertiary} />
               </View>
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.secondary }}>Доставок пока нет</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.text.secondary }}>{t("Доставок пока нет", "Hali yetkazish yo'q")}</Text>
             </View>
           ) : (
             deliveries.slice(0, 5).map((d, idx) => {
