@@ -7,7 +7,8 @@ import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
-import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, getNotificationCounts, getReceivablesAging } from "../../src/api";
+import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, getNotificationCounts, getReceivablesAging, getMyDebts } from "../../src/api";
+import { plural } from "../../src/lib/plural";
 import { debtorTotals } from "../../src/lib/debtors";
 import { formatMoney } from "../../src/store/branding";
 import { Card } from "../../src/components/ui";
@@ -123,12 +124,43 @@ function AgentHome() {
   const { user } = useAuthStore();
 
   const isAgentRole = user?.role === "agent" || user?.role === "supervisor" || user?.role === "ceo" || user?.role === "operator" || user?.role === "merchandiser";
+  /*
+    Мерчандайзер заказов не оформляет: его работа — визиты и отчёты по ним.
+    Раньше главная показывала ему «Динамику продаж», «Новый заказ» и «Мои
+    заказы сегодня» — три пустых блока о чужой работе поверх единственного
+    нужного. Ему остаются визиты, магазины, GPS и профиль.
+  */
+  const isMerchandiser = user?.role === "merchandiser";
+  const sells = isAgentRole && !isMerchandiser;
+  const isAgent = user?.role === "agent";
 
   const { data: revenueTrend, refetch: refetchTrend } = useQuery({
     queryKey: ["revenueTrend"],
     queryFn: () => getRevenueTrend(7),
-    retry: false, enabled: isAgentRole,
+    retry: false, enabled: sells,
   });
+
+  /*
+    Долги — плиткой на главной, а не только в профиле.
+
+    Экран «Мои долги» есть, но дверь к нему одна — строка в профиле, куда
+    агент заходит раз в месяц. Вопрос «кому идти собирать» задают каждое
+    утро, вместе с маршрутом. Только агенту, как и сам экран: у курьера
+    своих заказов нет, начальник смотрит долги отдельным отчётом.
+    Отказ гасится в null: главная не про долги, плитки просто не будет.
+  */
+  const { data: myDebts, refetch: refetchDebts } = useQuery({
+    queryKey: ["myDebts"],
+    queryFn: () => getMyDebts().catch(() => null),
+    retry: false, enabled: isAgent,
+  });
+  const debtSummary = useMemo(() => {
+    if (!myDebts) return null;
+    return {
+      shops: new Set(myDebts.map(d => d.shopId)).size,
+      sum: myDebts.reduce((acc, d) => acc + (Number(d.remaining) || 0), 0),
+    };
+  }, [myDebts]);
 
   // Today's route. getPlans() with no arguments already scopes to today and to
   // the calling agent server-side, so nothing needs passing here.
@@ -139,7 +171,7 @@ function AgentHome() {
   });
 
   const { data: myOrders, isLoading: ordersLoading, isError: ordersFailed, refetch: refetchOrders } = useQuery({
-    queryKey: ["myOrders"], queryFn: getMyOrders, retry: false, enabled: isAgentRole,
+    queryKey: ["myOrders"], queryFn: getMyOrders, retry: false, enabled: sells,
   });
 
   const visitedCount = (todayPlans ?? []).filter(p => p.status === "visited").length;
@@ -191,9 +223,9 @@ function AgentHome() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchPlans(), refetchOrders(), refetchTrend()]);
+      await Promise.all([refetchPlans(), refetchOrders(), refetchTrend(), refetchDebts()]);
     } finally { setRefreshing(false); }
-  }, [refetchPlans, refetchOrders, refetchTrend]);
+  }, [refetchPlans, refetchOrders, refetchTrend, refetchDebts]);
 
   const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent.primary} />;
 
@@ -311,6 +343,7 @@ function AgentHome() {
       </FadeInItem>
 
       {/* ── Revenue sparkline card (matching web) ────────────────────────── */}
+      {sells && (
       <FadeInItem delay={120}>
         <View style={{ backgroundColor: colors.bg.card, borderRadius: 24, padding: 20, marginBottom: 16, ...soft(isDark).raised }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -327,10 +360,12 @@ function AgentHome() {
           <Sparkline data={revenueTrend?.length ? revenueTrend : [0]} color={colors.accent.primary} width={320} height={60} />
         </View>
       </FadeInItem>
+      )}
 
       {/* ── Quick Actions (matching web style) ────────────────────────────── */}
       <FadeInItem delay={180}>
         <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
+          {sells && (
           <PressableScale onPress={() => router.push("/order/new")} haptic="light" style={{ flex: 1 }}>
             <LinearGradient colors={[colors.accent.primary, colors.text.tertiary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10 }}>
@@ -340,6 +375,7 @@ function AgentHome() {
               <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>НОВЫЙ ЗАКАЗ</Text>
             </LinearGradient>
           </PressableScale>
+          )}
           <PressableScale onPress={() => router.push("/(tabs)/shops")} haptic="light" style={{ flex: 1 }}>
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
@@ -358,6 +394,7 @@ function AgentHome() {
               <Text style={{ fontSize: 10, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>GPS</Text>
             </View>
           </PressableScale>
+          {sells && (
           <PressableScale onPress={() => router.push("/(tabs)/barcode")} haptic="light" style={{ flex: 1 }}>
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
@@ -366,6 +403,7 @@ function AgentHome() {
               <Text style={{ fontSize: 10, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>БАРКОД</Text>
             </View>
           </PressableScale>
+          )}
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 16, borderRadius: 16, gap: 8, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
@@ -377,7 +415,31 @@ function AgentHome() {
         </View>
       </FadeInItem>
 
+      {/* ── Долги: кому идти собирать ─────────────────────────────────────── */}
+      {isAgent && debtSummary && debtSummary.shops > 0 && (
+        <FadeInItem delay={210}>
+          <PressableScale onPress={() => router.push("/debts")} haptic="light">
+            <View style={{
+              backgroundColor: colors.bg.card, borderRadius: 20, padding: 16, marginBottom: 16, ...soft(isDark).raised,
+              flexDirection: "row", alignItems: "center", gap: 12,
+            }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.status.dangerDim, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="alert-circle" size={18} color={colors.status.danger} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, letterSpacing: 0.6, color: colors.status.danger }}>ДОЛГИ</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: 15, color: colors.text.primary, marginTop: 2 }}>
+                  {debtSummary.shops} {plural(debtSummary.shops, "магазин", "магазина", "магазинов")} · {formatMoney(debtSummary.sum)}
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.text.tertiary} />
+            </View>
+          </PressableScale>
+        </FadeInItem>
+      )}
+
       {/* ── Recent Orders (matching web) ─────────────────────────────────── */}
+      {sells && (
       <FadeInItem delay={240}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -398,7 +460,7 @@ function AgentHome() {
             пустой, хотя это просто нет сети в подвале магазина. Ровно на этом
             уже обжигались соседние экраны: «На сегодня визитов нет» вместо
             «связь пропала». */}
-        {isAgentRole && (
+        {sells && (
           <View style={{
             backgroundColor: colors.bg.card,
             borderRadius: 20, padding: 16, marginBottom: 12,
@@ -493,6 +555,7 @@ function AgentHome() {
           )}
         </View>
       </FadeInItem>
+      )}
     </ScrollView>
   );
 }

@@ -90,3 +90,15 @@ export function orderTotals(lines: MoneyLine[]): { subtotal: number; totalQty: n
   }
   return { subtotal, totalQty };
 }
+
+/**
+ * Сумма заказа, который ещё лежит в очереди на телефоне.
+ *
+ * Было: в списке заказов отложенный заказ значился только счётчиком «1 не
+ * отправлен» — ни магазина, ни суммы, ни времени. Названная владельцу
+ * сумма (quotedTotal) в записи есть; у записей, сделанных до её появления,
+ * считается по строкам — так же, как считалась на экране оформления.
+ */
+export function offlineOrderTotal(o: { quotedTotal?: number; input: { items: MoneyLine[] } }): number {
+  return o.quotedTotal ?? orderTotals(o.input.items).subtotal;
+}

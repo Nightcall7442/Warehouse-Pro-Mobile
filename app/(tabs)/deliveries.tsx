@@ -6,16 +6,16 @@ import { useRouter } from "expo-router";
 import { reportNotQueued } from "../../src/lib/offline-guard";
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Linking, Alert,
+  RefreshControl, ActivityIndicator, Linking, Alert, Modal, Pressable,
 } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, ThemeColors, KpiColors } from "../../src/theme";
+import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
 import { Card, Button, Badge, SectionHeader, EmptyState } from "../../src/components/ui";
-import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
+import { mapUrl, FAIL_REASONS, FAIL_REASON_MAX, failReason } from "../../src/lib/courier-route";
 import { listMyDeliveries, type Delivery } from "../../src/api";
 import { useOfflineStore, isRetryableError, deliveryActionOrderId } from "../../src/store/offline";
 import { errorText } from "../../src/lib/error-text";
@@ -25,6 +25,7 @@ import * as Network from "expo-network";
 import { formatMoney } from "../../src/store/branding";
 import { getCourierKpi } from "../../src/api";
 import { deliveryStatusLabel } from "../../src/lib/order-status";
+import { plural } from "../../src/lib/plural";
 
 /* Слово — из общего словаря, здесь только значок и вид плашки. */
 const STATUS_CONFIG: Record<string, { icon: keyof typeof Feather.glyphMap; variant: "info" | "warning" | "success" | "danger" }> = {
@@ -38,11 +39,17 @@ const STATUS_CONFIG: Record<string, { icon: keyof typeof Feather.glyphMap; varia
 /**
  * Итоги месяца у курьера.
  *
- * ── Почему отдельно от колец выше ───────────────────────────────────────────
+ * ── Почему отдельно от строки «Ожидают · В пути» ────────────────────────────
  *
- * Кольца считают СЕГОДНЯШНИЙ маршрут: сколько ждёт, сколько в пути. Это
- * вопрос «что я ещё не сделал». А «сколько я отвёз за месяц» — вопрос про
- * работу целиком, и по сегодняшнему дню на него не ответить.
+ * Строка под заголовком считает СЕГОДНЯШНИЙ маршрут: сколько ждёт, сколько
+ * в пути. Это вопрос «что я ещё не сделал». А «сколько я отвёз за месяц» —
+ * вопрос про работу целиком, и по сегодняшнему дню на него не ответить.
+ *
+ * ── Почему внизу списка ─────────────────────────────────────────────────────
+ *
+ * Блок стоял над маршрутом вместе с двумя кольцами: первая точка уезжала за
+ * край экрана, и курьер каждое утро листал мимо итогов месяца, чтобы увидеть,
+ * куда ехать. Итоги нужны раз в день, точка — каждые двадцать минут.
  *
  * ── Почему рядом с зарплатой ────────────────────────────────────────────────
  *
@@ -75,7 +82,7 @@ function MonthTotals() {
   ];
 
   return (
-    <Card style={{ marginTop: 12, marginBottom: 12 }} onPress={() => router.push("/salary")}>
+    <Card style={{ marginTop: 4, marginBottom: 12 }} onPress={() => router.push("/salary")}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.md }}>
         <Text style={{
           fontFamily: Typography.fontMedium, fontSize: Typography.size.xs,
@@ -113,6 +120,8 @@ function MonthTotals() {
 
 type DeliveryRow =
   | { type: "header"; key: string; title: string }
+  /** Кнопка «Выехал по всем» — над разделом ожидающих, когда точек больше одной. */
+  | { type: "take-all"; key: string; count: number }
   | { type: "transit"; key: string; order: Delivery }
   | { type: "assigned"; key: string; order: Delivery }
   | { type: "queued"; key: string; order: Delivery };
@@ -155,6 +164,18 @@ export default function DeliveriesScreen() {
   const colors = useThemeColors();
   const qc = useQueryClient();
   const [cashInputs, setCashInputs] = useState<Record<number, string>>({});
+  /*
+    Причина «не доставлено» спрашивается своим окном, а не Alert: на Android
+    в Alert помещаются три кнопки, а нужны три причины, «Другое» и «Отмена».
+  */
+  const [failFor, setFailFor] = useState<Delivery | null>(null);
+  /*
+    «Выехал по всем» гонит ту же мутацию по точкам подряд. Пока он идёт, тост
+    и обновление списка на каждую точку не нужны: тридцать «Взято в
+    доставку!» и тридцать перезапросов маршрута на EDGE — это минута
+    мигания. Один итог в конце.
+  */
+  const bulkOut = useRef(false);
 
   const { data: deliveries, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["myDeliveries"],
@@ -275,6 +296,7 @@ export default function DeliveriesScreen() {
         notify.info("Нет подключения. Действие сохранено офлайн.");
         return;
       }
+      if (bulkOut.current) return;
       qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       notify.success("Взято в доставку!");
@@ -400,13 +422,12 @@ export default function DeliveriesScreen() {
     onError: (e: Error) => notify.error(failureText(e)),
   });
 
-  const { queued, assigned, inTransit, deliveredCount, totalDeliveries } = useMemo(() => {
+  const { queued, assigned, inTransit, totalDeliveries } = useMemo(() => {
     const all = deliveries ?? [];
     return {
       queued: all.filter((d: Delivery) => queuedOrderIds.has(d.id)),
       assigned: all.filter((d: Delivery) => d.deliveryStatus === "assigned" && !queuedOrderIds.has(d.id) && !locallyOut.has(d.id)),
       inTransit: all.filter((d: Delivery) => (d.deliveryStatus === "out_for_delivery" || locallyOut.has(d.id)) && !queuedOrderIds.has(d.id)),
-      deliveredCount: all.filter((d: Delivery) => d.deliveryStatus === "delivered").length,
       totalDeliveries: all.length,
     };
   }, [deliveries, queuedOrderIds, locallyOut]);
@@ -432,6 +453,8 @@ export default function DeliveriesScreen() {
       for (const order of inTransit) rows.push({ type: "transit", key: `t-${order.id}`, order });
     }
     if (assigned.length > 0) {
+      // Одна точка — хватает кнопки на карточке; «по всем» имеет смысл от двух.
+      if (assigned.length > 1) rows.push({ type: "take-all", key: "take-all", count: assigned.length });
       rows.push({ type: "header", key: "h-assigned", title: "ОЖИДАЮТ ДОСТАВКИ" });
       for (const order of assigned) rows.push({ type: "assigned", key: `a-${order.id}`, order });
     }
@@ -442,8 +465,13 @@ export default function DeliveriesScreen() {
     router.push({ pathname: "/order/deliver", params: { id: String(order.id) } });
   }, [router]);
 
-  const openMap = useCallback(async (address: string) => {
-    const url = `https://yandex.ru/maps/?text=${encodeURIComponent(address)}`;
+  /*
+    Карта — по координатам точки, а не по тексту адреса; текст остаётся
+    запасным путём. Разбор адреса и координат — в lib/courier-route.
+  */
+  const openMap = useCallback(async (order: Delivery) => {
+    const url = mapUrl(order);
+    if (!url) { notify.error("У магазина нет ни адреса, ни координат"); return; }
     try {
       const canOpen = await Linking.canOpenURL(url);
       if (canOpen) {
@@ -489,17 +517,53 @@ export default function DeliveriesScreen() {
     ]);
   }, [mutateDeliver]);
 
-  const handleFail = useCallback((order: Delivery) => {
-    Alert.alert("Не доставлено?", `Заказ ${order.orderNumber} → ${order.shopName}`, [
-      { text: "Отмена", style: "cancel" },
-      { text: "Да", onPress: () => mutateFail({ order }) },
-    ]);
+  /*
+    Было: Alert «Не доставлено? — Да», и отметка уходила без причины.
+    Оператор видел «не доставлено» и звонил курьеру спросить, что случилось.
+    Теперь — окно с причинами; без причины отметка не ставится.
+  */
+  const handleFail = useCallback((order: Delivery) => setFailFor(order), []);
+  const confirmFail = useCallback((order: Delivery, reason: string) => {
+    setFailFor(null);
+    mutateFail({ order, reason });
   }, [mutateFail]);
 
   const handleTakeOut = useCallback((order: Delivery) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     mutateOut(order);
   }, [mutateOut]);
+
+  const mutateOutAsync = markOut.mutateAsync;
+  /*
+    «Выехал по всем»: та же мутация, по точкам подряд в порядке списка.
+
+    Было: курьер с 30 точками утром на складе нажимал «Взять в доставку»
+    30 раз. Подряд, а не разом: очередь без сети ложится по одной в том же
+    порядке, а на сети в полёте один запрос, и гаснет ровно та карточка, по
+    которой идёт отметка. Отказ по одной точке не останавливает остальные —
+    его текст показывает onError, а итог говорит, сколько не вышло.
+  */
+  const handleTakeAllOut = useCallback((orders: Delivery[]) => {
+    Alert.alert("Выехал по всем?", `${orders.length} ${plural(orders.length, "точка", "точки", "точек")} перейдут «в путь».`, [
+      { text: "Отмена", style: "cancel" },
+      { text: "Выехал", onPress: async () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        bulkOut.current = true;
+        let failed = 0;
+        try {
+          for (const order of orders) {
+            try { await mutateOutAsync(order); } catch { failed += 1; }
+          }
+        } finally {
+          bulkOut.current = false;
+        }
+        qc.invalidateQueries({ queryKey: ["myDeliveries"] });
+        const done = orders.length - failed;
+        if (failed === 0) notify.success(`Выехал по ${done} ${plural(done, "точке", "точкам", "точкам")}`);
+        else notify.warning(`Выехал по ${done} из ${orders.length}, не вышло: ${failed}`);
+      } },
+    ]);
+  }, [mutateOutAsync, qc]);
 
   if (isLoading) {
     return (
@@ -550,6 +614,14 @@ export default function DeliveriesScreen() {
         >
           Доставки
         </Text>
+        {/*
+          Вместо двух колец «Ожидают / В пути» — одна строка. Кольца с
+          процентами от общего числа занимали треть экрана, и первая точка
+          маршрута уезжала за край: курьер листал их каждое утро.
+        */}
+        <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
+          Ожидают {assigned.length} · В пути {inTransit.length}
+        </Text>
       </View>
 
       <FlatList
@@ -576,34 +648,16 @@ export default function DeliveriesScreen() {
             tintColor={colors.accent.primary}
           />
         }
-        ListHeaderComponent={
-          <>
-            {/* Stats — rings + progress bar */}
-            <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
-              <Card style={{ flex: 1, padding: 16, alignItems: "center" }}>
-                <ProgressRing value={totalDeliveries > 0 ? Math.round(assigned.length / Math.max(totalDeliveries, 1) * 100) : 0} size={56} strokeWidth={6} color={KpiColors.blue} />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 6 }}>{assigned.length}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Ожидают</Text>
-              </Card>
-              <Card style={{ flex: 1, padding: 16, alignItems: "center" }}>
-                <ProgressRing value={totalDeliveries > 0 ? Math.round(inTransit.length / Math.max(totalDeliveries, 1) * 100) : 0} size={56} strokeWidth={6} color={KpiColors.amber} />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.status.warning, marginTop: 6 }}>{inTransit.length}</Text>
-                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 9, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>В пути</Text>
-              </Card>
-            </View>
-            <NeumorphicProgressBar value={totalDeliveries > 0 ? Math.round(deliveredCount / Math.max(totalDeliveries, 1) * 100) : 0} height={6} color={KpiColors.green} />
-            {/*
-              Итоги месяца — под сегодняшним маршрутом.
+        /*
+          Итоги месяца — ПОД маршрутом, а не над ним.
 
-              Кольца выше отвечают «что осталось СЕГОДНЯ», и это разные
-              вопросы: курьер не видел, сколько он отвёз за месяц, сколько
-              довёз денег и в скольких днях выходил. Ручка (kpi.courierKpi)
-              была написана и не вызывалась ниоткуда — свои показатели он не
-              видел вовсе.
-            */}
-            <MonthTotals />
-          </>
-        }
+          Строка под заголовком отвечает «что осталось СЕГОДНЯ», и это разные
+          вопросы: курьер не видел, сколько он отвёз за месяц, сколько довёз
+          денег и в скольких днях выходил. Ручка (kpi.courierKpi) была
+          написана и не вызывалась ниоткуда — свои показатели он не видел
+          вовсе. А наверху блок закрывал первую точку маршрута.
+        */
+        ListFooterComponent={<MonthTotals />}
         ListEmptyComponent={
           <EmptyState
             icon="truck"
@@ -612,6 +666,13 @@ export default function DeliveriesScreen() {
         }
         renderItem={({ item }) => {
           if (item.type === "header") return <SectionHeader title={item.title} />;
+          if (item.type === "take-all") {
+            return (
+              <Button variant="primary" icon="truck" onPress={() => handleTakeAllOut(assigned)} loading={markOut.isPending && bulkOut.current} style={{ marginBottom: 12 }}>
+                {`Выехал по всем (${item.count})`}
+              </Button>
+            );
+          }
           if (item.type === "queued") {
             /*
               Отметка уже стоит, но ещё не ушла. Карточка приглушена и без
@@ -710,7 +771,78 @@ export default function DeliveriesScreen() {
           );
         }}
       />
+      <FailReasonSheet order={failFor} colors={colors} onCancel={() => setFailFor(null)} onConfirm={confirmFail} />
     </View>
+  );
+}
+
+/*
+  Окно причины «не доставлено».
+
+  Три причины кнопками и «Другое» со свободным полем. Отметка без причины
+  не ставится: кнопка «Не доставлено» глухая, пока причина не выбрана.
+  Предел поля — серверный (≤ 500), чтобы длинный текст не отрезался молча.
+*/
+function FailReasonSheet({ order, colors, onCancel, onConfirm }: {
+  order: Delivery | null;
+  colors: ThemeColors;
+  onCancel: () => void;
+  onConfirm: (order: Delivery, reason: string) => void;
+}) {
+  const [choice, setChoice] = useState<string | null>(null);
+  const [other, setOther] = useState("");
+  const reason = failReason(choice, other);
+  // Каждое открытие — с чистого листа: причина прошлой точки не наследуется.
+  const close = () => { setChoice(null); setOther(""); onCancel(); };
+  const confirm = () => {
+    if (!order || !reason) return;
+    setChoice(null); setOther("");
+    onConfirm(order, reason);
+  };
+  const chip = (value: string, label: string) => {
+    const on = choice === value;
+    return (
+      <TouchableOpacity
+        key={value}
+        onPress={() => setChoice(value)}
+        style={{ paddingHorizontal: 14, height: 44, borderRadius: Radii.lg, justifyContent: "center", backgroundColor: on ? colors.brand.primaryDim : colors.bg.input }}
+      >
+        <Text style={{ fontFamily: on ? Typography.fontBold : Typography.fontMedium, fontSize: Typography.size.sm, color: on ? colors.brand.primary : colors.text.secondary }}>{label}</Text>
+      </TouchableOpacity>
+    );
+  };
+  return (
+    <Modal visible={order != null} transparent animationType="fade" onRequestClose={close}>
+      <Pressable style={{ flex: 1, backgroundColor: colors.bg.overlay, justifyContent: "flex-end" }} onPress={close}>
+        <Pressable onPress={e => e.stopPropagation()} style={{ backgroundColor: colors.bg.card, borderTopLeftRadius: Radii.xl, borderTopRightRadius: Radii.xl, padding: Spacing.lg, paddingBottom: Spacing.xxl }}>
+          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>Почему не доставлено?</Text>
+          {order && (
+            <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>
+              Заказ {order.orderNumber} → {order.shopName}
+            </Text>
+          )}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: Spacing.md }}>
+            {FAIL_REASONS.map(r => chip(r, r))}
+            {chip("other", "Другое")}
+          </View>
+          {choice === "other" && (
+            <TextInput
+              value={other}
+              onChangeText={setOther}
+              placeholder="Что случилось"
+              placeholderTextColor={colors.text.muted}
+              maxLength={FAIL_REASON_MAX}
+              autoFocus
+              style={{ marginTop: Spacing.md, backgroundColor: colors.bg.input, borderRadius: Radii.md, paddingHorizontal: 12, paddingVertical: 10, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary }}
+            />
+          )}
+          <View style={{ flexDirection: "row", gap: 10, marginTop: Spacing.lg }}>
+            <Button variant="secondary" onPress={close} style={{ flex: 1 }}>Отмена</Button>
+            <Button variant="danger" icon="x-circle" onPress={confirm} disabled={!reason} style={{ flex: 1 }}>Не доставлено</Button>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -731,7 +863,7 @@ const DeliveryCard = memo(function DeliveryCard({
   colors: ThemeColors;
   cashInput: string;
   onCashChange: (orderId: number, value: string) => void;
-  onOpenMap: (address: string) => void;
+  onOpenMap: (order: Delivery) => void;
   onDeliver: (order: Delivery, cashAmount: string) => void;
   /** Полное оформление: частичная оплата, срок долга, возврат по позициям. */
   onOpenFull: (order: Delivery) => void;
@@ -772,9 +904,11 @@ const DeliveryCard = memo(function DeliveryCard({
           {formatMoney(order.total)}
         </Text>
 
-        <Button variant="secondary" size="sm" icon="map-pin" onPress={() => order.shopAddress && onOpenMap(order.shopAddress)} style={{ marginBottom: 12 }}>
-          На карте
-        </Button>
+        {mapUrl(order) && (
+          <Button variant="secondary" size="sm" icon="map-pin" onPress={() => onOpenMap(order)} style={{ marginBottom: 12 }}>
+            На карте
+          </Button>
+        )}
 
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border.subtle, paddingTop: 12 }}>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.muted, marginBottom: 6 }}>
@@ -830,7 +964,7 @@ const AssignedCard = memo(function AssignedCard({
 }: {
   order: Delivery;
   colors: ThemeColors;
-  onOpenMap: (address: string) => void;
+  onOpenMap: (order: Delivery) => void;
   onTakeOut: (order: Delivery) => void;
   isPending: boolean;
 }) {
@@ -864,8 +998,8 @@ const AssignedCard = memo(function AssignedCard({
       </Text>
 
       <View style={{ flexDirection: "row", gap: 8 }}>
-        {order.shopAddress && (
-          <Button variant="secondary" size="sm" icon="map-pin" onPress={() => onOpenMap(order.shopAddress!)} style={{ flex: 1 }}>
+        {mapUrl(order) && (
+          <Button variant="secondary" size="sm" icon="map-pin" onPress={() => onOpenMap(order)} style={{ flex: 1 }}>
             На карте
           </Button>
         )}
