@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { validateDeliveryForm } from "../../src/lib/delivery-validation";
+import { parseDueDate } from "../../src/lib/due-date";
 import { reportNotQueued } from "../../src/lib/offline-guard";
 import { Button } from "../../src/components/ui";
 import {
@@ -141,7 +142,6 @@ export default function DeliveryScreen() {
   });
 
   const orderTotal = useMemo(() => Number(order?.total ?? 0), [order]);
-  const debt = useMemo(() => Math.max(0, orderTotal - Number(paidAmount || 0)), [orderTotal, paidAmount]);
 
   const returnedItemsList = useMemo(() => {
     if (!order) return [];
@@ -149,6 +149,19 @@ export default function DeliveryScreen() {
       .map(item => ({ itemId: item.id, returnedQty: Number(returnedQty[item.id] || 0) }))
       .filter(ri => ri.returnedQty > 0);
   }, [order, returnedQty]);
+
+  /*
+    Сколько магазин должен за то, что оставил: итог минус вернувшееся по
+    цене строки. Сервер считает так же (courier-delivery: orderTotal после
+    возврата), и оплата при частичном возврате сверяется с этой суммой.
+  */
+  const keptTotal = useMemo(() => {
+    if (!order || result !== "partial_returned") return orderTotal;
+    const returnedValue = order.items.reduce((s, item) => s + Number(returnedQty[item.id] || 0) * Number(item.unitPrice), 0);
+    return Math.max(0, Math.round((orderTotal - returnedValue) * 100) / 100);
+  }, [order, result, orderTotal, returnedQty]);
+  const owed = result === "partial_returned" ? keptTotal : orderTotal;
+  const debt = useMemo(() => Math.max(0, owed - Number(paidAmount || 0)), [owed, paidAmount]);
 
   const setItemReturnedQty = (itemId: number, maxQty: number, value: string) => {
     const clamped = Math.max(0, Math.min(maxQty, Number(value) || 0));
@@ -171,9 +184,18 @@ export default function DeliveryScreen() {
       paidAmount,
       orderTotal,
       returnedItemsCount: returnedItemsList.length,
+      keptTotal,
     });
     if (problem) {
       Alert.alert("Ошибка", problem);
+      return;
+    }
+    // Дату пишут как привыкли — «15.09.2026»; сервер ждёт ГГГГ-ММ-ДД. Разбор
+    // лежал в lib/due-date и здесь не использовался: отказ приходил уже
+    // после того, как товар отдан и деньги взяты.
+    const dueIso = debtDueDate.trim() ? parseDueDate(debtDueDate) : null;
+    if (debtDueDate.trim() && !dueIso) {
+      Alert.alert("Дата не разобрана", `«${debtDueDate}» — напишите день, месяц и год, например 15.09.2026.`);
       return;
     }
 
@@ -181,7 +203,8 @@ export default function DeliveryScreen() {
       paid: `100% оплата: ${orderTotal.toLocaleString("ru")} ${branding.currencySymbol}`,
       partial_paid: `Оплата: ${Number(paidAmount).toLocaleString("ru")} ${branding.currencySymbol}, долг: ${debt.toLocaleString("ru")} ${branding.currencySymbol}`,
       returned: "Полный возврат — товар вернётся на склад",
-      partial_returned: `Частичный возврат: ${returnedItemsList.length} позици${returnedItemsList.length === 1 ? "я" : "и"}`,
+      partial_returned: `Возврат: ${returnedItemsList.length} позици${returnedItemsList.length === 1 ? "я" : "и"}; оплата ${Number(paidAmount || 0).toLocaleString("ru")} ${branding.currencySymbol}` +
+        (debt > 0 ? `, долг ${debt.toLocaleString("ru")} ${branding.currencySymbol}` : ""),
     };
 
     Alert.alert(
@@ -196,9 +219,11 @@ export default function DeliveryScreen() {
             mutation.mutate({
               orderId: Number(id),
               result,
-              paidAmount: result === "paid" ? String(orderTotal) : result === "partial_paid" ? paidAmount : undefined,
+              paidAmount: result === "paid" ? String(orderTotal)
+                : result === "partial_paid" || result === "partial_returned" ? String(Number(paidAmount || 0))
+                : undefined,
               paymentMethod,
-              debtDueDate: debtDueDate || undefined,
+              debtDueDate: dueIso ?? undefined,
               returnReason: returnReason || undefined,
               returnedItems: result === "partial_returned" ? returnedItemsList : undefined,
               notes: notes || undefined,
@@ -241,7 +266,7 @@ export default function DeliveryScreen() {
     );
   }
 
-  const showPaymentFields = result === "paid" || result === "partial_paid";
+  const showPaymentFields = result === "paid" || result === "partial_paid" || result === "partial_returned";
   const showReturnFields = result === "returned" || result === "partial_returned";
 
   return (
@@ -309,10 +334,10 @@ export default function DeliveryScreen() {
               ОПЛАТА
             </Text>
 
-            {result === "partial_paid" && (
+            {(result === "partial_paid" || result === "partial_returned") && (
               <>
                 <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
-                  Сумма оплаты:
+                  {result === "partial_returned" ? `Оплата (за оставшееся ${keptTotal.toLocaleString("ru")} ${branding.currencySymbol}):` : "Сумма оплаты:"}
                 </Text>
                 <TextInput
                   value={paidAmount}
@@ -370,7 +395,7 @@ export default function DeliveryScreen() {
             </View>
 
             {/* Debt due date */}
-            {result === "partial_paid" && (
+            {(result === "partial_paid" || (result === "partial_returned" && debt > 0)) && (
               <>
                 <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, marginBottom: 4 }}>
                   Когда обещал доплатить:
@@ -378,7 +403,7 @@ export default function DeliveryScreen() {
                 <TextInput
                   value={debtDueDate}
                   onChangeText={setDebtDueDate}
-                  placeholder="ГГГГ-ММ-ДД"
+                  placeholder="15.09.2026"
                   placeholderTextColor={colors.text.muted}
                   style={{
                     height: 44, paddingHorizontal: 12,

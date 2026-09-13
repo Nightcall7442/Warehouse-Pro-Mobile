@@ -225,3 +225,38 @@ describe("переписка по заказу", () => {
     must(COMMENTS.includes("maxLength={2000}"), "предел длины разошёлся с серверным");
   });
 });
+
+describe("визиты и доставки: дыры, найденные разбором удобства ролей 13.09", () => {
+  const PLAN = read("app", "(tabs)", "plan.tsx");
+  const DELIVER = read("app", "order", "deliver.tsx");
+
+  it("«Готово» у мерчандайзера открывает отчёт о визите, а не ставит галочку", () => {
+    /*
+      Единственный переход на /merchandiser/visit лежал в AgentPlansView —
+      на вкладке, которой у мерчандайзера нет. В бою роль не производила ни
+      одного отчёта, а KPI считал визиты сделанными.
+    */
+    expect(PLAN).toContain('pathname: "/merchandiser/visit"');
+    expect(PLAN).toMatch(/isMerchandiser[\s\S]{0,200}router\.push/);
+  });
+
+  it("отметка визита агента без связи ложится в очередь, а не в «повторите позже»", () => {
+    expect(PLAN).toContain("useVisitQueue");
+    expect(PLAN).toContain("queueVisit.add(");
+    expect(PLAN).toContain("isRetryableError(e)");
+  });
+
+  it("отвергнутая сервером отметка курьера — с текстом и кнопками «Повторить» / «Убрать»", () => {
+    // Раньше она висела в «ЖДУТ ОТПРАВКИ» до конца дня без объяснения и
+    // без выхода: кнопки были только на вкладке «Заказы», скрытой у курьера.
+    expect(DELIVERIES).toContain("retryDeliveryAction(failed.id)");
+    expect(DELIVERIES).toContain("discardDeliveryAction(failed.id)");
+    expect(DELIVERIES).toContain('a.status === "failed"');
+  });
+
+  it("частичный возврат — вместе с деньгами; дата долга разбирается как пишут люди", () => {
+    expect(DELIVER).toContain('result === "partial_returned"');
+    expect(DELIVER).toMatch(/showPaymentFields = .*partial_returned/);
+    expect(DELIVER).toContain("parseDueDate(debtDueDate)");
+  });
+});
