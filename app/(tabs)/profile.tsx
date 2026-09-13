@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "../../src/store/auth";
 import { updateProfile, changePassword, getAgentDashboard, getMyShops, uploadFile } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { useT, useLang, useLangStore } from "../../src/i18n";
 import { useBrandingStore } from "../../src/store/branding";
 import { SecureImage } from "../../src/components/SecureImage";
 import { preparePhoto } from "../../src/lib/prepare-photo";
@@ -43,6 +44,9 @@ function Label({ children, colors }: { children: React.ReactNode; colors: Return
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, toggleTheme } = useThemeStore();
+  const t = useT();
+  const lang = useLang();
+  const setLang = useLangStore((s) => s.setLang);
   const { user, logout, updateUser } = useAuthStore();
   const colors = useThemeColors();
   const branding = useBrandingStore(s => s.branding);
@@ -314,6 +318,33 @@ export default function ProfileScreen() {
                   <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: isDark ? "#fff" : colors.text.secondary }}>Тёмная</Text>
                 </View>
               </PressableScale>
+            </View>
+          </Card>
+        </FadeInItem>
+
+        {/* ── Язык ── */}
+        <FadeInItem delay={100}>
+          <Card style={{ padding: Spacing.xl, marginTop: Spacing.base }}>
+            <Label colors={colors}>{t("ЯЗЫК", "TIL")}</Label>
+            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+              {([["ru", "Русский"], ["uz", "O'zbekcha"]] as const).map(([code, name]) => {
+                const active = lang === code;
+                return (
+                  <PressableScale key={code} onPress={() => { void setLang(code); }} haptic="light" style={{ flex: 1 }}>
+                    <View
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      style={{
+                        paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center",
+                        backgroundColor: active ? colors.accent.primary : colors.bg.elevated,
+                        ...(active ? soft(isDark).raisedSm : soft(isDark).inset),
+                      }}
+                    >
+                      <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: active ? "#fff" : colors.text.secondary }}>{name}</Text>
+                    </View>
+                  </PressableScale>
+                );
+              })}
             </View>
           </Card>
         </FadeInItem>

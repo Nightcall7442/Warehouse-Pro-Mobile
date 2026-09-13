@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from "react";
+import { useLangStore } from "../src/i18n";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider, useQueryClient, focusManager } from "@tanstack/react-query";
@@ -170,7 +171,7 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    load(); loadTheme(); loadBranding();
+    load(); loadTheme(); loadBranding(); void useLangStore.getState().loadLang();
     void useVisitQueue.getState().load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
