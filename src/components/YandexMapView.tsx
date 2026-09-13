@@ -266,7 +266,7 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
     const markersJson = JSON.stringify(markers.map(m => ({ ...m, svg: buildMarkerSvg(m) })));
     // Имя агента попадает внутрь <script> страницы: «</script>» в нём разорвал
     // бы тег. JSON.stringify «<» не экранирует — делаем это сами.
-    const embedded = JSON.stringify(markersJson).replace(/</g, "\u003c");
+    const embedded = JSON.stringify(markersJson).replace(/</g, "\\u003c");
     const html = (htmlRef.current as string).replace(
       "</body>",
       `<script>window.addEventListener("load", function () { try { updateMarkers(${embedded}); } catch (e) {} });</script></body>`,
