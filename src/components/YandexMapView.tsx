@@ -264,9 +264,12 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { unstable_createElement } = require("react-native-web") as { unstable_createElement: (type: string, props: Record<string, unknown>) => React.ReactElement };
     const markersJson = JSON.stringify(markers.map(m => ({ ...m, svg: buildMarkerSvg(m) })));
+    // Имя агента попадает внутрь <script> страницы: «</script>» в нём разорвал
+    // бы тег. JSON.stringify «<» не экранирует — делаем это сами.
+    const embedded = JSON.stringify(markersJson).replace(/</g, "\u003c");
     const html = (htmlRef.current as string).replace(
       "</body>",
-      `<script>window.addEventListener("load", function () { try { updateMarkers(${JSON.stringify(markersJson)}); } catch (e) {} });</script></body>`,
+      `<script>window.addEventListener("load", function () { try { updateMarkers(${embedded}); } catch (e) {} });</script></body>`,
     );
     return (
       <View style={[{ flex: 1, overflow: "hidden" }, style]}>
