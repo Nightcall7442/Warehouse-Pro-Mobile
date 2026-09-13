@@ -52,7 +52,7 @@ describe("возраст долга", () => {
 
   it("корзин ровно четыре и все названы", () => {
     expect(BUCKETS.map(b => b.key)).toEqual(["d0_7", "d8_30", "d31_60", "d60plus"]);
-    for (const b of BUCKETS) must(b.label.length > 0, `у корзины ${b.key} нет подписи`);
+    for (const b of BUCKETS) must(b.ru.length > 0 && b.uz.length > 0, `у корзины ${b.key} нет подписи на обоих языках`);
   });
 });
 

@@ -12,6 +12,7 @@ import {
 } from "../../theme";
 import { Card, IconCircle, Badge } from "../ui";
 import { FadeInItem } from "../Animated";
+import { useT } from "../../i18n";
 import { STATUS_CONFIG, PIPELINE_STEPS, fmt, makeStyles, IconName } from "./OrderStyles";
 
 /** Animated pulsing skeleton row */
@@ -70,6 +71,7 @@ export function LoadingState({ colors }: { colors: ThemeColors }) {
 /** Pipeline tracker — shows progress or cancelled */
 export function PipelineBanner({ status, colors }: { status: string; colors: ThemeColors }) {
   const { isDark } = useThemeStore();
+  const t = useT();
   // Незнакомое состояние не выдаётся за «Новый»: пропуск виден, неправда нет.
   const cfg = STATUS_CONFIG[status] ?? { ...STATUS_CONFIG.new, label: status, step: 0 };
   if (status === "cancelled") {
@@ -79,8 +81,8 @@ export function PipelineBanner({ status, colors }: { status: string; colors: The
           <Feather name="x-circle" size={28} color={colors.status.danger} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary, marginBottom: 10 }}>Заказ отменён</Text>
-          <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>Этот заказ был отменён и не обрабатывается</Text>
+          <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary, marginBottom: 10 }}>{t("Заказ отменён", "Buyurtma bekor qilingan")}</Text>
+          <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>{t("Этот заказ был отменён и не обрабатывается", "Bu buyurtma bekor qilingan va bajarilmaydi")}</Text>
         </View>
       </Card>
     );
@@ -141,20 +143,21 @@ export function InfoRow({ icon, label, value, accent, colors }: { icon: IconName
 
 /** Order summary info card */
 export function OrderInfoCard({ order, colors }: { order: any; colors: ThemeColors }) {
+  const t = useT();
   return (
     <FadeInItem delay={0}>
       <Card style={{ marginBottom: Spacing.sm, padding: 0, overflow: "hidden" }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: Spacing.base, paddingBottom: 12 }}>
           <IconCircle name="info" size={15} variant="brand" />
-          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Информация</Text>
+          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Информация", "Ma'lumot")}</Text>
         </View>
         <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />
-        <InfoRow icon="hash"        label="Номер заказа"  value={`#${order.orderNumber}`} colors={colors} />
-        <InfoRow icon="calendar"    label="Дата создания" value={fmt(order.createdAt)} colors={colors} />
-        <InfoRow icon="shopping-bag" label="Магазин"      value={order.shopName ?? "Не указан"} colors={colors} />
-        {order.agent?.name && <InfoRow icon="user" label="Агент" value={order.agent.name} colors={colors} />}
-        {order.shop?.address && <InfoRow icon="map-pin" label="Адрес" value={order.shop.address} colors={colors} />}
-        {order.notes     && <InfoRow icon="file-text"     label="Заметки"      value={order.notes} colors={colors} />}
+        <InfoRow icon="hash"        label={t("Номер заказа", "Buyurtma raqami")}  value={`#${order.orderNumber}`} colors={colors} />
+        <InfoRow icon="calendar"    label={t("Дата создания", "Yaratilgan sana")} value={fmt(order.createdAt)} colors={colors} />
+        <InfoRow icon="shopping-bag" label={t("Магазин", "Do'kon")}      value={order.shopName ?? t("Не указан", "Ko'rsatilmagan")} colors={colors} />
+        {order.agent?.name && <InfoRow icon="user" label={t("Агент", "Agent")} value={order.agent.name} colors={colors} />}
+        {order.shop?.address && <InfoRow icon="map-pin" label={t("Адрес", "Manzil")} value={order.shop.address} colors={colors} />}
+        {order.notes     && <InfoRow icon="file-text"     label={t("Заметки", "Izohlar")}      value={order.notes} colors={colors} />}
       </Card>
     </FadeInItem>
   );

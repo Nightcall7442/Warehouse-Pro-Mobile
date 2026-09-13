@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { Typography, Spacing, Radii } from "../theme";
 import { useThemeColors } from "../store/theme";
+import { useT } from "../i18n";
 
 interface Props {
   children: React.ReactNode;
@@ -15,6 +16,7 @@ interface State {
 
 function ErrorFallback({ onRetry }: { onRetry: () => void }) {
   const colors = useThemeColors();
+  const t = useT();
   return (
     <View
       style={{
@@ -46,7 +48,7 @@ function ErrorFallback({ onRetry }: { onRetry: () => void }) {
           textAlign: "center",
         }}
       >
-        Произошла ошибка
+        {t("Произошла ошибка", "Xatolik yuz berdi")}
       </Text>
       <Text
         style={{
@@ -58,7 +60,7 @@ function ErrorFallback({ onRetry }: { onRetry: () => void }) {
           maxWidth: 280,
         }}
       >
-        {"Неожиданная ошибка. Попробуйте ещё раз."}
+        {t("Неожиданная ошибка. Попробуйте ещё раз.", "Kutilmagan xatolik. Yana urinib ko'ring.")}
       </Text>
       <TouchableOpacity
         onPress={onRetry}
@@ -71,7 +73,7 @@ function ErrorFallback({ onRetry }: { onRetry: () => void }) {
         }}
       >
         <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>
-          Повторить
+          {t("Повторить", "Qayta urinish")}
         </Text>
       </TouchableOpacity>
     </View>

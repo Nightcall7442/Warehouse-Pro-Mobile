@@ -52,6 +52,7 @@ import { canMovePromise } from "../../src/lib/promised-delivery";
 import { Card } from "../../src/components/ui";
 import { Spacing } from "../../src/theme";
 import { errorText } from "../../src/lib/error-text";
+import { useT } from "../../src/i18n";
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -59,6 +60,7 @@ export default function OrderDetailScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors, insets.top);
+  const t = useT();
   const queryClient = useQueryClient();
   const fadeIn = useSharedValue(0);
 
@@ -78,13 +80,13 @@ export default function OrderDetailScreen() {
     mutationFn: () => cancelOrder(Number(id)),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Заказ отменён");
+      notify.success(t("Заказ отменён", "Buyurtma bekor qilindi"));
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
     },
     onError: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error("Не удалось отменить заказ. Попробуйте ещё раз.");
+      notify.error(t("Не удалось отменить заказ. Попробуйте ещё раз.", "Buyurtmani bekor qilib bo'lmadi. Yana urinib ko'ring."));
     },
   });
 
@@ -92,12 +94,12 @@ export default function OrderDetailScreen() {
     mutationFn: () => deleteOrder(Number(id)),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Заказ удалён");
+      notify.success(t("Заказ удалён", "Buyurtma o'chirildi"));
       router.back();
     },
     onError: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error("Не удалось удалить заказ. Попробуйте ещё раз.");
+      notify.error(t("Не удалось удалить заказ. Попробуйте ещё раз.", "Buyurtmani o'chirib bo'lmadi. Yana urinib ko'ring."));
     },
   });
 
@@ -109,14 +111,14 @@ export default function OrderDetailScreen() {
     mutationFn: () => updateOrder(Number(id), { notes: editNotes || undefined, discount: editDiscount || undefined }),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Заказ обновлён");
+      notify.success(t("Заказ обновлён", "Buyurtma yangilandi"));
       setShowEditModal(false);
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
     },
     onError: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error("Не удалось обновить заказ");
+      notify.error(t("Не удалось обновить заказ", "Buyurtmani yangilab bo'lmadi"));
     },
   });
 
@@ -146,13 +148,13 @@ export default function OrderDetailScreen() {
       updateOrderItems(Number(id), items),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Количество товаров обновлено");
+      notify.success(t("Количество товаров обновлено", "Mahsulot miqdori yangilandi"));
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
     },
     onError: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error("Не удалось обновить количество");
+      notify.error(t("Не удалось обновить количество", "Miqdorni yangilab bo'lmadi"));
     },
   });
 
@@ -170,7 +172,7 @@ export default function OrderDetailScreen() {
     mutationFn: (v: string | null) => setPromisedDelivery(Number(id), v),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notify.success("Срок сохранён");
+      notify.success(t("Срок сохранён", "Muddat saqlandi"));
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
     },
@@ -193,20 +195,23 @@ export default function OrderDetailScreen() {
 
   function handleShare() {
     if (!order) return;
+    const shop = order.shopName ?? "—";
+    const total = money(order.total);
+    const status = STATUS_CONFIG[order.status]?.label ?? order.status;
     Share.share({
-      title: `Заказ #${order.orderNumber}`,
-      message: `Заказ #${order.orderNumber}\nМагазин: ${order.shopName ?? "—"}\nСумма: ${money(order.total)}\nСтатус: ${STATUS_CONFIG[order.status]?.label ?? order.status}`,
+      title: t(`Заказ #${order.orderNumber}`, `Buyurtma #${order.orderNumber}`),
+      message: t(`Заказ #${order.orderNumber}\nМагазин: ${shop}\nСумма: ${total}\nСтатус: ${status}`, `Buyurtma #${order.orderNumber}\nDo'kon: ${shop}\nSumma: ${total}\nHolat: ${status}`),
     });
   }
 
   function handleCancel() {
     Alert.alert(
-      "Отменить заказ?",
-      "Это действие нельзя отменить.",
+      t("Отменить заказ?", "Buyurtmani bekor qilasizmi?"),
+      t("Это действие нельзя отменить.", "Bu amalni qaytarib bo'lmaydi."),
       [
-        { text: "Нет", style: "cancel" },
+        { text: t("Нет", "Yo'q"), style: "cancel" },
         {
-          text: "Да, отменить",
+          text: t("Да, отменить", "Ha, bekor qilish"),
           style: "destructive",
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -219,12 +224,12 @@ export default function OrderDetailScreen() {
 
   function handleDelete() {
     Alert.alert(
-      "Удалить заказ?",
-      "Заказ будет скрыт из списка. Это действие нельзя отменить.",
+      t("Удалить заказ?", "Buyurtmani o'chirasizmi?"),
+      t("Заказ будет скрыт из списка. Это действие нельзя отменить.", "Buyurtma ro'yxatdan yashiriladi. Bu amalni qaytarib bo'lmaydi."),
       [
-        { text: "Нет", style: "cancel" },
+        { text: t("Нет", "Yo'q"), style: "cancel" },
         {
-          text: "Да, удалить",
+          text: t("Да, удалить", "Ha, o'chirish"),
           style: "destructive",
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -258,16 +263,16 @@ export default function OrderDetailScreen() {
         <View style={[styles.errorIcon, { backgroundColor: noConnection ? colors.status.warningDim : colors.status.dangerDim }]}>
           <Feather name={noConnection ? "wifi-off" : "alert-triangle"} size={28} color={noConnection ? colors.status.warning : colors.status.danger} />
         </View>
-        <Text style={styles.errorTitle}>{noConnection ? "Заказ не загрузился" : "Заказ не найден"}</Text>
+        <Text style={styles.errorTitle}>{noConnection ? t("Заказ не загрузился", "Buyurtma yuklanmadi") : t("Заказ не найден", "Buyurtma topilmadi")}</Text>
         <Text style={styles.errorSub}>
           {noConnection
-            ? "Нет связи с сервером. Заказ на месте — попробуйте ещё раз."
-            : "Возможно, он был удалён или у вас нет доступа."}
+            ? t("Нет связи с сервером. Заказ на месте — попробуйте ещё раз.", "Server bilan aloqa yo'q. Buyurtma joyida — yana urinib ko'ring.")
+            : t("Возможно, он был удалён или у вас нет доступа.", "Ehtimol, u o'chirilgan yoki sizga ruxsat yo'q.")}
         </Text>
         {noConnection && (
           <TouchableOpacity onPress={() => refetch()} style={[styles.errorBtn, { backgroundColor: colors.brand.primary, borderRadius: Radii.xl }]}>
             <Feather name="refresh-cw" size={16} color="#fff" />
-            <Text style={styles.errorBtnText}>Повторить</Text>
+            <Text style={styles.errorBtnText}>{t("Повторить", "Qayta urinish")}</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -275,7 +280,7 @@ export default function OrderDetailScreen() {
           style={[styles.errorBtn, { backgroundColor: noConnection ? colors.bg.elevated : colors.brand.primary, borderRadius: Radii.xl }]}
         >
           <Feather name="arrow-left" size={16} color={noConnection ? colors.text.primary : "#fff"} />
-          <Text style={[styles.errorBtnText, noConnection && { color: colors.text.primary }]}>Назад к заказам</Text>
+          <Text style={[styles.errorBtnText, noConnection && { color: colors.text.primary }]}>{t("Назад к заказам", "Buyurtmalarga qaytish")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -301,7 +306,7 @@ export default function OrderDetailScreen() {
           <Feather name="arrow-left" size={22} color={colors.text.primary} />
         </PressableScale>
         <View style={{ flex: 1 }}>
-          <Text style={styles.topBarTitle}>Заказ #{order.orderNumber}</Text>
+          <Text style={styles.topBarTitle}>{t("Заказ", "Buyurtma")} #{order.orderNumber}</Text>
           <Text style={styles.topBarSub}>{fmt(order.createdAt)}</Text>
         </View>
         <PressableScale onPress={handleShare} haptic="light" style={styles.topBarAction}>

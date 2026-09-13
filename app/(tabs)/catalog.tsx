@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { formatMoney } from "../../src/store/branding";
 import { readableInk } from "../../src/lib/contrast";
+import { useT, useLang } from "../../src/i18n";
 /*
   Своей таблицы единиц у каталога больше нет — она была третьей в приложении и
   расходилась с остальными: box здесь звался «ящ», а строки block не было
@@ -38,6 +39,8 @@ function ProductCard({
   product: Product; colors: ThemeColors; isDark: boolean; onPress: () => void; onAdd: () => void;
   fmt: (v: number | string | null | undefined) => string; cardWidth: number;
 }) {
+  const t = useT();
+  const lang = useLang();
   const hasPhoto = !!product.photoUrl;
   const inStock = Number(product.available) > 0;
   const imgHeight = cardWidth * 0.7;
@@ -56,7 +59,7 @@ function ProductCard({
           )}
           {/* Stock badge */}
           <View style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, backgroundColor: inStock ? colors.status.successDim : colors.status.dangerDim, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 4, ...(inStock ? soft(isDark).raisedSm : soft(isDark).inset),}}>
-            <Text style={{ color: inStock ? colors.status.success : colors.status.danger, fontSize: 11, fontFamily: Typography.fontSemibold }}>{inStock ? "В наличии" : "Нет"}</Text>
+            <Text style={{ color: inStock ? colors.status.success : colors.status.danger, fontSize: 11, fontFamily: Typography.fontSemibold }}>{inStock ? t("В наличии", "Bor") : t("Нет", "Yo'q")}</Text>
           </View>
           {/* Add button */}
           {inStock && (
@@ -69,10 +72,10 @@ function ProductCard({
         {/* Info */}
         <View style={{ padding: Spacing.md }}>
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, marginBottom: 4 }} numberOfLines={2}>{product.name}</Text>
-          {product.code && <Text style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMono, marginBottom: 6 }}>Артикул: {product.code}</Text>}
+          {product.code && <Text style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMono, marginBottom: 6 }}>{t("Артикул", "Artikul")}: {product.code}</Text>}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}<Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>/{unitShort(product.unit)}</Text></Text>
-            {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{formatQty(product.available)} {unitShort(product.unit)}</Text>}
+            <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}<Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>/{unitShort(product.unit, lang)}</Text></Text>
+            {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{formatQty(product.available)} {unitShort(product.unit, lang)}</Text>}
           </View>
         </View>
       </Card>
@@ -96,6 +99,8 @@ export function ProductDetail({
     этого — src/theme.ts.
   */
   const insets = useSafeAreaInsets();
+  const t = useT();
+  const lang = useLang();
   const [qty, setQty] = useState(1);
   const { height: SCREEN_H } = useWindowDimensions();
   if (!product) return null;
@@ -137,17 +142,17 @@ export function ProductDetail({
           </View>
           <View style={{ padding: Spacing.xl }}>
             <Text style={{ fontSize: 22, fontFamily: Typography.fontBold, color: colors.text.primary, marginBottom: 4 }}>{product.name}</Text>
-            {product.code && <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginBottom: 12 }}>Артикул: {product.code}</Text>}
+            {product.code && <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginBottom: 12 }}>{t("Артикул", "Artikul")}: {product.code}</Text>}
             {/* Price + Stock row */}
             <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: 20 }}>
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, ...soft(isDark).raised, padding: Spacing.lg }}>
-                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Цена за {unitShort(product.unit)}</Text>
+                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>{t(`Цена за ${unitShort(product.unit, lang)}`, `${unitShort(product.unit, lang)} narxi`)}</Text>
                 <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: colors.accent.primary, marginTop: 4 }}>{fmt(product.unitPrice)}</Text>
               </View>
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, ...soft(isDark).raised, padding: Spacing.lg }}>
-                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>Остаток</Text>
+                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>{t("Остаток", "Qoldiq")}</Text>
                 <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: Number(product.available) > 0 ? colors.status.success : colors.status.danger, marginTop: 4 }}>
-                  {formatQty(product.available)} {unitShort(product.unit)}
+                  {formatQty(product.available)} {unitShort(product.unit, lang)}
                 </Text>
               </View>
             </View>
@@ -176,7 +181,7 @@ export function ProductDetail({
               style={{ backgroundColor: colors.accent.primary, opacity: outOfStock ? 0.4 : 1, borderRadius: Radii.md, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
               <Feather name={outOfStock ? "slash" : "shopping-cart"} size={18} color={ink} />
               <Text style={{ color: ink, fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>
-                {outOfStock ? "Нет в наличии" : "Добавить в заказ"}
+                {outOfStock ? t("Нет в наличии", "Omborda yo'q") : t("Добавить в заказ", "Buyurtmaga qo'shish")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -199,6 +204,7 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
     этого — src/theme.ts.
   */
   const insets = useSafeAreaInsets();
+  const t = useT();
   const [selected, setSelected] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("");
@@ -229,12 +235,12 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
           <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
           </View>
-          <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.md }}>Выберите магазин</Text>
-          <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск по имени, адресу…" />
+          <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.md }}>{t("Выберите магазин", "Do'konni tanlang")}</Text>
+          <SearchInput value={search} onChangeText={setSearch} placeholder={t("Поиск по имени, адресу…", "Nomi, manzili bo'yicha qidirish…")} />
           {cities.length > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: Spacing.sm, marginBottom: Spacing.sm }}>
               <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, ...((!cityFilter) ? soft(isDark).raisedSm : soft(isDark).inset),}}>
-                <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>Все</Text>
+                <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>{t("Все", "Hammasi")}</Text>
               </TouchableOpacity>
               {cities.map(c => (
                 <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, ...((cityFilter === c) ? soft(isDark).raisedSm : soft(isDark).inset),}}>
@@ -243,7 +249,7 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
               ))}
             </ScrollView>
           )}
-          <Text style={{ fontSize: 11, color: colors.text.muted, marginTop: 4, marginBottom: 8 }}>{filtered.length} магазинов</Text>
+          <Text style={{ fontSize: 11, color: colors.text.muted, marginTop: 4, marginBottom: 8 }}>{t(`${filtered.length} магазинов`, `${filtered.length} ta do'kon`)}</Text>
           <FlatList data={filtered} keyExtractor={s => String(s.id)} style={{ maxHeight: 300 }}
             renderItem={({ item: shop }) => (
               <TouchableOpacity onPress={() => setSelected(shop.id)}
@@ -261,7 +267,7 @@ function ShopPicker({ visible, shops, onSelect, onClose, colors }: {
           />
           <TouchableOpacity onPress={() => selected && onSelect(selected)} disabled={!selected}
             style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center", marginTop: Spacing.lg, opacity: selected ? 1 : 0.5 }}>
-            <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>Создать заказ</Text>
+            <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>{t("Создать заказ", "Buyurtma yaratish")}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
@@ -281,6 +287,7 @@ function PaymentPicker({ visible, onSelect, onClose, colors, submitting }: {
     этого — src/theme.ts.
   */
   const insets = useSafeAreaInsets();
+  const t = useT();
   const [selected, setSelected] = useState<"cash" | "card" | "transfer" | "debt">("cash");
   const options: Array<{ key: "cash" | "card" | "transfer" | "debt"; label: string; icon: "dollar-sign" | "credit-card" | "send" | "alert-circle" }> = [
     { key: "cash", label: PAYMENT_METHODS.cash, icon: "dollar-sign" },
@@ -299,7 +306,7 @@ function PaymentPicker({ visible, onSelect, onClose, colors, submitting }: {
           <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
           </View>
-          <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.lg }}>Способ оплаты</Text>
+          <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold, marginBottom: Spacing.lg }}>{t("Способ оплаты", "To'lov usuli")}</Text>
           <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.xl }}>
             {options.map(opt => {
               const active = selected === opt.key;
@@ -328,7 +335,7 @@ function PaymentPicker({ visible, onSelect, onClose, colors, submitting }: {
             }}>
             {submitting && <ActivityIndicator size="small" color={readableInk(colors.accent.primary)} />}
             <Text style={{ color: readableInk(colors.accent.primary), fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>
-              {submitting ? "Отправляется…" : "Подтвердить"}
+              {submitting ? t("Отправляется…", "Yuborilmoqda…") : t("Подтвердить", "Tasdiqlash")}
             </Text>
           </TouchableOpacity>
         </Pressable>
@@ -348,6 +355,7 @@ export default function CatalogScreen() {
   const CARD_W = useMemo(() => (SCREEN_W - Spacing.base * 2 - Spacing.md) / 2, [SCREEN_W]);
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const queryClient = useQueryClient();
   const { addOrder } = useOfflineStore();
   const { user } = useAuthStore();
@@ -416,8 +424,8 @@ export default function CatalogScreen() {
 
   const categories = useMemo(() => {
     const dynamic = (serverCategories ?? []).filter(Boolean).map((c: string) => ({ key: c.toLowerCase(), label: c }));
-    return [{ key: "all", label: "Все" }, ...dynamic];
-  }, [serverCategories]);
+    return [{ key: "all", label: t("Все", "Hammasi") }, ...dynamic];
+  }, [serverCategories, t]);
 
   // Кэш показываем ровно тогда, когда сеть не ответила, а сохранённый список есть.
   const isFromCache = isError && cachedProducts.length > 0;
@@ -475,39 +483,39 @@ export default function CatalogScreen() {
       if (data && typeof data === "object" && "offline" in data) {
         // Запись могла не лечь на диск — тогда заказ держится только в
         // памяти и пропадёт при выгрузке приложения.
-        if (!data.queued) { reportNotQueued("Заказ"); return; }
+        if (!data.queued) { reportNotQueued(t("Заказ", "Buyurtma")); return; }
         pendingIdempotencyKeyRef.current = null;
         setShowShopPicker(false); setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        notify.info("Нет связи. Заказ сохранён и отправится сам. Итог посчитается по ценам на момент отправки.");
+        notify.info(t("Нет связи. Заказ сохранён и отправится сам. Итог посчитается по ценам на момент отправки.", "Aloqa yo'q. Buyurtma saqlandi va o'zi yuboriladi. Jami yuborish paytidagi narxlar bo'yicha hisoblanadi."));
         return;
       }
-      notify.success("Заказ создан!");
+      notify.success(t("Заказ создан!", "Buyurtma yaratildi!"));
       pendingIdempotencyKeyRef.current = null;
       setShowShopPicker(false); setShowPaymentPicker(false); setPendingProduct(null); setPendingShopId(null);
       for (const queryKey of [["myOrders"], ["products"], ["availableShops"], ["plans"]]) {
         queryClient.invalidateQueries({ queryKey });
       }
     },
-    onError: (e: Error) => notify.error(e.message || "Ошибка"),
+    onError: (e: Error) => notify.error(e.message || t("Ошибка", "Xatolik")),
   });
 
   const handleAdd = useCallback((product: Product, qty: number) => {
-    if (shops.length === 0) { notify.error("Нет магазинов"); return; }
+    if (shops.length === 0) { notify.error(t("Нет магазинов", "Do'kon yo'q")); return; }
     pendingIdempotencyKeyRef.current = uuidv4();
     if (shops.length === 1) {
       setPendingProduct(product); setPendingQty(qty); setPendingShopId(shops[0].id); setShowPaymentPicker(true);
     } else {
       setPendingProduct(product); setPendingQty(qty); setShowShopPicker(true);
     }
-  }, [shops]);
+  }, [shops, t]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       {/* Header */}
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
-        <Text style={{ color: colors.text.primary, fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, marginBottom: Spacing.md }}>Каталог</Text>
-        <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск товаров…" />
+        <Text style={{ color: colors.text.primary, fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, marginBottom: Spacing.md }}>{t("Каталог", "Katalog")}</Text>
+        <SearchInput value={search} onChangeText={setSearch} placeholder={t("Поиск товаров…", "Mahsulot qidirish…")} />
       </View>
 
       {/* Category chips */}
@@ -532,8 +540,8 @@ export default function CatalogScreen() {
           <View style={{ width: 72, height: 72, borderRadius: Radii.xl, backgroundColor: colors.status.dangerDim, alignItems: "center", justifyContent: "center", marginBottom: Spacing.md }}>
             <Feather name="wifi-off" size={32} color={colors.status.danger} />
           </View>
-          <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>Ошибка загрузки</Text>
-          <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>{error?.message ?? "Проверьте подключение"}</Text>
+          <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>{t("Ошибка загрузки", "Yuklashda xatolik")}</Text>
+          <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>{error?.message ?? t("Проверьте подключение", "Ulanishni tekshiring")}</Text>
           {/*
             Повторить было нечем. Сетка с потягиванием вниз в этой ветке не
             рисуется вовсе, а другого способа перезапустить запрос нет: агент в
@@ -541,7 +549,7 @@ export default function CatalogScreen() {
             надпись и перезапускал приложение.
           */}
           <Button onPress={() => { void refetch(); }} loading={isFetching} style={{ marginTop: Spacing.lg }}>
-            Повторить
+            {t("Повторить", "Qayta urinish")}
           </Button>
         </View>
       ) : isLoading && !isFromCache ? (
@@ -564,7 +572,7 @@ export default function CatalogScreen() {
           ListHeaderComponent={isFromCache ? (
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, paddingHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.status.warningDim, borderRadius: Radii.md, marginHorizontal: Spacing.base }}>
               <Feather name="wifi-off" size={14} color={colors.status.warning} />
-              <Text style={{ color: colors.status.warning, fontSize: Typography.size.sm, fontFamily: Typography.fontMedium }}>Офлайн данные</Text>
+              <Text style={{ color: colors.status.warning, fontSize: Typography.size.sm, fontFamily: Typography.fontMedium }}>{t("Офлайн данные", "Oflayn ma'lumotlar")}</Text>
             </View>
           ) : null}
           renderItem={({ item }) => (
@@ -581,10 +589,10 @@ export default function CatalogScreen() {
               {/* Пустой каталог — это пустой каталог, а не «введите запрос»:
                   список товаров приходит и без поиска. */}
               <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>
-                {search ? "Товары не найдены" : "Каталог пуст"}
+                {search ? t("Товары не найдены", "Mahsulot topilmadi") : t("Каталог пуст", "Katalog bo'sh")}
               </Text>
               <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>
-                {search ? "Попробуйте изменить запрос" : "Товары появятся, когда их заведут на складе"}
+                {search ? t("Попробуйте изменить запрос", "So'rovni o'zgartirib ko'ring") : t("Товары появятся, когда их заведут на складе", "Mahsulotlar omborga kiritilgach paydo bo'ladi")}
               </Text>
             </View>
           }

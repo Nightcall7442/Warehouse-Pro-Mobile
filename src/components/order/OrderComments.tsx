@@ -9,6 +9,7 @@ import { getOrderComments, addOrderComment, type OrderComment } from "../../api"
 import { errorText } from "../../lib/error-text";
 import { notify } from "../../store/toast";
 import * as Haptics from "expo-haptics";
+import { useT, useLang } from "../../i18n";
 
 /**
  * Переписка по заказу.
@@ -33,6 +34,8 @@ import * as Haptics from "expo-haptics";
  */
 export function OrderComments({ orderId }: { orderId: number }) {
   const colors = useThemeColors();
+  const t = useT();
+  const lang = useLang();
   const qc = useQueryClient();
   const [draft, setDraft] = useState("");
 
@@ -78,7 +81,7 @@ export function OrderComments({ orderId }: { orderId: number }) {
           fontFamily: Typography.fontMedium, fontSize: Typography.size.xs,
           letterSpacing: 1.5, textTransform: "uppercase", color: colors.text.muted,
         }}>
-          Переписка
+          {t("Переписка", "Yozishmalar")}
         </Text>
       </View>
 
@@ -90,7 +93,7 @@ export function OrderComments({ orderId }: { orderId: number }) {
         </Text>
       ) : flat.length === 0 ? (
         <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary }}>
-          Пока ничего не писали
+          {t("Пока ничего не писали", "Hali hech narsa yozilmagan")}
         </Text>
       ) : (
         <View style={{ gap: Spacing.md }}>
@@ -98,10 +101,10 @@ export function OrderComments({ orderId }: { orderId: number }) {
             <View key={c.id} style={{ paddingLeft: depth * Spacing.lg }}>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
-                  {c.userName ?? "Сотрудник"}
+                  {c.userName ?? t("Сотрудник", "Xodim")}
                 </Text>
                 <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>
-                  {c.createdAt ? new Date(c.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                  {c.createdAt ? new Date(c.createdAt).toLocaleString(lang === "uz" ? "uz-Latn-UZ" : "ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
                 </Text>
               </View>
               <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2 }}>
@@ -117,7 +120,7 @@ export function OrderComments({ orderId }: { orderId: number }) {
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder="Написать по заказу…"
+          placeholder={t("Написать по заказу…", "Buyurtma bo'yicha yozish…")}
           placeholderTextColor={colors.text.tertiary}
           multiline
           /*
@@ -136,7 +139,7 @@ export function OrderComments({ orderId }: { orderId: number }) {
           onPress={() => add.mutate(draft.trim())}
           disabled={!canSend}
           accessibilityRole="button"
-          accessibilityLabel="Отправить сообщение"
+          accessibilityLabel={t("Отправить сообщение", "Xabar yuborish")}
           style={{
             width: Sizes.touchTarget, height: Sizes.touchTarget, borderRadius: Radii.lg,
             alignItems: "center", justifyContent: "center",
