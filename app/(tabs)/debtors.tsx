@@ -11,6 +11,7 @@ import { getReceivablesAging, type ShopAging, type AgeBucket } from "../../src/a
 import { formatMoney } from "../../src/store/branding";
 import { errorText } from "../../src/lib/error-text";
 import { BUCKETS, bucketOf, sortDebtors, debtorTotals } from "../../src/lib/debtors";
+import { useT, useLang } from "../../src/i18n";
 
 /**
  * Задолженности магазинов — экран супервайзера.
@@ -39,6 +40,8 @@ export default function DebtorsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
+  const t = useT();
+  const lang = useLang();
 
   const [search, setSearch] = useState("");
   const [bucket, setBucket] = useState<AgeBucket | null>(null);
@@ -79,7 +82,7 @@ export default function DebtorsScreen() {
               {item.shopName}
             </Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
-              {item.agentName ?? "агент не назначен"}
+              {item.agentName ?? t("агент не назначен", "agent biriktirilmagan")}
             </Text>
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
@@ -90,13 +93,13 @@ export default function DebtorsScreen() {
                   писать «0 дней» значило бы показать его самым свежим.
                 */
                 <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>
-                  без привязки к заказу
+                  {t("без привязки к заказу", "buyurtmaga bog'lanmagan")}
                 </Text>
               ) : (
                 <>
                   <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: bucketColor(b) }} />
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: bucketColor(b) }}>
-                    висит {item.oldestDays} {item.oldestDays === 1 ? "день" : item.oldestDays < 5 ? "дня" : "дней"}
+                    {t(`висит ${item.oldestDays} ${item.oldestDays === 1 ? "день" : item.oldestDays < 5 ? "дня" : "дней"}`, `${item.oldestDays} kundan beri turibdi`)}
                   </Text>
                 </>
               )}
@@ -110,7 +113,7 @@ export default function DebtorsScreen() {
             {item.phone ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Позвонить: ${item.shopName}`}
+                accessibilityLabel={t(`Позвонить: ${item.shopName}`, `Qo'ng'iroq: ${item.shopName}`)}
                 onPress={() => Linking.openURL(`tel:${item.phone}`)}
                 style={{
                   minHeight: Sizes.touchTarget, minWidth: Sizes.touchTarget,
@@ -123,7 +126,7 @@ export default function DebtorsScreen() {
               </Pressable>
             ) : (
               <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary }}>
-                нет телефона
+                {t("нет телефона", "telefon yo'q")}
               </Text>
             )}
           </View>
@@ -131,12 +134,12 @@ export default function DebtorsScreen() {
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Открыть магазин: ${item.shopName}`}
+          accessibilityLabel={t(`Открыть магазин: ${item.shopName}`, `Do'konni ochish: ${item.shopName}`)}
           onPress={() => router.push(`/shop/${item.shopId}`)}
           style={{ minHeight: Sizes.touchTarget, justifyContent: "center", marginTop: 4 }}
         >
           <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.brand.primary }}>
-            Открыть магазин →
+            {t("Открыть магазин →", "Do'konni ochish →")}
           </Text>
         </Pressable>
       </Card>
@@ -147,7 +150,7 @@ export default function DebtorsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg.primary, paddingTop: insets.top + Spacing.md }}>
       <View style={{ paddingHorizontal: Spacing.base }}>
         <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: colors.text.primary }}>
-          Долги магазинов
+          {t("Долги магазинов", "Do'konlar qarzi")}
         </Text>
 
         {/* ── Итог и возраст ────────────────────────────────────────────── */}
@@ -157,13 +160,13 @@ export default function DebtorsScreen() {
               {formatMoney(totals.totalDebt)}
             </Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary }}>
-              {totals.debtorCount} магазинов
+              {t(`${totals.debtorCount} магазинов`, `${totals.debtorCount} ta do'kon`)}
             </Text>
           </View>
 
           {totals.overdue > 0 && (
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.status.danger, marginTop: 4 }}>
-              старше месяца: {formatMoney(totals.overdue)}
+              {t("старше месяца", "bir oydan eski")}: {formatMoney(totals.overdue)}
             </Text>
           )}
 
@@ -176,7 +179,7 @@ export default function DebtorsScreen() {
           */}
           {totals.unattributed > 0 && (
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 4 }}>
-              без привязки к заказу: {formatMoney(totals.unattributed)}
+              {t("без привязки к заказу", "buyurtmaga bog'lanmagan")}: {formatMoney(totals.unattributed)}
             </Text>
           )}
         </Card>
@@ -189,11 +192,12 @@ export default function DebtorsScreen() {
           {BUCKETS.map(b => {
             const active = bucket === b.key;
             const sum = totals.buckets[b.key] ?? 0;
+            const label = lang === "uz" ? b.uz : b.ru;
             return (
               <Pressable
                 key={b.key}
                 accessibilityRole="button"
-                accessibilityLabel={`Возраст долга: ${b.label}`}
+                accessibilityLabel={t(`Возраст долга: ${label}`, `Qarz muddati: ${label}`)}
                 onPress={() => setBucket(active ? null : b.key)}
                 style={{
                   minHeight: Sizes.touchTarget, justifyContent: "center",
@@ -206,7 +210,7 @@ export default function DebtorsScreen() {
                   fontSize: Typography.size.xs,
                   color: active ? "#fff" : colors.text.secondary,
                 }}>
-                  {b.label}
+                  {label}
                 </Text>
                 <Text style={{
                   fontFamily: Typography.fontMedium, fontSize: Typography.size.xs,
@@ -221,11 +225,11 @@ export default function DebtorsScreen() {
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm }}>
           <View style={{ flex: 1 }}>
-            <SearchInput value={search} onChangeText={setSearch} placeholder="Магазин или агент" />
+            <SearchInput value={search} onChangeText={setSearch} placeholder={t("Магазин или агент", "Do'kon yoki agent")} />
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={byAmount ? "Сортировать по возрасту" : "Сортировать по сумме"}
+            accessibilityLabel={byAmount ? t("Сортировать по возрасту", "Muddat bo'yicha saralash") : t("Сортировать по сумме", "Summa bo'yicha saralash")}
             onPress={() => setByAmount(v => !v)}
             style={{
               minHeight: Sizes.touchTarget, minWidth: Sizes.touchTarget,
@@ -241,12 +245,12 @@ export default function DebtorsScreen() {
       {q.isLoading ? (
         <ActivityIndicator color={colors.brand.primary} style={{ marginTop: Spacing.xl }} />
       ) : q.isError ? (
-        <EmptyState icon="alert-circle" title="Не загрузилось" description={errorText(q.error)} />
+        <EmptyState icon="alert-circle" title={t("Не загрузилось", "Yuklanmadi")} description={errorText(q.error)} />
       ) : rows.length === 0 ? (
         <EmptyState
           icon="check-circle"
-          title={q.data?.shops.length ? "Ничего не найдено" : "Долгов нет"}
-          description={q.data?.shops.length ? "Измените поиск или срок" : "Ни за одним магазином долга не числится"}
+          title={q.data?.shops.length ? t("Ничего не найдено", "Hech narsa topilmadi") : t("Долгов нет", "Qarz yo'q")}
+          description={q.data?.shops.length ? t("Измените поиск или срок", "Qidiruv yoki muddatni o'zgartiring") : t("Ни за одним магазином долга не числится", "Hech bir do'konda qarz yo'q")}
         />
       ) : (
         <FlatList

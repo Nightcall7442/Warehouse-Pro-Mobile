@@ -20,6 +20,8 @@ import { PressableScale } from "../../src/components/Animated";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { bumpLine, findScanned, cartSummary } from "../../src/lib/cart";
 import { qty as qtyText } from "../../src/lib/format";
+import { unitShort } from "../../src/lib/units";
+import { useT, useLang } from "../../src/i18n";
 
 interface OrderLine {
   productId: number;
@@ -76,7 +78,8 @@ function parseStock(raw: string | number | null | undefined): number | null {
 
 // ── Step Indicator (matches web Steps) ───────────────────────────────────────
 function StepIndicator({ step, total, colors }: { step: number; total: number; colors: ThemeColors }) {
-  const labels = ["Магазин", "Товары", "Итог"];
+  const t = useT();
+  const labels = [t("Магазин", "Do'kon"), t("Товары", "Mahsulotlar"), t("Итог", "Yakun")];
   return (
     <View style={{ backgroundColor: colors.bg.secondary, paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, borderBottomWidth: 1, borderBottomColor: colors.border.default }}>
       {/* Progress track */}
@@ -89,7 +92,7 @@ function StepIndicator({ step, total, colors }: { step: number; total: number; c
           <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontBold, color: "#fff" }}>{step}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 1 }}>ШАГ {step} ИЗ {total}</Text>
+          <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 1 }}>{t(`ШАГ ${step} ИЗ ${total}`, `QADAM ${step} / ${total}`)}</Text>
           <Text style={{ fontSize: Typography.size.base, color: colors.text.primary, fontFamily: Typography.fontBold }}>{labels[step - 1]}</Text>
         </View>
         {/* Dots */}
@@ -106,6 +109,8 @@ function StepIndicator({ step, total, colors }: { step: number; total: number; c
 // ── Step 1: Shop Picker ──────────────────────────────────────────────────────
 function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSelect: (s: Shop) => void; colors: ThemeColors }) {
   const { isDark } = useThemeStore();
+  const t = useT();
+  const lang = useLang();
   const [search, setSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("");
   const [recentIds, setRecentIds] = useState<number[]>([]);
@@ -124,7 +129,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
   // Про возраст копии сказано прямо: по остаткам и ценам агент разговаривает
   // с хозяином магазина, и выдавать вчерашнее за сегодняшнее молча нельзя.
   const copyNotice = fromCopy && savedAt
-    ? `Список сохранён ${new Date(savedAt).toLocaleDateString("ru")} — связи нет, он мог устареть`
+    ? t(`Список сохранён ${new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru")} — связи нет, он мог устареть`, `Ro'yxat ${new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru")} da saqlangan — aloqa yo'q, eskirgan bo'lishi mumkin`)
     : null;
 
   // Load recent shop IDs on mount
@@ -176,7 +181,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
             <Text style={{ fontSize: Typography.size.sm, color: colors.text.tertiary }} numberOfLines={1}>
               {[shop.ownerName, shop.city].filter(Boolean).join(" · ") || "—"}
             </Text>
-            {hasDebt && <Text style={{ fontSize: Typography.size.xs, color: colors.status.danger, fontFamily: Typography.fontMedium, marginTop: 2 }}>Долг: {Number(shop.debt).toLocaleString("ru")} сум</Text>}
+            {hasDebt && <Text style={{ fontSize: Typography.size.xs, color: colors.status.danger, fontFamily: Typography.fontMedium, marginTop: 2 }}>{t("Долг", "Qarz")}: {Number(shop.debt).toLocaleString("ru")} {t("сум", "so'm")}</Text>}
           </View>
           {selected ? (
             <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
@@ -198,12 +203,12 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
           <Text style={{ flex: 1, fontSize: Typography.size.xs, color: colors.text.secondary }}>{copyNotice}</Text>
         </View>
       )}
-      <SearchInput value={search} onChangeText={setSearch} placeholder="Поиск по имени, адресу, району…" autoFocus />
+      <SearchInput value={search} onChangeText={setSearch} placeholder={t("Поиск по имени, адресу, району…", "Nomi, manzili, tumani bo'yicha qidirish…")} autoFocus />
       {/* City quick filter */}
       {cities.length > 1 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, ...(!cityFilter ? soft(isDark).raisedSm : soft(isDark).inset) }}>
-            <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>Все города</Text>
+            <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>{t("Все города", "Barcha shaharlar")}</Text>
           </TouchableOpacity>
           {cities.map(c => (
             <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, ...((cityFilter === c) ? soft(isDark).raisedSm : soft(isDark).inset),}}>
@@ -217,22 +222,22 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
       ) : filtered.length === 0 && recentShops.length === 0 ? (
         <View style={{ alignItems: "center", paddingVertical: 60 }}>
           <Feather name="search" size={32} color={colors.text.muted} />
-          <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.secondary, marginTop: Spacing.md }}>Ничего не найдено</Text>
+          <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.secondary, marginTop: Spacing.md }}>{t("Ничего не найдено", "Hech narsa topilmadi")}</Text>
         </View>
       ) : (
         <>
           {/* Recent shops */}
           {!search && !cityFilter && recentShops.length > 0 && (
             <View style={{ marginBottom: Spacing.sm }}>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5, marginBottom: 8 }}>НЕДАВНИЕ</Text>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5, marginBottom: 8 }}>{t("НЕДАВНИЕ", "YAQINDAGILAR")}</Text>
               {recentShops.map(s => <View key={`recent-${s.id}`}>{renderShopItem({ item: s })}</View>)}
             </View>
           )}
           {/* All shops */}
           {!search && !cityFilter && recentShops.length > 0 && filtered.length > 0 && (
-            <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5, marginBottom: 4 }}>ВСЕ МАГАЗИНЫ</Text>
+            <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5, marginBottom: 4 }}>{t("ВСЕ МАГАЗИНЫ", "BARCHA DO'KONLAR")}</Text>
           )}
-          <Text style={{ fontSize: 11, color: colors.text.muted, marginBottom: 4 }}>{filtered.length} магазинов</Text>
+          <Text style={{ fontSize: 11, color: colors.text.muted, marginBottom: 4 }}>{t(`${filtered.length} магазинов`, `${filtered.length} ta do'kon`)}</Text>
           <FlatList data={filtered} keyExtractor={s => String(s.id)} scrollEnabled={false} renderItem={renderShopItem} />
         </>
       )}
@@ -243,6 +248,8 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
 // ── Step 2: Product Picker + Cart ────────────────────────────────────────────
 function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors }) {
   const { isDark } = useThemeStore();
+  const t = useT();
+  const lang = useLang();
   /*
     Пустая корзина — окно выбора открыто сразу.
 
@@ -263,7 +270,7 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
           <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent.primary + "20", alignItems: "center", justifyContent: "center" }}>
             <Feather name="plus" size={18} color={colors.accent.primary} />
           </View>
-          <Text style={{ flex: 1, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.accent.primary }}>Добавить товар</Text>
+          <Text style={{ flex: 1, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.accent.primary }}>{t("Добавить товар", "Mahsulot qo'shish")}</Text>
           <Feather name="chevron-right" size={16} color={colors.accent.primary} />
         </Card>
       </PressableScale>
@@ -274,8 +281,8 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
           <View style={{ width: 64, height: 64, borderRadius: Radii.xl, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
             <Feather name="package" size={28} color={colors.text.muted} />
           </View>
-          <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.secondary }}>Корзина пуста</Text>
-          <Text style={{ fontSize: Typography.size.sm, color: colors.text.tertiary }}>Нажмите «Добавить товар»</Text>
+          <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.secondary }}>{t("Корзина пуста", "Savat bo'sh")}</Text>
+          <Text style={{ fontSize: Typography.size.sm, color: colors.text.tertiary }}>{t("Нажмите «Добавить товар»", "«Mahsulot qo'shish» ni bosing")}</Text>
         </View>
       )}
 
@@ -299,15 +306,15 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
             </View>
             {/* Price info */}
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>{line.unitPrice.toLocaleString("ru")} сум / {line.unit ?? "кг"}</Text>
+              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>{line.unitPrice.toLocaleString("ru")} {t("сум", "so'm")} / {unitShort(line.unit, lang)}</Text>
               <Text style={{ fontSize: Typography.size.xs, color: overStock ? colors.status.danger : colors.text.tertiary }}>
-                {line.available == null ? "Остаток уточняется" : `Остаток: ${line.available}${overStock ? " (превышено!)" : ""}`}
+                {line.available == null ? t("Остаток уточняется", "Qoldiq aniqlanmoqda") : t(`Остаток: ${line.available}${overStock ? " (превышено!)" : ""}`, `Qoldiq: ${line.available}${overStock ? " (oshib ketdi!)" : ""}`)}
               </Text>
             </View>
             {/* Inputs */}
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1.4, gap: 4 }}>
-                <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>КОЛ-ВО</Text>
+                <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>{t("КОЛ-ВО", "MIQDOR")}</Text>
                 {/* «− поле +»: цифры набирать в перчатках неудобно, а плюс-минус
                     на единицу — самая частая правка. Поле остаётся для дробных
                     и больших чисел. Кнопки 36 точек с hitSlop — до нормы 44. */}
@@ -329,14 +336,14 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
                 </View>
               </View>
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>СКИДКА (%)</Text>
+                <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>{t("СКИДКА (%)", "CHEGIRMA (%)")}</Text>
                 <TextInput value={line.discount} onChangeText={v => {
                   const next = [...lines]; next[idx] = { ...next[idx], discount: clampDiscountText(v) }; onChange(next);
                 }} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text.tertiary} selectTextOnFocus
                   style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, paddingVertical: 10, paddingHorizontal: 8, fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "center" }} />
               </View>
               <View style={{ flex: 1.2, gap: 4 }}>
-                <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>СУММА</Text>
+                <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 0.5 }}>{t("СУММА", "SUMMA")}</Text>
                 <View style={{ backgroundColor: colors.accent.primary + "12", borderRadius: Radii.md, paddingVertical: 10, paddingHorizontal: 8, alignItems: "center" }}>
                   {Number(line.discount) > 0 && (
                     <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, textDecorationLine: "line-through" }}>
@@ -372,6 +379,8 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   visible: boolean; onClose: () => void; lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors;
 }) {
   const { isDark } = useThemeStore();
+  const t = useT();
+  const lang = useLang();
   const [search, setSearch] = useState("");
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -383,7 +392,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   const { data: products, fromCopy, savedAt } = useOfflineCopy<typeof liveProducts>("products", liveProducts);
   const isLoading = liveLoading && !products;
   const copyNotice = fromCopy && savedAt
-    ? `Каталог сохранён ${new Date(savedAt).toLocaleDateString("ru")} — связи нет, остатки и цены могли измениться`
+    ? t(`Каталог сохранён ${new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru")} — связи нет, остатки и цены могли измениться`, `Katalog ${new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru")} da saqlangan — aloqa yo'q, qoldiq va narxlar o'zgargan bo'lishi mumkin`)
     : null;
 
   const filtered = useMemo(() => {
@@ -403,7 +412,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
     const p = findScanned(products ?? [], data);
     if (!p) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error(`Товар со штрих-кодом ${data} не найден`);
+      notify.error(t(`Товар со штрих-кодом ${data} не найден`, `${data} shtrix-kodli mahsulot topilmadi`));
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -413,7 +422,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   const openScanner = async () => {
     if (!permission?.granted) {
       const r = await requestPermission();
-      if (!r.granted) { notify.error("Нет доступа к камере"); return; }
+      if (!r.granted) { notify.error(t("Нет доступа к камере", "Kameraga ruxsat yo'q")); return; }
     }
     setScanning(true);
   };
@@ -429,7 +438,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
             <View style={{ width: 40, height: 4, borderRadius: Radii.full, backgroundColor: colors.border.default }} />
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.base, paddingBottom: Spacing.md }}>
-            <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold }}>Выбор товара</Text>
+            <Text style={{ color: colors.text.primary, fontSize: Typography.size.lg, fontFamily: Typography.fontBold }}>{t("Выбор товара", "Mahsulot tanlash")}</Text>
             {/* Область нажатия была 32×32 при норме 44: попасть в неё на
                 ходу, одной рукой, нельзя. Размер кружка оставлен прежним —
                 hitSlop расширяет только область отклика. */}
@@ -444,7 +453,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
           {/* Search */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).raised, paddingHorizontal: 14, paddingVertical: 10 }}>
             <Feather name="search" size={16} color={colors.text.muted} />
-            <TextInput style={{ flex: 1, color: colors.text.primary, fontSize: Typography.size.base, fontFamily: Typography.fontRegular }} placeholder="Название или артикул…" placeholderTextColor={colors.text.muted} value={search} onChangeText={setSearch} autoFocus />
+            <TextInput style={{ flex: 1, color: colors.text.primary, fontSize: Typography.size.base, fontFamily: Typography.fontRegular }} placeholder={t("Название или артикул…", "Nomi yoki artikuli…")} placeholderTextColor={colors.text.muted} value={search} onChangeText={setSearch} autoFocus />
             {/* Очистка поиска была голой иконкой 16 точек. */}
             {search.length > 0 && (
               <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
@@ -467,7 +476,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                 <Feather name="x" size={16} color="#fff" />
               </TouchableOpacity>
               <Text style={{ position: "absolute", bottom: 8, left: 0, right: 0, textAlign: "center", color: "#fff", fontSize: Typography.size.xs }}>
-                Каждый скан — плюс единица
+                {t("Каждый скан — плюс единица", "Har bir skan — bittadan qo'shadi")}
               </Text>
             </View>
           )}
@@ -482,7 +491,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
             <View style={{ width: 20, height: 20, borderRadius: 4, ...(onlyInStock ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
               {onlyInStock && <Feather name="check" size={12} color="#fff" />}
             </View>
-            <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, fontFamily: Typography.fontMedium }}>Только в наличии</Text>
+            <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, fontFamily: Typography.fontMedium }}>{t("Только в наличии", "Faqat bor bo'lganlar")}</Text>
             <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>({filtered.length})</Text>
           </TouchableOpacity>
           {/* Product list */}
@@ -490,7 +499,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
             <View style={{ padding: Spacing.base, gap: 10 }}>{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height={60} radius={Radii.lg} />)}</View>
           ) : (
             <FlatList data={filtered} keyExtractor={p => String(p.id)} contentContainerStyle={{ padding: Spacing.base, gap: 8 }} keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={<View style={{ alignItems: "center", paddingVertical: 40 }}><Feather name="search" size={28} color={colors.text.muted} /><Text style={{ fontSize: Typography.size.base, color: colors.text.secondary, marginTop: Spacing.md }}>Товар не найден</Text></View>}
+              ListEmptyComponent={<View style={{ alignItems: "center", paddingVertical: 40 }}><Feather name="search" size={28} color={colors.text.muted} /><Text style={{ fontSize: Typography.size.base, color: colors.text.secondary, marginTop: Spacing.md }}>{t("Товар не найден", "Mahsulot topilmadi")}</Text></View>}
               renderItem={({ item: p }) => {
                 const qty = qtyOf.get(p.id) ?? 0;
                 const added = qty > 0;
@@ -518,9 +527,9 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                         <Text style={{ color: added ? colors.text.secondary : colors.text.primary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }} numberOfLines={1}>{p.name}</Text>
                         <View style={{ flexDirection: "row", gap: 6, marginTop: 2 }}>
                           {p.code && <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, backgroundColor: colors.bg.elevated, paddingHorizontal: 4, borderRadius: 4 }}>{p.code}</Text>}
-                          <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontMedium }}>{Number(p.unitPrice).toLocaleString("ru")} сум</Text>
+                          <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontMedium }}>{Number(p.unitPrice).toLocaleString("ru")} {t("сум", "so'm")}</Text>
                           <Text testID={`picker-stock-${p.id}`} style={{ fontSize: Typography.size.xs, color: atLimit ? colors.status.danger : colors.text.tertiary }}>
-                            {stock == null ? "· остаток уточняется" : stock <= 0 ? "· нет на складе" : `· остаток ${qtyText(stock)}`}
+                            {stock == null ? t("· остаток уточняется", "· qoldiq aniqlanmoqda") : stock <= 0 ? t("· нет на складе", "· omborda yo'q") : t(`· остаток ${qtyText(stock)}`, `· qoldiq ${qtyText(stock)}`)}
                           </Text>
                         </View>
                       </View>
@@ -551,13 +560,13 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
           <View testID="picker-summary" style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: Spacing.base, paddingVertical: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>
-                {summary.count === 0 ? "Корзина пуста" : `${summary.count} ${summary.count === 1 ? "товар" : summary.count < 5 ? "товара" : "товаров"}`}
+                {summary.count === 0 ? t("Корзина пуста", "Savat bo'sh") : t(`${summary.count} ${summary.count === 1 ? "товар" : summary.count < 5 ? "товара" : "товаров"}`, `${summary.count} ta mahsulot`)}
               </Text>
-              <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary }}>{summary.total.toLocaleString("ru")} сум</Text>
+              <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary }}>{summary.total.toLocaleString("ru")} {t("сум", "so'm")}</Text>
             </View>
             <PressableScale onPress={onClose} haptic="medium">
               <View testID="picker-done" style={{ paddingHorizontal: 22, paddingVertical: 12, borderRadius: Radii.lg, backgroundColor: colors.accent.primary }}>
-                <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.base }}>Готово</Text>
+                <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.base }}>{t("Готово", "Tayyor")}</Text>
               </View>
             </PressableScale>
           </View>
@@ -576,6 +585,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
   colors: ThemeColors;
 }) {
   const { isDark } = useThemeStore();
+  const t = useT();
   const { subtotal, totalQty } = useMemo(() => {
     let sub = 0, qty = 0;
     for (const l of lines) { sub += l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100); qty += Number(l.quantity || 0); }
@@ -583,10 +593,10 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
   }, [lines]);
 
   const PAYMENT_OPTIONS = [
-    { key: "cash", label: "Наличные", icon: "dollar-sign" as const },
-    { key: "card", label: "Карта", icon: "credit-card" as const },
-    { key: "transfer", label: "Перевод", icon: "send" as const },
-    { key: "debt", label: "Долг", icon: "alert-circle" as const },
+    { key: "cash", label: t("Наличные", "Naqd"), icon: "dollar-sign" as const },
+    { key: "card", label: t("Карта", "Karta"), icon: "credit-card" as const },
+    { key: "transfer", label: t("Перевод", "O'tkazma"), icon: "send" as const },
+    { key: "debt", label: t("Долг", "Qarz"), icon: "alert-circle" as const },
   ];
 
   return (
@@ -597,14 +607,14 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
           <Feather name="shopping-bag" size={20} color={colors.accent.primary} />
         </View>
         <View>
-          <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 1 }}>МАГАЗИН</Text>
+          <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 1 }}>{t("МАГАЗИН", "DO'KON")}</Text>
           <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.text.primary, marginTop: 2 }}>{shopName}</Text>
         </View>
       </Card>
 
       {/* Payment method */}
       <Card style={{ padding: Spacing.base }}>
-        <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 1, marginBottom: Spacing.md }}>СПОСОБ ОПЛАТЫ</Text>
+        <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 1, marginBottom: Spacing.md }}>{t("СПОСОБ ОПЛАТЫ", "TO'LOV USULI")}</Text>
         <View style={{ flexDirection: "row", gap: Spacing.sm }}>
           {PAYMENT_OPTIONS.map(opt => {
             const active = paymentMethod === opt.key;
@@ -628,9 +638,9 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {/* Header */}
         <View style={{ flexDirection: "row", paddingHorizontal: Spacing.base, paddingVertical: 10, backgroundColor: colors.bg.elevated, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
-          <Text style={{ flex: 3, fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5 }}>ТОВАР</Text>
-          <Text style={{ flex: 1, fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, textAlign: "right" }}>КОЛ</Text>
-          <Text style={{ flex: 2, fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, textAlign: "right" }}>СУММА</Text>
+          <Text style={{ flex: 3, fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, letterSpacing: 0.5 }}>{t("ТОВАР", "MAHSULOT")}</Text>
+          <Text style={{ flex: 1, fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, textAlign: "right" }}>{t("КОЛ", "SONI")}</Text>
+          <Text style={{ flex: 2, fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, textAlign: "right" }}>{t("СУММА", "SUMMA")}</Text>
         </View>
         {lines.map(l => {
           const total = l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100);
@@ -638,7 +648,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
             <View key={l.productId} style={{ flexDirection: "row", paddingHorizontal: Spacing.base, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
               <View style={{ flex: 3, gap: 2 }}>
                 <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary }} numberOfLines={1}>{l.name}</Text>
-                {Number(l.discount) > 0 && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success }}>−{l.discount}% скидка</Text>}
+                {Number(l.discount) > 0 && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success }}>−{l.discount}% {t("скидка", "chegirma")}</Text>}
               </View>
               <Text style={{ flex: 1, fontSize: Typography.size.sm, color: colors.text.secondary, textAlign: "right" }}>{l.quantity}</Text>
               <Text style={{ flex: 2, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary, textAlign: "right" }}>{total.toLocaleString("ru")}</Text>
@@ -647,18 +657,18 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
         })}
         {/* Total */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingVertical: 14, backgroundColor: colors.accent.primary + "10" }}>
-          <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.secondary, letterSpacing: 0.5 }}>ИТОГО — {lines.length} поз., {totalQty} ед.</Text>
-          <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{subtotal.toLocaleString("ru")} сум</Text>
+          <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.secondary, letterSpacing: 0.5 }}>{t(`ИТОГО — ${lines.length} поз., ${totalQty} ед.`, `JAMI — ${lines.length} ta pozitsiya, ${totalQty} birlik`)}</Text>
+          <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{subtotal.toLocaleString("ru")} {t("сум", "so'm")}</Text>
         </View>
       </Card>
       {/* Notes */}
       <Card style={{ gap: 8, padding: Spacing.base }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Feather name="edit-3" size={14} color={colors.text.tertiary} />
-          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.secondary }}>Примечания</Text>
-          <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>необязательно</Text>
+          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.secondary }}>{t("Примечания", "Izohlar")}</Text>
+          <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>{t("необязательно", "ixtiyoriy")}</Text>
         </View>
-        <TextInput value={notes} onChangeText={onNotesChange} placeholder="Комментарий к заказу…" placeholderTextColor={colors.text.tertiary} multiline numberOfLines={3} textAlignVertical="top"
+        <TextInput value={notes} onChangeText={onNotesChange} placeholder={t("Комментарий к заказу…", "Buyurtmaga izoh…")} placeholderTextColor={colors.text.tertiary} multiline numberOfLines={3} textAlignVertical="top"
           style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.md, ...soft(isDark).inset, padding: Spacing.base, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary, minHeight: 80 }} />
       </Card>
       {/*
@@ -718,6 +728,7 @@ export default function NewOrderScreen() {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string }>();
   const { addOrder } = useOfflineStore();
 
@@ -809,12 +820,13 @@ export default function NewOrderScreen() {
     if (skipDraft) return;
     loadDraft().then(draft => {
       if (draft && draft.lines.length > 0) {
+        const forShop = draft.shop ? t(` для ${draft.shop.name}`, `: ${draft.shop.name}`) : "";
         Alert.alert(
-          "Продолжить черновик?",
-          `Найден неотправленный заказ${draft.shop ? ` для ${draft.shop.name}` : ""} (${draft.lines.length} товаров)`,
+          t("Продолжить черновик?", "Qoralamani davom ettirasizmi?"),
+          t(`Найден неотправленный заказ${forShop} (${draft.lines.length} товаров)`, `Yuborilmagan buyurtma topildi${forShop} (${draft.lines.length} ta mahsulot)`),
           [
-            { text: "Начать заново", style: "cancel", onPress: () => clearDraft() },
-            { text: "Продолжить", onPress: () => {
+            { text: t("Начать заново", "Yangidan boshlash"), style: "cancel", onPress: () => clearDraft() },
+            { text: t("Продолжить", "Davom etish"), onPress: () => {
               setSelectedShop(draft.shop);
               setLines(draft.lines);
               setNotes(draft.notes);
@@ -877,8 +889,8 @@ export default function NewOrderScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Скидка выше порога: заказ оформлен, но ждёт офиса — сказать это сразу,
       // иначе агент ждёт курьера по заказу, который никто не подтвердил.
-      if (created?.held) notify.info("Заказ оформлен и ждёт подтверждения офиса — скидка выше порога");
-      else notify.success("Заказ создан!");
+      if (created?.held) notify.info(t("Заказ оформлен и ждёт подтверждения офиса — скидка выше порога", "Buyurtma rasmiylashtirildi va ofis tasdig'ini kutmoqda — chegirma chegaradan yuqori"));
+      else notify.success(t("Заказ создан!", "Buyurtma yaratildi!"));
       router.back();
     },
     onError: async (e: Error) => {
@@ -913,8 +925,8 @@ export default function NewOrderScreen() {
           // тост следующее сообщение перекрывает, окно нужно закрыть рукой.
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           Alert.alert(
-            "Заказ НЕ сохранён",
-            "На телефоне нет места, заказ не записался. Он остался на экране как черновик — освободите место и попробуйте снова или продиктуйте заказ в офис. Не закрывайте экран.",
+            t("Заказ НЕ сохранён", "Buyurtma SAQLANMADI"),
+            t("На телефоне нет места, заказ не записался. Он остался на экране как черновик — освободите место и попробуйте снова или продиктуйте заказ в офис. Не закрывайте экран.", "Telefonda joy yo'q, buyurtma yozilmadi. U ekranda qoralama sifatida qoldi — joy bo'shatib, qayta urinib ko'ring yoki buyurtmani ofisga aytib bering. Ekranni yopmang."),
           );
           return;
         }
@@ -924,10 +936,10 @@ export default function NewOrderScreen() {
         // момент отправки, а не по тем, что агент видел сейчас. Если за это
         // время прайс поменяется, после синхронизации придёт отдельное
         // сообщение с обеими суммами.
-        notify.info("Ошибка сети. Заказ сохранён офлайн. Итог будет пересчитан по ценам на момент отправки.");
+        notify.info(t("Ошибка сети. Заказ сохранён офлайн. Итог будет пересчитан по ценам на момент отправки.", "Tarmoq xatosi. Buyurtma oflayn saqlandi. Jami yuborish paytidagi narxlar bo'yicha qayta hisoblanadi."));
         router.back();
       } else {
-        notify.error(e.message ?? "Ошибка");
+        notify.error(e.message ?? t("Ошибка", "Xatolik"));
       }
     },
   });
@@ -950,11 +962,11 @@ export default function NewOrderScreen() {
    * «Остаток: 0 (превышено!)», как «товара нет на складе» и уходил.
    */
   const blockedReason = canNext ? null
-    : step === 1 ? "Выберите магазин"
+    : step === 1 ? t("Выберите магазин", "Do'konni tanlang")
     : step === 2
-      ? lines.length === 0 ? "Добавьте хотя бы один товар"
-        : quantityError ? `«${quantityError.name}»: на складе ${quantityError.available}, в заказе ${quantityError.quantity}`
-        : "Укажите количество больше нуля для каждого товара"
+      ? lines.length === 0 ? t("Добавьте хотя бы один товар", "Kamida bitta mahsulot qo'shing")
+        : quantityError ? t(`«${quantityError.name}»: на складе ${quantityError.available}, в заказе ${quantityError.quantity}`, `«${quantityError.name}»: omborda ${quantityError.available}, buyurtmada ${quantityError.quantity}`)
+        : t("Укажите количество больше нуля для каждого товара", "Har bir mahsulot uchun noldan katta miqdor kiriting")
       : null;
 
   const handleSubmit = async () => {
@@ -993,7 +1005,7 @@ export default function NewOrderScreen() {
             <Feather name="arrow-left" size={18} color={colors.text.primary} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary }}>Новый заказ</Text>
+            <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary }}>{t("Новый заказ", "Yangi buyurtma")}</Text>
             {selectedShop && step > 1 && <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 1 }}>{selectedShop.name}</Text>}
           </View>
         </View>
@@ -1018,7 +1030,7 @@ export default function NewOrderScreen() {
           )}
           <PressableScale onPress={() => { setStep(s => s + 1); }} disabled={!canNext} haptic="medium">
             <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: canNext ? 1 : 0.45 }}>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>Продолжить →</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>{t("Продолжить →", "Davom etish →")}</Text>
             </View>
           </PressableScale>
           </>
@@ -1028,7 +1040,7 @@ export default function NewOrderScreen() {
               {createMutation.isPending ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>Подтвердить заказ</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>{t("Подтвердить заказ", "Buyurtmani tasdiqlash")}</Text>
               )}
             </View>
           </PressableScale>

@@ -10,6 +10,7 @@ import { Card, EmptyState, SearchInput } from "../src/components/ui";
 import { getMyDebts, type MyDebt } from "../src/api";
 import { formatMoney } from "../src/store/branding";
 import { errorText } from "../src/lib/error-text";
+import { useT, useLang, type Lang } from "../src/i18n";
 
 /**
  * Долги по моим заказам.
@@ -38,6 +39,8 @@ export default function DebtsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
+  const t = useT();
+  const lang = useLang();
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   /*
@@ -84,15 +87,15 @@ export default function DebtsScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Назад"
+          accessibilityLabel={t("Назад", "Orqaga")}
           style={{ width: 36, height: 36, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.card }}
         >
           <Feather name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 22, color: colors.text.primary }}>Мои долги</Text>
+          <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 22, color: colors.text.primary }}>{t("Мои долги", "Mening qarzlarim")}</Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.secondary, marginTop: 2 }}>
-            {q.isLoading ? "Считаем…" : `${formatMoney(total)} · ${shops} точек`}
+            {q.isLoading ? t("Считаем…", "Hisoblanmoqda…") : t(`${formatMoney(total)} · ${shops} точек`, `${formatMoney(total)} · ${shops} ta do'kon`)}
           </Text>
         </View>
       </View>
@@ -105,7 +108,7 @@ export default function DebtsScreen() {
         ListHeaderComponent={
           (q.data?.length ?? 0) > 0 ? (
             <View style={{ marginBottom: Spacing.sm }}>
-              <SearchInput value={search} onChangeText={setSearch} placeholder="Магазин или номер заказа" />
+              <SearchInput value={search} onChangeText={setSearch} placeholder={t("Магазин или номер заказа", "Do'kon yoki buyurtma raqami")} />
             </View>
           ) : null
         }
@@ -113,30 +116,32 @@ export default function DebtsScreen() {
           q.isLoading ? (
             <ActivityIndicator color={colors.brand.primary} style={{ marginTop: Spacing.xxl }} />
           ) : q.isError ? (
-            <EmptyState icon="alert-circle" title="Не удалось загрузить" description={errorText(q.error)} />
+            <EmptyState icon="alert-circle" title={t("Не удалось загрузить", "Yuklab bo'lmadi")} description={errorText(q.error)} />
           ) : search.trim() ? (
-            <EmptyState icon="search" title="Ничего не нашлось" description="Попробуйте другое название" />
+            <EmptyState icon="search" title={t("Ничего не нашлось", "Hech narsa topilmadi")} description={t("Попробуйте другое название", "Boshqa nom bilan urinib ko'ring")} />
           ) : (
-            <EmptyState icon="check-circle" title="Долгов нет" description="По вашим заказам всё оплачено" />
+            <EmptyState icon="check-circle" title={t("Долгов нет", "Qarz yo'q")} description={t("По вашим заказам всё оплачено", "Buyurtmalaringiz bo'yicha hammasi to'langan")} />
           )
         }
-        renderItem={({ item }) => <DebtRow debt={item} now={now} colors={colors} onOpen={() => router.push(`/order/${item.orderId}`)} />}
+        renderItem={({ item }) => <DebtRow debt={item} now={now} lang={lang} colors={colors} onOpen={() => router.push(`/order/${item.orderId}`)} />}
       />
     </View>
   );
 }
 
-function DebtRow({ debt, now, colors, onOpen }: {
+function DebtRow({ debt, now, lang, colors, onOpen }: {
   debt: MyDebt;
   /** «Сейчас» приходит сверху: см. разбор в DebtsScreen. */
   now: number;
+  lang: Lang;
   colors: ReturnType<typeof useThemeColors>;
   onOpen: () => void;
 }) {
+  const t = useT();
   const remaining = Number(debt.remaining ?? 0);
   const paid = Number(debt.paid ?? 0);
   const total = Number(debt.total ?? 0);
-  const day = debt.createdAt ? new Date(debt.createdAt).toLocaleDateString("ru-RU") : "";
+  const day = debt.createdAt ? new Date(debt.createdAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru-RU") : "";
   /*
     Сколько дней висит. Возраст долга — единственное, что отличает «вчера
     отгрузили» от «забыли полгода назад», а по сумме они выглядят одинаково.
@@ -154,7 +159,7 @@ function DebtRow({ debt, now, colors, onOpen }: {
           </Text>
           <Text style={{ fontFamily: Typography.fontMono, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
             {debt.orderNumber} · {day}
-            {days > 0 ? ` · ${days} дн.` : ""}
+            {days > 0 ? t(` · ${days} дн.`, ` · ${days} kun`) : ""}
           </Text>
           {debt.shopAddress ? (
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }} numberOfLines={1}>
@@ -172,7 +177,7 @@ function DebtRow({ debt, now, colors, onOpen }: {
           */}
           {paid > 0 ? (
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
-              из {formatMoney(total)}
+              {t(`из ${formatMoney(total)}`, `${formatMoney(total)} dan`)}
             </Text>
           ) : null}
         </View>
@@ -182,7 +187,7 @@ function DebtRow({ debt, now, colors, onOpen }: {
         <Pressable
           onPress={() => Linking.openURL(`tel:${debt.shopPhone}`)}
           accessibilityRole="button"
-          accessibilityLabel={`Позвонить в ${debt.shopName}`}
+          accessibilityLabel={t(`Позвонить в ${debt.shopName}`, `${debt.shopName} ga qo'ng'iroq`)}
           style={{
             flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
             minHeight: Sizes.touchTarget, borderRadius: Radii.lg, marginTop: Spacing.md,

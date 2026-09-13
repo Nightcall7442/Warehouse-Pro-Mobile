@@ -14,12 +14,15 @@ import * as Haptics from "expo-haptics";
 import { formatMoney } from "../../src/store/branding";
 import { unitShort } from "../../src/lib/units";
 import { readableInk } from "../../src/lib/contrast";
+import { useT, useLang } from "../../src/i18n";
 
 export default function BarcodeScannerScreen() {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const t = useT();
+  const lang = useLang();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [foundProduct, setFoundProduct] = useState<{ id: number; code: string; name: string; unitPrice: string; unit: string; available: string | null } | null>(null);
@@ -55,10 +58,10 @@ export default function BarcodeScannerScreen() {
       if (product) {
         setFoundProduct(product);
       } else {
-        Alert.alert("Товар не найден", `Штрих-код: ${data}`, [{ text: "OK", onPress: () => setScanned(false) }]);
+        Alert.alert(t("Товар не найден", "Mahsulot topilmadi"), t(`Штрих-код: ${data}`, `Shtrix-kod: ${data}`), [{ text: "OK", onPress: () => setScanned(false) }]);
       }
     } catch {
-      Alert.alert("Ошибка", "Не удалось найти товар");
+      Alert.alert(t("Ошибка", "Xatolik"), t("Не удалось найти товар", "Mahsulotni topib bo'lmadi"));
       setScanned(false);
     } finally {
       setSearching(false);
@@ -76,10 +79,10 @@ export default function BarcodeScannerScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg.primary, justifyContent: "center", alignItems: "center", padding: 20 }}>
         <Feather name="camera" size={48} color={colors.text.muted} />
-        <Text style={{ fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 16, fontFamily: Typography.fontMedium }}>Нет доступа к камере</Text>
+        <Text style={{ fontSize: Typography.size.lg, color: colors.text.primary, marginTop: 16, fontFamily: Typography.fontMedium }}>{t("Нет доступа к камере", "Kameraga ruxsat yo'q")}</Text>
         <PressableScale onPress={requestPermission} haptic="medium">
           <View style={{ marginTop: 16, paddingVertical: 12, paddingHorizontal: 24, borderRadius: Radii.md, backgroundColor: colors.accent.primary }}>
-            <Text style={{ color: actionInk, fontFamily: Typography.fontSemibold }}>Разрешить</Text>
+            <Text style={{ color: actionInk, fontFamily: Typography.fontSemibold }}>{t("Разрешить", "Ruxsat berish")}</Text>
           </View>
         </PressableScale>
       </View>
@@ -105,7 +108,7 @@ export default function BarcodeScannerScreen() {
               <Feather name="arrow-left" size={20} color="#fff" />
             </View>
           </PressableScale>
-          <Text style={{ color: "#fff", fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>Сканировать</Text>
+          <Text style={{ color: "#fff", fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>{t("Сканировать", "Skanerlash")}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -121,7 +124,7 @@ export default function BarcodeScannerScreen() {
             {!scanned && <View style={{ width: "80%", height: 2, backgroundColor: colors.accent.primary, borderRadius: 1, position: "absolute", top: "50%", alignSelf: "center" }} />}
           </View>
           <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: Typography.size.base, marginTop: 20 }}>
-            {scanned ? "Обработка..." : "Наведите камеру на штрих-код"}
+            {scanned ? t("Обработка...", "Qayta ishlanmoqda...") : t("Наведите камеру на штрих-код", "Kamerani shtrix-kodga qarating")}
           </Text>
         </View>
 
@@ -139,7 +142,7 @@ export default function BarcodeScannerScreen() {
                   товара...» — экран выглядел зависшим, и он начинал тыкать в
                   камеру повторно. */}
               <ActivityIndicator size="small" color="#fff" />
-              <Text style={{ color: "#fff", fontSize: Typography.size.md }}>Поиск товара...</Text>
+              <Text style={{ color: "#fff", fontSize: Typography.size.md }}>{t("Поиск товара...", "Mahsulot qidirilmoqda...")}</Text>
             </View>
           ) : foundProduct ? (
             /* Единица берётся из общего справочника. Раньше она выбиралась
@@ -152,9 +155,9 @@ export default function BarcodeScannerScreen() {
               <Card style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{foundProduct.name}</Text>
-                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary, marginTop: 2 }}>{formatMoney(foundProduct.unitPrice)}/{unitShort(foundProduct.unit)}</Text>
+                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary, marginTop: 2 }}>{formatMoney(foundProduct.unitPrice)}/{unitShort(foundProduct.unit, lang)}</Text>
                   {foundProduct.available && (
-                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>Остаток: {Number(foundProduct.available).toFixed(0)} {unitShort(foundProduct.unit)}</Text>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>{t("Остаток", "Qoldiq")}: {Number(foundProduct.available).toFixed(0)} {unitShort(foundProduct.unit, lang)}</Text>
                   )}
                 </View>
                 <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); addToCart(); }} haptic="medium">
@@ -166,7 +169,7 @@ export default function BarcodeScannerScreen() {
               <PressableScale onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); addToCart(); }} haptic="medium">
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, borderRadius: Radii.lg, backgroundColor: colors.accent.primary }}>
                   <Feather name="shopping-cart" size={18} color={actionInk} />
-                  <Text style={{ color: actionInk, fontSize: Typography.size.md, fontFamily: Typography.fontSemibold }}>Заказать этот товар</Text>
+                  <Text style={{ color: actionInk, fontSize: Typography.size.md, fontFamily: Typography.fontSemibold }}>{t("Заказать этот товар", "Shu mahsulotni buyurtma qilish")}</Text>
                 </View>
               </PressableScale>
             </View>
@@ -174,7 +177,7 @@ export default function BarcodeScannerScreen() {
             <PressableScale onPress={() => { Haptics.selectionAsync(); setScanned(false); }} haptic="light">
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: Radii.lg, backgroundColor: colors.bg.overlay }}>
                 <Feather name="refresh-cw" size={18} color="#fff" />
-                <Text style={{ color: "#fff", fontSize: Typography.size.md, fontFamily: Typography.fontMedium }}>Сканировать снова</Text>
+                <Text style={{ color: "#fff", fontSize: Typography.size.md, fontFamily: Typography.fontMedium }}>{t("Сканировать снова", "Qayta skanerlash")}</Text>
               </View>
             </PressableScale>
           )}

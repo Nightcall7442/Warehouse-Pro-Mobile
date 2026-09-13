@@ -17,11 +17,16 @@ import type { AgeBucket, ReceivablesAging, ShopAging } from "../api";
    «8–30» сумму, посчитанную по другому правилу.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export const BUCKETS: ReadonlyArray<{ key: AgeBucket; label: string }> = [
-  { key: "d0_7",    label: "до 7 дней" },
-  { key: "d8_30",   label: "8–30 дней" },
-  { key: "d31_60",  label: "31–60 дней" },
-  { key: "d60plus", label: "больше 60" },
+/**
+ * Подпись парой {ru, uz}: экран выбирает по языку через useLang(). Храповик
+ * узбекского ищет t(...) на строке и пару в таблице не видит — отсюда
+ * i18n-ignore: перевод стоит рядом, в поле uz.
+ */
+export const BUCKETS: ReadonlyArray<{ key: AgeBucket; ru: string; uz: string }> = [
+  { key: "d0_7",    ru: "до 7 дней",  uz: "7 kungacha" },  // i18n-ignore
+  { key: "d8_30",   ru: "8–30 дней",  uz: "8–30 kun" },    // i18n-ignore
+  { key: "d31_60",  ru: "31–60 дней", uz: "31–60 kun" },   // i18n-ignore
+  { key: "d60plus", ru: "больше 60",  uz: "60 dan ko'p" }, // i18n-ignore
 ];
 
 /**
