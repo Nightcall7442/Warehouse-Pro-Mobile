@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import { useQuery } from "@tanstack/react-query";
 import { getPlans } from "../api";
 import { useAuthStore } from "../store/auth";
+import { useT } from "../i18n";
 
 /**
  * Одно напоминание в день о запланированных визитах.
@@ -39,6 +40,7 @@ const REMINDER_ID = "visit-summary-reminder";
 
 export function useVisitReminders() {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const t = useT();
   const { data: plans } = useQuery({
     queryKey: ["plans"],
     queryFn: () => getPlans(),
@@ -74,10 +76,10 @@ export function useVisitReminders() {
     Notifications.scheduleNotificationAsync({
       identifier: REMINDER_ID,
       content: {
-        title: "План на сегодня",
+        title: t("План на сегодня", "Bugungi reja"),
         body: plannedCount === 1
-          ? "Запланирован 1 визит"
-          : `Запланировано визитов: ${plannedCount}`,
+          ? t("Запланирован 1 визит", "1 ta tashrif rejalangan")
+          : t(`Запланировано визитов: ${plannedCount}`, `${plannedCount} ta tashrif rejalangan`),
         data: { type: "visit_reminder" },
         sound: true,
       },
@@ -86,5 +88,5 @@ export function useVisitReminders() {
         date: at,
       },
     }).catch(() => {});
-  }, [isAuthenticated, plannedCount]);
+  }, [isAuthenticated, plannedCount, t]);
 }

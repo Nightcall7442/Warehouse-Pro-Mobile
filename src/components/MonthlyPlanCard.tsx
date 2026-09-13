@@ -2,7 +2,7 @@ import { View, Text } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { format, parseISO } from "date-fns";
-import { ru } from "date-fns/locale";
+import { ru, uz } from "date-fns/locale";
 import { getMyQuota } from "../api";
 import { computePace, money } from "../lib/monthly-plan";
 import { useThemeColors, useThemeStore } from "../store/theme";
@@ -10,6 +10,7 @@ import { Typography, Spacing, Radii, soft } from "../theme";
 import { ShimmerSkeleton } from "./Animated";
 import { ErrorState } from "./QueryState";
 import { useBrandingStore } from "../store/branding";
+import { useT, useLang } from "../i18n";
 
 /**
  * The agent's monthly quota, as their supervisor set it.
@@ -25,6 +26,8 @@ export function MonthlyPlanCard() {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const { currencySymbol, symbolPosition } = useBrandingStore(s => s.branding);
+  const t = useT();
+  const lang = useLang();
 
   // Знак валюты был приклеен справа вручную, мимо formatMoney, который знает
   // сторону знака: арендатор с долларом читал «12,4 млн $» вместо «$ 12,4 млн».
@@ -67,9 +70,9 @@ export function MonthlyPlanCard() {
     return (
       <View style={{ ...surface, paddingVertical: Spacing.sm }}>
         <ErrorState
-          what="норму месяца"
+          what={t("норму месяца", "oylik normani")}
           error={error}
-          description="Норма назначена или нет — сейчас неизвестно: ответ не пришёл."
+          description={t("Норма назначена или нет — сейчас неизвестно: ответ не пришёл.", "Norma bor-yo'qligi hozir noma'lum: javob kelmadi.")}
           onRetry={() => { void refetch(); }}
           retrying={isFetching}
         />
@@ -90,10 +93,10 @@ export function MonthlyPlanCard() {
           <Feather name="target" size={18} color={colors.text.muted} />
         </View>
         <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.secondary }}>
-          Норма на этот месяц не назначена
+          {t("Норма на этот месяц не назначена", "Bu oyga norma qo'yilmagan")}
         </Text>
         <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.muted, textAlign: "center" }}>
-          Её ставит супервайзер
+          {t("Её ставит супервайзер", "Uni supervisor qo'yadi")}
         </Text>
       </View>
     );
@@ -102,14 +105,14 @@ export function MonthlyPlanCard() {
   const pace = computePace(quota);
 
   const TONE = {
-    done:    { color: colors.status.success, label: "План выполнен",  icon: "check-circle" as const },
-    ahead:   { color: colors.status.success, label: "Идёте с опережением", icon: "trending-up" as const },
-    onTrack: { color: colors.accent.primary, label: "Идёте по графику",    icon: "activity" as const },
-    behind:  { color: colors.status.warning, label: "Отставание от графика", icon: "trending-down" as const },
+    done:    { color: colors.status.success, label: t("План выполнен", "Reja bajarildi"),  icon: "check-circle" as const },
+    ahead:   { color: colors.status.success, label: t("Идёте с опережением", "Rejadan oldinda"), icon: "trending-up" as const },
+    onTrack: { color: colors.accent.primary, label: t("Идёте по графику", "Jadval bo'yicha"),    icon: "activity" as const },
+    behind:  { color: colors.status.warning, label: t("Отставание от графика", "Jadvaldan orqada"), icon: "trending-down" as const },
   }[pace.status];
 
   const monthLabel = (() => {
-    try { return format(parseISO(quota.month), "LLLL yyyy", { locale: ru }); }
+    try { return format(parseISO(quota.month), "LLLL yyyy", { locale: lang === "uz" ? uz : ru }); }
     catch { return ""; }
   })();
 
@@ -122,7 +125,7 @@ export function MonthlyPlanCard() {
             fontFamily: Typography.fontSemibold, fontSize: 10, letterSpacing: 1,
             textTransform: "uppercase", color: colors.text.muted,
           }}>
-            План на {monthLabel}
+            {t(`План на ${monthLabel}`, `${monthLabel} rejasi`)}
           </Text>
           <View style={{
             flexDirection: "row", alignItems: "center", gap: 5,
@@ -141,7 +144,7 @@ export function MonthlyPlanCard() {
             {quota.revenue.pct}%
           </Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }}>
-            {money(quota.revenue.actual)} из {withCurrency(money(quota.revenue.target))}
+            {t(`${money(quota.revenue.actual)} из ${withCurrency(money(quota.revenue.target))}`, `${withCurrency(money(quota.revenue.target))} dan ${money(quota.revenue.actual)}`)}
           </Text>
         </View>
 
@@ -170,8 +173,8 @@ export function MonthlyPlanCard() {
             color: colors.text.muted, marginTop: pace.status === "done" ? 8 : 6,
           }}>
             {pace.status === "done"
-              ? "Норма закрыта — всё сверху идёт в плюс"
-              : `День ${quota.daysElapsed} из ${quota.daysTotal} · график ${pace.expectedPct}%`}
+              ? t("Норма закрыта — всё сверху идёт в плюс", "Norma yopildi — ustidagisi ortiqcha")
+              : t(`День ${quota.daysElapsed} из ${quota.daysTotal} · график ${pace.expectedPct}%`, `${quota.daysElapsed} / ${quota.daysTotal} kun · jadval ${pace.expectedPct}%`)}
           </Text>
         </View>
       </View>
@@ -181,10 +184,10 @@ export function MonthlyPlanCard() {
         <View style={{
           flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border.subtle,
         }}>
-          <Stat label="Осталось" value={withCurrency(money(pace.remaining))} colors={colors} />
+          <Stat label={t("Осталось", "Qoldi")} value={withCurrency(money(pace.remaining))} colors={colors} />
           <View style={{ width: 1, backgroundColor: colors.border.subtle }} />
           <Stat
-            label={pace.daysLeft > 0 ? `В день (${pace.daysLeft} дн.)` : "Последний день"}
+            label={pace.daysLeft > 0 ? t(`В день (${pace.daysLeft} дн.)`, `Kuniga (${pace.daysLeft} kun)`) : t("Последний день", "Oxirgi kun")}
             value={withCurrency(money(pace.perDay))}
             colors={colors}
           />
@@ -196,7 +199,7 @@ export function MonthlyPlanCard() {
       <View style={{ borderTopWidth: 1, borderTopColor: colors.border.subtle, padding: Spacing.base, gap: 12 }}>
         <MiniGoal
           icon="shopping-cart"
-          label="Заказы"
+          label={t("Заказы", "Buyurtmalar")}
           actual={String(quota.orders.actual)}
           target={String(quota.orders.target)}
           pct={quota.orders.pct}
@@ -204,7 +207,7 @@ export function MonthlyPlanCard() {
         />
         <MiniGoal
           icon="map-pin"
-          label="Визиты"
+          label={t("Визиты", "Tashriflar")}
           actual={`${Math.round(quota.visits.actual)}%`}
           target={`${Math.round(quota.visits.target)}%`}
           pct={quota.visits.pct}

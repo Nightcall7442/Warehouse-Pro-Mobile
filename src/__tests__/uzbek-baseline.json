@@ -1,14 +1,1 @@
-{
-  "app/(tabs)/plan.tsx": 22,
-  "app/(tabs)/targets.tsx": 8,
-  "app/(tabs)/tracking.tsx": 13,
-  "app/merchandiser/visit.tsx": 19,
-  "src/components/MonthlyPlanCard.tsx": 13,
-  "src/components/plans/AgentPlansView.tsx": 28,
-  "src/components/plans/CreatePlanModal.tsx": 9,
-  "src/components/plans/PlanHelpers.tsx": 3,
-  "src/components/plans/PlanRow.tsx": 1,
-  "src/components/plans/SupervisorPlansView.tsx": 19,
-  "src/hooks/useVisitReminders.ts": 3,
-  "src/lib/monthly-plan.ts": 3
-}
+{}

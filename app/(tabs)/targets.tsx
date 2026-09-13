@@ -17,6 +17,7 @@ import { DateNav } from "../../src/components/plans/DateNav";
 import { fmtDate } from "../../src/components/plans/PlanHelpers";
 import { LinearGradient } from "expo-linear-gradient";
 import { formatMoney } from "../../src/store/branding";
+import { useT, useLang } from "../../src/i18n";
 
 type Section = "targets" | "visits";
 
@@ -36,10 +37,12 @@ export default function TargetsScreen() {
   const [section, setSection] = useState<Section>("targets");
   const [date, setDate] = useState(new Date());
   const [filterAgentId, setFilterAgentId] = useState<number | null>(null);
+  const t = useT();
+  const lang = useLang();
 
   const dateStr = fmtDate(date);
   const isToday = dateStr === fmtDate(new Date());
-  const currentMonth = new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  const currentMonth = new Date().toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru-RU", { month: "long", year: "numeric" });
 
   // Targets data
   const {
@@ -70,12 +73,12 @@ export default function TargetsScreen() {
     if (filterAgentId || !plans || plans.length === 0) return null;
     const groups: Record<string, Plan[]> = {};
     for (const plan of plans) {
-      const key = plan.agentName ?? `Агент #${plan.agentId}`;
+      const key = plan.agentName ?? t(`Агент #${plan.agentId}`, `Agent #${plan.agentId}`);
       if (!groups[key]) groups[key] = [];
       groups[key].push(plan);
     }
     return Object.entries(groups).map(([agentName, items]) => ({ title: agentName, data: items }));
-  }, [plans, filterAgentId]);
+  }, [plans, filterAgentId, t]);
 
   // Summary stats
   const totalTarget = (summary ?? []).reduce((s, a) => s + Number(a.targetAmount), 0);
@@ -89,7 +92,7 @@ export default function TargetsScreen() {
         style={{ paddingTop: insets.top + 16, paddingBottom: 16, paddingHorizontal: Spacing.base }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <View>
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: headerInk }}>Показатели</Text>
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: headerInk }}>{t("Показатели", "Ko'rsatkichlar")}</Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: headerInkSoft, marginTop: 4 }}>{currentMonth}</Text>
           </View>
         </View>
@@ -98,12 +101,12 @@ export default function TargetsScreen() {
         <View style={{ flexDirection: "row", backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 12, padding: 3 }}>
           <PressableScale onPress={() => setSection("targets")} haptic="light" style={{ flex: 1 }}>
             <View style={{ paddingVertical: 10, borderRadius: 10, backgroundColor: section === "targets" ? "rgba(255,255,255,0.25)" : "transparent", alignItems: "center" }}>
-              <Text style={{ fontFamily: section === "targets" ? Typography.fontBold : Typography.fontMedium, fontSize: 13, color: headerInk }}>Нормы</Text>
+              <Text style={{ fontFamily: section === "targets" ? Typography.fontBold : Typography.fontMedium, fontSize: 13, color: headerInk }}>{t("Нормы", "Normalar")}</Text>
             </View>
           </PressableScale>
           <PressableScale onPress={() => setSection("visits")} haptic="light" style={{ flex: 1 }}>
             <View style={{ paddingVertical: 10, borderRadius: 10, backgroundColor: section === "visits" ? "rgba(255,255,255,0.25)" : "transparent", alignItems: "center" }}>
-              <Text style={{ fontFamily: section === "visits" ? Typography.fontBold : Typography.fontMedium, fontSize: 13, color: headerInk }}>Визиты</Text>
+              <Text style={{ fontFamily: section === "visits" ? Typography.fontBold : Typography.fontMedium, fontSize: 13, color: headerInk }}>{t("Визиты", "Tashriflar")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -131,20 +134,20 @@ export default function TargetsScreen() {
                   под ней. formatMoney знает и разряды, и сторону знака. */}
               <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md }}>
                 <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
-                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>План</Text>
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("План", "Reja")}</Text>
                   <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: Typography.fontBold, fontSize: 15, color: colors.text.primary, marginTop: 4 }}>{formatMoney(totalTarget)}</Text>
                 </Card>
                 <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
-                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Факт</Text>
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("Факт", "Fakt")}</Text>
                   <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: Typography.fontBold, fontSize: 15, color: colors.status.success, marginTop: 4 }}>{formatMoney(totalActual)}</Text>
                 </Card>
                 <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
-                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>Среднее</Text>
+                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("Среднее", "O'rtacha")}</Text>
                   <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: avgCompletion >= 80 ? colors.status.success : avgCompletion >= 50 ? colors.status.warning : colors.status.danger, marginTop: 4 }}>{avgCompletion}%</Text>
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.muted }}>выполнение</Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.muted }}>{t("выполнение", "bajarilish")}</Text>
                 </Card>
               </View>
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary }}>{summary.length} агентов</Text>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 13, color: colors.text.secondary }}>{t(`${summary.length} агентов`, `${summary.length} ta agent`)}</Text>
             </View>
           ) : null}
           ListEmptyComponent={summaryLoading ? (
@@ -155,9 +158,9 @@ export default function TargetsScreen() {
             // существующих или решал, что настройки слетели.
             <View style={{ paddingTop: Spacing.xl }}>
               <ErrorState
-                what="нормы"
+                what={t("нормы", "normalarni")}
                 error={summaryErr}
-                description="Это сбой связи, а не пустые настройки. Нормы на месте — их не удалось получить."
+                description={t("Это сбой связи, а не пустые настройки. Нормы на месте — их не удалось получить.", "Bu aloqa xatosi, bo'sh sozlama emas. Normalar joyida — faqat olib bo'lmadi.")}
                 onRetry={() => { void refetchSummary(); }}
                 retrying={summaryFetching}
               />
@@ -165,8 +168,8 @@ export default function TargetsScreen() {
           ) : (
             <View style={{ alignItems: "center", paddingTop: 60, gap: 12 }}>
               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}><Feather name="target" size={28} color={colors.text.muted} /></View>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>Нет норм</Text>
-              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.muted, textAlign: "center" }}>Создайте нормы в табе «Планы»</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{t("Нет норм", "Normalar yo'q")}</Text>
+              <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.muted, textAlign: "center" }}>{t("Создайте нормы в табе «Планы»", "Normani «Rejalar» bo'limida yarating")}</Text>
             </View>
           )}
           renderItem={({ item, index }) => {
@@ -181,7 +184,7 @@ export default function TargetsScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{item.userName}</Text>
-                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.tertiary, marginTop: 2 }}>План: {formatMoney(item.targetAmount)}</Text>
+                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: 12, color: colors.text.tertiary, marginTop: 2 }}>{t("План", "Reja")}: {formatMoney(item.targetAmount)}</Text>
                     </View>
                     <View style={{ alignItems: "center" }}>
                       <ProgressRing value={revPct} size={56} strokeWidth={5} color={color} />
@@ -191,7 +194,7 @@ export default function TargetsScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     {/* «План: 5 000 000 сум», а под ним «Факт: 3 200 000» без
                         валюты — вторая цифра повисала без единицы. */}
-                    <Text style={{ fontFamily: Typography.fontMono, fontSize: 11, color: colors.text.secondary }}>Факт: {formatMoney(item.actualAmount)}</Text>
+                    <Text style={{ fontFamily: Typography.fontMono, fontSize: 11, color: colors.text.secondary }}>{t("Факт", "Fakt")}: {formatMoney(item.actualAmount)}</Text>
                     <NeumorphicProgressBar value={revPct} height={6} color={color} style={{ flex: 1 }} />
                   </View>
                 </Card>
@@ -211,7 +214,7 @@ export default function TargetsScreen() {
             <PressableScale onPress={() => setFilterAgentId(null)} haptic="selection">
               <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, backgroundColor: colors.bg.card, borderRadius: Radii.md, ...(filterAgentId ? soft(isDark).raisedSm : soft(isDark).inset), padding: 10 }}>
                 <Feather name="user" size={15} color={filterAgentId ? colors.accent.primary : colors.text.muted} />
-                <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 13, color: filterAgentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? "Все агенты"}</Text>
+                <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: 13, color: filterAgentId ? colors.text.primary : colors.text.muted }}>{selectedAgent?.name ?? t("Все агенты", "Barcha agentlar")}</Text>
                 <Feather name="chevron-down" size={16} color={colors.text.muted} />
               </View>
             </PressableScale>
@@ -230,9 +233,9 @@ export default function TargetsScreen() {
             // отказе связи планы есть, просто не доехали.
             <View style={{ paddingTop: Spacing.xl }}>
               <ErrorState
-                what="планы"
+                what={t("планы", "rejalarni")}
                 error={plansErr}
-                description="Это сбой связи, а не пустой день. Проверьте подключение и попробуйте снова."
+                description={t("Это сбой связи, а не пустой день. Проверьте подключение и попробуйте снова.", "Bu aloqa xatosi, bo'sh kun emas. Ulanishni tekshirib, qayta urinib ko'ring.")}
                 onRetry={() => { void refetchPlans(); }}
                 retrying={plansFetching}
               />
@@ -248,14 +251,14 @@ export default function TargetsScreen() {
                 </View>
               )}
               renderItem={({ item: plan, index }) => <FadeInItem delay={index * 30}><PlanRow plan={plan} showCity colors={colors} isDark={isDark} /></FadeInItem>}
-              ListEmptyComponent={<EmptyState icon="calendar" title="На этот день планов нет" />}
+              ListEmptyComponent={<EmptyState icon="calendar" title={t("На этот день планов нет", "Bu kun uchun reja yo'q")} />}
             />
           ) : (
             <FlatList data={plans ?? []} keyExtractor={p => String(p.id)}
               contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }}
               ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
               refreshControl={<RefreshControl refreshing={plansFetching} onRefresh={refetchPlans} tintColor={colors.accent.primary} />}
-              ListEmptyComponent={<EmptyState icon="calendar" title="На этот день планов нет" />}
+              ListEmptyComponent={<EmptyState icon="calendar" title={t("На этот день планов нет", "Bu kun uchun reja yo'q")} />}
               renderItem={({ item: plan, index }) => <FadeInItem delay={index * 30}><PlanRow plan={plan} showAgent={!filterAgentId} showCity colors={colors} isDark={isDark} /></FadeInItem>}
             />
           )}

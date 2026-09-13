@@ -6,6 +6,7 @@ import type { Plan } from "../../api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Typography, Spacing, Radii, ThemeColors, soft } from "../../theme";
 import { PressableScale } from "../Animated";
+import { tt } from "../../i18n";
 
 /**
  * День для запроса — по местному календарю, а не по Гринвичу.
@@ -24,21 +25,21 @@ export function getStatusMeta(status: Plan["status"], colors: ThemeColors) {
   switch (status) {
     case "visited":
       return {
-        label: "Посещён",
+        label: tt("Посещён", "Tashrif qilindi"),
         icon: "check-circle" as const,
         color: colors.accent.success,
         bg: colors.status.successDim,
       };
     case "skipped":
       return {
-        label: "Пропущен",
+        label: tt("Пропущен", "O'tkazildi"),
         icon: "clock" as const,
         color: colors.accent.warning,
         bg: colors.status.warningDim,
       };
     default:
       return {
-        label: "Запланирован",
+        label: tt("Запланирован", "Rejalangan"),
         icon: "calendar" as const,
         color: colors.accent.info,
         bg: colors.status.infoDim,
