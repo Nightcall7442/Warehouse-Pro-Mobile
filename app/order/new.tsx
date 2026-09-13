@@ -19,6 +19,7 @@ import { Card, SearchInput, Skeleton } from "../../src/components/ui";
 import { PressableScale } from "../../src/components/Animated";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { bumpLine, findScanned, cartSummary } from "../../src/lib/cart";
+import { qty as qtyText } from "../../src/lib/format";
 
 interface OrderLine {
   productId: number;
@@ -242,7 +243,15 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
 // ── Step 2: Product Picker + Cart ────────────────────────────────────────────
 function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors }) {
   const { isDark } = useThemeStore();
-  const [showPicker, setShowPicker] = useState(false);
+  /*
+    Пустая корзина — окно выбора открыто сразу.
+
+    Шаг товаров с пустой корзиной показывал «Корзина пуста. Нажмите
+    „Добавить товар“» — лишнее нажатие на каждом заказе ради экрана, на
+    котором делать нечего. Вернулся с проверки заказа с набранной корзиной —
+    окно не лезет.
+  */
+  const [showPicker, setShowPicker] = useState(lines.length === 0);
 
   const lineTotal = (l: OrderLine) => l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100);
 
@@ -485,9 +494,19 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
               renderItem={({ item: p }) => {
                 const qty = qtyOf.get(p.id) ?? 0;
                 const added = qty > 0;
+                /*
+                  Остаток — рядом с ценой, и «+» глохнет на его границе.
+
+                  Было: в окне выбора остатка не видно вовсе, агент набирал
+                  двадцать при пяти на складе и узнавал об этом только по
+                  погасшей «Продолжить» с подписью на другом экране.
+                  Неизвестный остаток (null) не ограничивает — см. parseStock.
+                */
+                const stock = parseStock(p.available);
+                const atLimit = stock != null && qty >= stock;
                 return (
                   <PressableScale onPress={() => {
-                    if (added) return;
+                    if (added || atLimit) return;
                     onChange(bumpLine(lines, p, 1));
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }} haptic="light">
@@ -500,6 +519,9 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                         <View style={{ flexDirection: "row", gap: 6, marginTop: 2 }}>
                           {p.code && <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, backgroundColor: colors.bg.elevated, paddingHorizontal: 4, borderRadius: 4 }}>{p.code}</Text>}
                           <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontMedium }}>{Number(p.unitPrice).toLocaleString("ru")} сум</Text>
+                          <Text testID={`picker-stock-${p.id}`} style={{ fontSize: Typography.size.xs, color: atLimit ? colors.status.danger : colors.text.tertiary }}>
+                            {stock == null ? "· остаток уточняется" : stock <= 0 ? "· нет на складе" : `· остаток ${qtyText(stock)}`}
+                          </Text>
                         </View>
                       </View>
                       {added ? (
@@ -509,13 +531,13 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
                             <Feather name="minus" size={14} color={colors.text.primary} />
                           </TouchableOpacity>
                           <Text style={{ minWidth: 22, textAlign: "center", fontSize: Typography.size.sm, fontFamily: Typography.fontBold, color: colors.text.primary }}>{qty}</Text>
-                          <TouchableOpacity testID={`stepper-plus-${p.id}`} onPress={() => onChange(bumpLine(lines, p, 1))} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                            style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                          <TouchableOpacity testID={`stepper-plus-${p.id}`} disabled={atLimit} onPress={() => onChange(bumpLine(lines, p, 1))} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                            style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center", opacity: atLimit ? 0.35 : 1 }}>
                             <Feather name="plus" size={14} color="#fff" />
                           </TouchableOpacity>
                         </View>
                       ) : (
-                        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
+                        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center", opacity: atLimit ? 0.35 : 1 }}>
                           <Feather name="plus" size={14} color="#fff" />
                         </View>
                       )}

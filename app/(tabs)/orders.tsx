@@ -8,12 +8,14 @@ import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Feather } from "@expo/vector-icons";
 import { getMyOrders, Order } from "../../src/api";
+import { offlineOrderTotal } from "../../src/lib/order-money";
+import type { OfflineOrder } from "../../src/store/offline";
 import { useThemeColors } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { useOfflineStore } from "../../src/store/offline";
 import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
 
-import { Card } from "../../src/components/ui";
+import { Card, Badge } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale } from "../../src/components/Animated";
 import { LinearGradient } from "expo-linear-gradient";
@@ -21,7 +23,13 @@ import { Gradients } from "../../src/theme";
 
 const BOTTOM_TAB_HEIGHT = 80;
 
-type ListItem = { type: "header"; date: string; key: string } | { type: "order"; order: Order; key: string };
+type ListItem =
+  | { type: "header"; date: string; key: string }
+  /** Заголовок раздела без даты: «ОЖИДАЮТ ОТПРАВКИ». */
+  | { type: "title"; title: string; key: string }
+  | { type: "order"; order: Order; key: string }
+  /** Заказ из очереди на телефоне: сервер о нём ещё не знает. */
+  | { type: "pending"; order: OfflineOrder; key: string };
 
 function dayLabel(dateStr: string): string {
   try {
@@ -94,6 +102,18 @@ export default function OrdersScreen() {
       catch { return 0; }
     });
     const result: ListItem[] = [];
+    /*
+      Отложенные — первыми и обычными карточками.
+
+      Было: заказ, оформленный без связи, значился только счётчиком в жёлтой
+      полосе «1 заказ не отправлен» — ни магазина, ни суммы, ни времени.
+      Агент не мог понять, какой из трёх сегодняшних застрял, и оформлял
+      заново — второй такой же. Полоса остаётся: в ней «повторить» и «убрать».
+    */
+    if (pendingOffline.length > 0) {
+      result.push({ type: "title", title: "ОЖИДАЮТ ОТПРАВКИ", key: "h-pending" });
+      for (const order of pendingOffline) result.push({ type: "pending", order, key: `p-${order.id}` });
+    }
     let lastKey = "";
     for (const order of sorted) {
       const key = dayKey(order.createdAt);
@@ -104,7 +124,7 @@ export default function OrdersScreen() {
       result.push({ type: "order", order, key: `o-${order.id}` });
     }
     return result;
-  }, [orders]);
+  }, [orders, pendingOffline]);
 
   const stats = useMemo(() => {
     const arr = Array.isArray(orders) ? orders : [];
@@ -334,11 +354,36 @@ export default function OrdersScreen() {
           </View>
         ) : null}
         renderItem={({ item }) => {
-          if (item.type === "header") {
+          if (item.type === "header" || item.type === "title") {
+            const title = item.type === "title" ? item.title : dayLabel(item.date).toUpperCase();
             return (
               <View style={{ paddingTop: Spacing.md, paddingBottom: Spacing.xs }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.muted, letterSpacing: 0.5 }}>{dayLabel(item.date).toUpperCase()}</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.xs, color: colors.text.muted, letterSpacing: 0.5 }}>{title}</Text>
               </View>
+            );
+          }
+          if (item.type === "pending") {
+            const o = item.order;
+            const time = (() => { try { return format(parseISO(o.createdAt), "HH:mm", { locale: ru }); } catch { return ""; } })();
+            // Открыть нечего: номера у заказа нет, пока его не принял сервер.
+            return (
+              <Card style={{ marginBottom: Spacing.xs, opacity: 0.85 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+                  <View style={{ width: 36, height: 36, borderRadius: Radii.sm, backgroundColor: colors.status.warningDim, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name={o.status === "failed" ? "alert-circle" : "clock"} size={16} color={o.status === "failed" ? colors.status.danger : colors.status.warning} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{o.shopName}</Text>
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>{time}</Text>
+                  </View>
+                  <Text style={{ fontSize: Typography.size.md, fontFamily: Typography.fontBold, color: colors.text.primary, fontVariant: ["tabular-nums"] }}>
+                    {offlineOrderTotal(o).toLocaleString("ru")}
+                  </Text>
+                </View>
+                <Badge variant={o.status === "failed" ? "danger" : "warning"} style={{ marginTop: Spacing.sm }}>
+                  {o.status === "failed" ? "Сервер отклонил" : "Ожидает отправки"}
+                </Badge>
+              </Card>
             );
           }
           const order = item.order;

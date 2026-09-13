@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { validateDeliveryForm } from "../../src/lib/delivery-validation";
 import { parseDueDate } from "../../src/lib/due-date";
+import { plural } from "../../src/lib/plural";
+import { qty } from "../../src/lib/format";
 import { reportNotQueued } from "../../src/lib/offline-guard";
 import { Button } from "../../src/components/ui";
 import {
@@ -287,6 +289,30 @@ export default function DeliveryScreen() {
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2 }}>
             {order.shop?.name ?? "Магазин"} • Итого: {orderTotal.toLocaleString("ru")} {branding.currencySymbol}
           </Text>
+        </View>
+
+        {/*
+          Состав — всегда, сразу под заголовком.
+
+          Было: позиции показывались только при «Частичном возврате», как
+          поле ввода. Курьер у двери с коробками не видел, что именно везёт,
+          и открывал заказ отдельно, чтобы сверить с накладной. Здесь —
+          «название × количество», без кнопок.
+        */}
+        <View testID="deliver-items" style={[s.card, { marginHorizontal: 16, marginBottom: 12 }]}>
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.md, color: colors.text.primary, marginBottom: 8 }}>
+            СОСТАВ · {order.items.length} {plural(order.items.length, "позиция", "позиции", "позиций")}
+          </Text>
+          {order.items.map(item => (
+            <View key={item.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
+              <Text style={{ flex: 1, fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.primary }} numberOfLines={2}>
+                {item.productName}
+              </Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.sm, color: colors.text.primary }}>
+                × {qty(item.quantity)} {item.unit ?? "шт"}
+              </Text>
+            </View>
+          ))}
         </View>
 
         {/* Result Selection */}
