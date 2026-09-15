@@ -1,4 +1,6 @@
 // Warehouse Pro — Catalog v2 (cold palette, Card from ui.tsx)
+// Касание карточки открывает экран товара (app/product/[id]); корзинка на
+// карточке — быстрый заказ одной позиции, как и раньше.
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useRefreshOnFocus } from "../../src/hooks/useRefreshOnFocus";
 import {
@@ -6,6 +8,7 @@ import {
   ScrollView, useWindowDimensions, RefreshControl, ActivityIndicator,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { getProducts, getCategories, createOrder, getAvailableShops, getAllShopsForSupervisor, Product, Shop } from "../../src/api";
@@ -80,114 +83,6 @@ function ProductCard({
         </View>
       </Card>
     </TouchableOpacity>
-  );
-}
-
-// ── Product Detail Modal ─────────────────────────────────────────────────────
-/* Экспортируется ради проверки: кнопку «Добавить в заказ» уже один раз
-   обрезало нижним краем, и поймать это можно только отрисовкой. */
-export function ProductDetail({
-  product, visible, onClose, onAdd, colors, isDark, fmt }: {
-  product: Product | null; visible: boolean; onClose: () => void; onAdd: (qty: number) => void;
-  colors: ThemeColors; isDark: boolean; fmt: (v: number | string | null | undefined) => string;
-}) {
-  /*
-    Лист приклеен к нижнему краю окна, а окно на Android заходит ПОД системную
-    панель. Без этого отступа нижние 20–30 точек главной кнопки листа лежали в
-    полосе жестов или под тремя кнопками: агент жал «Добавить в заказ», а
-    срабатывало системное «Назад». Помощник safeBottomPadding уже написан для
-    этого — src/theme.ts.
-  */
-  const insets = useSafeAreaInsets();
-  const t = useT();
-  const lang = useLang();
-  const [qty, setQty] = useState(1);
-  const { height: SCREEN_H } = useWindowDimensions();
-  if (!product) return null;
-
-  /*
-    Товара нет — и кнопка это говорит, а не отправляет заказ в отказ.
-    Раньше при остатке 0 «плюс» продолжал считать, а «Добавить в заказ»
-    работала: агент узнавал о нехватке уже от сервера, посреди разговора
-    с хозяином магазина.
-  */
-  const available = Number(product.available ?? 0);
-  const outOfStock = !(available > 0);
-  // Надпись на заливке — по её яркости: фирменный цвет арендатора бывает светлым.
-  const ink = readableInk(colors.accent.primary);
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={onClose}>
-        <Pressable style={{
-          position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "92%",
-          paddingBottom: modalBottomPadding(insets.bottom),
-          backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, overflow: "hidden",
-        }} onPress={e => e.stopPropagation()}>
-          {/* Handle */}
-          <View style={{ alignItems: "center", paddingVertical: 10 }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />
-          </View>
-          <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-          {/* Снимок — доля ОСТАВШЕГОСЯ места, а не всего экрана: лист и так
-              не выше 92%, а сверху ещё полоска-ручка. */}
-          <View style={{ width: "100%", height: SCREEN_H * 0.36, backgroundColor: colors.bg.elevated }}>
-            {product.photoUrl ? (
-              <SecureImage uri={product.photoUrl} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-            ) : (
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="package" size={64} color={colors.text.muted} />
-              </View>
-            )}
-          </View>
-          <View style={{ padding: Spacing.xl }}>
-            <Text style={{ fontSize: 22, fontFamily: Typography.fontBold, color: colors.text.primary, marginBottom: 4 }}>{product.name}</Text>
-            {product.code && <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted, marginBottom: 12 }}>{t("Артикул", "Artikul")}: {product.code}</Text>}
-            {/* Price + Stock row */}
-            <View style={{ flexDirection: "row", gap: Spacing.md, marginBottom: 20 }}>
-              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, ...soft(isDark).raised, padding: Spacing.lg }}>
-                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>{t(`Цена за ${unitShort(product.unit, lang)}`, `${unitShort(product.unit, lang)} narxi`)}</Text>
-                <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: colors.accent.primary, marginTop: 4 }}>{fmt(product.unitPrice)}</Text>
-              </View>
-              <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: Radii.lg, ...soft(isDark).raised, padding: Spacing.lg }}>
-                <Text style={{ fontSize: 10, color: colors.text.muted, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: Typography.fontMedium }}>{t("Остаток", "Qoldiq")}</Text>
-                <Text style={{ fontSize: 20, fontFamily: Typography.fontBold, color: Number(product.available) > 0 ? colors.status.success : colors.status.danger, marginTop: 4 }}>
-                  {formatQty(product.available)} {unitShort(product.unit, lang)}
-                </Text>
-              </View>
-            </View>
-            {/* Qty stepper */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24, marginBottom: 20 }}>
-              <TouchableOpacity onPress={() => setQty(Math.max(1, qty - 1))}
-                style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.elevated, ...soft(isDark).raised, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="minus" size={20} color={colors.text.primary} />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 32, fontFamily: Typography.fontBold, color: colors.text.primary, minWidth: 50, textAlign: "center" }}>{qty}</Text>
-              <TouchableOpacity
-                onPress={() => setQty(Math.min(available, qty + 1))}
-                disabled={outOfStock || qty >= available}
-                style={{ width: 48, height: 48, borderRadius: 24, opacity: outOfStock || qty >= available ? 0.4 : 1, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus" size={20} color={ink} />
-              </TouchableOpacity>
-            </View>
-          </View>
-          </ScrollView>
-
-          {/* Кнопка вне прокрутки: она обязана быть видна всегда. */}
-          <View style={{ paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, paddingBottom: Spacing.md }}>
-            <TouchableOpacity
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAdd(qty); setQty(1); }}
-              disabled={outOfStock}
-              style={{ backgroundColor: colors.accent.primary, opacity: outOfStock ? 0.4 : 1, borderRadius: Radii.md, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
-              <Feather name={outOfStock ? "slash" : "shopping-cart"} size={18} color={ink} />
-              <Text style={{ color: ink, fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>
-                {outOfStock ? t("Нет в наличии", "Omborda yo'q") : t("Добавить в заказ", "Buyurtmaga qo'shish")}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
   );
 }
 
@@ -362,8 +257,6 @@ export default function CatalogScreen() {
 
   const [search, setSearch] = useState("");
   const [selectedCat, setSelectedCat] = useState("all");
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [showDetail, setShowDetail] = useState(false);
   const [showShopPicker, setShowShopPicker] = useState(false);
   const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
   const [pendingQty, setPendingQty] = useState(1);
@@ -578,7 +471,7 @@ export default function CatalogScreen() {
           renderItem={({ item }) => (
             <ProductCard
               product={item} colors={colors} isDark={isDark}
-              onPress={() => { setSelectedProduct(item); setShowDetail(true); }}
+              onPress={() => router.push(`/product/${item.id}`)}
               onAdd={() => handleAdd(item, 1)} fmt={fmt} cardWidth={CARD_W} />
           )}
           ListEmptyComponent={
@@ -598,10 +491,6 @@ export default function CatalogScreen() {
           }
         />
       )}
-
-      <ProductDetail product={selectedProduct} visible={showDetail} colors={colors} isDark={isDark} fmt={fmt}
-        onClose={() => { setShowDetail(false); setSelectedProduct(null); }}
-        onAdd={(qty) => { if (selectedProduct) { handleAdd(selectedProduct, qty); setShowDetail(false); setSelectedProduct(null); } }} />
 
       <ShopPicker visible={showShopPicker} shops={shops} colors={colors}
         onClose={() => { setShowShopPicker(false); setPendingProduct(null); pendingIdempotencyKeyRef.current = null; }}

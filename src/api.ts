@@ -345,6 +345,11 @@ export interface Product {
   available: string | null;
   unit?: string;
   photoUrl?: string | null;
+  /** Ниже — то, что product.listAll отдаёт для карточки товара; DECIMAL приходит строкой. */
+  packSize?: string | number | null;
+  packLabel?: string | null;
+  unitWeight?: string | number | null;
+  description?: string | null;
 }
 
 export interface OrderItem {

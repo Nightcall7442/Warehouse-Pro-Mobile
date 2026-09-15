@@ -294,6 +294,30 @@ export function SearchInput({ value, onChangeText, placeholder, autoFocus }: Sea
   );
 }
 
+// ── Info Row ──────────────────────────────────────────────────────────────────
+// Строка «значок · подпись · значение» из карточки магазина. Карточка товара
+// собрана из таких же строк, поэтому она живёт здесь, а не в app/shop/[id].
+export function InfoRow({ icon, label, value, onPress, mono }: {
+  icon: keyof typeof Feather.glyphMap; label: string; value: string; onPress?: () => void;
+  /** Артикул и штрих-код — моноширинным: одинаковые знаки читаются как код, а не как слово. */
+  mono?: boolean;
+}) {
+  const colors = useThemeColors();
+  const content = (
+    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 16, gap: 12 }}>
+      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.accent.primary + "22", alignItems: "center", justifyContent: "center" }}>
+        <Feather name={icon} size={16} color={colors.accent.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginBottom: 2 }}>{label}</Text>
+        <Text style={{ fontFamily: mono ? Typography.fontMono : Typography.fontMedium, fontSize: Typography.size.base, color: onPress ? colors.accent.primary : colors.text.primary }}>{value}</Text>
+      </View>
+      {onPress && <Feather name="chevron-right" size={16} color={colors.accent.primary} />}
+    </View>
+  );
+  return onPress ? <TouchableOpacity onPress={onPress} activeOpacity={0.7}>{content}</TouchableOpacity> : content;
+}
+
 // ── Divider ───────────────────────────────────────────────────────────────────
 export function Divider() {
   const colors = useThemeColors();
