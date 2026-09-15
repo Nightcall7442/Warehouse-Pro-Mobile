@@ -729,7 +729,7 @@ export default function NewOrderScreen() {
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const t = useT();
-  const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string }>();
+  const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string; productQty?: string }>();
   const { addOrder } = useOfflineStore();
 
   const [step, setStep] = useState(params.productId ? 1 : params.shopId ? 2 : 1);
@@ -742,7 +742,9 @@ export default function NewOrderScreen() {
       // ноль. Ноль на этом месте гасил кнопку «Продолжить» и рисовал агенту
       // «Остаток: 0 (превышено!)» на товар, который он держал в руках.
       // Настоящее значение дочитывается ниже из каталога.
-      return [{ productId: Number(params.productId), name: params.productName ?? "", unitPrice: Number(params.productPrice), quantity: "1", discount: "0", available: null }];
+      // Количество приходит с экрана товара; сканер его не передаёт — тогда одна.
+      const qty = Math.floor(Number(params.productQty));
+      return [{ productId: Number(params.productId), name: params.productName ?? "", unitPrice: Number(params.productPrice), quantity: qty > 0 ? String(qty) : "1", discount: "0", available: null }];
     }
     return [];
   });

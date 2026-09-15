@@ -11,30 +11,14 @@ import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { Typography, Spacing, Radii, Gradients, ThemeColors, soft } from "../../src/theme";
+import { Typography, Spacing, Radii, Gradients, soft } from "../../src/theme";
 import { getShop, getShopForSupervisor, updateShop, uploadShopPhoto, uploadFile, getTerritories, Territory } from "../../src/api";
-import { Card, Badge, Button } from "../../src/components/ui";
+import { Card, Badge, Button, InfoRow } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
 import { preparePhoto } from "../../src/lib/prepare-photo";
 import { PressableScale, FadeInItem, ShimmerSkeleton } from "../../src/components/Animated";
 import { formatMoney } from "../../src/store/branding";
 import { useT } from "../../src/i18n";
-
-function InfoRow({ icon, label, value, onPress, colors }: { icon: string; label: string; value: string; onPress?: () => void; colors: ThemeColors }) {
-  const content = (
-    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 16, gap: 12 }}>
-      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.accent.primary + "22", alignItems: "center", justifyContent: "center" }}>
-        <Feather name={icon as keyof typeof Feather.glyphMap} size={16} color={colors.accent.primary} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginBottom: 2 }}>{label}</Text>
-        <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: onPress ? colors.accent.primary : colors.text.primary }}>{value}</Text>
-      </View>
-      {onPress && <Feather name="chevron-right" size={16} color={colors.accent.primary} />}
-    </View>
-  );
-  return onPress ? <TouchableOpacity onPress={onPress} activeOpacity={0.7}>{content}</TouchableOpacity> : content;
-}
 
 export default function ShopDetailScreen() {
   const { isDark } = useThemeStore();
@@ -307,12 +291,12 @@ export default function ShopDetailScreen() {
               </View>
             ) : (
               <>
-                {shop.ownerName && <InfoRow icon="user" label={t("Владелец", "Egasi")} value={shop.ownerName} colors={colors} />}
-                {shop.phone && <InfoRow icon="phone" label={t("Телефон", "Telefon")} value={shop.phone} onPress={() => Linking.openURL(`tel:${shop.phone}`)} colors={colors} />}
-                {shop.address && <InfoRow icon="map-pin" label={t("Адрес", "Manzil")} value={shop.address} colors={colors} />}
-                {shop.city && <InfoRow icon="navigation" label={t("Город", "Shahar")} value={[shop.city, shop.district].filter(Boolean).join(", ")} colors={colors} />}
-                {shop.gpsLat && shop.gpsLng && <InfoRow icon="crosshair" label={t("Геолокация", "Joylashuv")} value={`${Number(shop.gpsLat).toFixed(6)}, ${Number(shop.gpsLng).toFixed(6)}`} colors={colors} />}
-                {shop.notes && <InfoRow icon="file-text" label={t("Заметки", "Izoh")} value={shop.notes} colors={colors} />}
+                {shop.ownerName && <InfoRow icon="user" label={t("Владелец", "Egasi")} value={shop.ownerName} />}
+                {shop.phone && <InfoRow icon="phone" label={t("Телефон", "Telefon")} value={shop.phone} onPress={() => Linking.openURL(`tel:${shop.phone}`)} />}
+                {shop.address && <InfoRow icon="map-pin" label={t("Адрес", "Manzil")} value={shop.address} />}
+                {shop.city && <InfoRow icon="navigation" label={t("Город", "Shahar")} value={[shop.city, shop.district].filter(Boolean).join(", ")} />}
+                {shop.gpsLat && shop.gpsLng && <InfoRow icon="crosshair" label={t("Геолокация", "Joylashuv")} value={`${Number(shop.gpsLat).toFixed(6)}, ${Number(shop.gpsLng).toFixed(6)}`} />}
+                {shop.notes && <InfoRow icon="file-text" label={t("Заметки", "Izoh")} value={shop.notes} />}
               </>
             )}
           </Card>

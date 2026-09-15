@@ -211,6 +211,7 @@ export default function RootLayout() {
               <Stack.Screen name="order/new" options={{ title: t("Новый заказ", "Yangi buyurtma"), presentation: "modal" }} />
               <Stack.Screen name="shop/new" options={{ headerShown: false, presentation: "modal" }} />
               <Stack.Screen name="shop/[id]" options={{ headerShown: false }} />
+              <Stack.Screen name="product/[id]" options={{ headerShown: false }} />
               <Stack.Screen name="shop/nearby" options={{ headerShown: false, presentation: "modal" }} />
               <Stack.Screen name="order/[id]" options={{ headerShown: false }} />
               <Stack.Screen name="order/deliver" options={{ headerShown: false }} />
