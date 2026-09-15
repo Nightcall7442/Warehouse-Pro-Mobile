@@ -1,397 +1,273 @@
-# Warehouse Pro — Mobile App
+<div align="center">
 
-React Native / Expo mobile application for field agents and supervisors. Connects to the Warehouse Pro backend via tRPC API.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/horizontal-dark.svg">
+  <img src="assets/brand/horizontal.svg" alt="Warehouse Pro" width="320">
+</picture>
 
----
+**Телефон полевого сотрудника дистрибьютора**
 
-## Features
+Агент, курьер, мерчандайзер и супервайзер — каждый видит свою работу, и всё это работает без связи.
 
-- **Authentication** — Login with email/password, secure token storage
-- **Shop Management** — View, create, and edit assigned shops
-- **Order Creation** — Create orders with barcode scanning and offline support
-- **GPS Tracking** — Background location updates for supervisor visibility
-- **Daily Plans** — View and update visit plan status
-- **Barcode Scanning** — Camera-based product lookup
-- **Photo Capture** — Take shop/product photos and visit proof images
-- **Supervisor Features** — Agent tracking map, plan assignment
-- **Offline Support** — Create orders without connectivity, sync when online
-- **White-Label** — Displays tenant branding (logo, company name, colors)
+[![CI](https://github.com/Nightcall7442/Warehouse-Pro-Mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/Nightcall7442/Warehouse-Pro-Mobile/actions/workflows/ci.yml)
+![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020)
+![React Native](https://img.shields.io/badge/React%20Native-0.86-61dafb)
+![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6)
 
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Framework | React Native 0.81 / Expo SDK 54 |
-| Navigation | Expo Router 6 |
-| State | Zustand 5, TanStack React Query 5 |
-| HTTP | Axios 1.7 with tRPC adapter |
-| Auth | expo-secure-store |
-| Maps | react-native-maps |
-| Camera | expo-camera |
-| Location | expo-location |
-| Fonts | DM Sans (expo-google-fonts) |
-| Animations | react-native-reanimated 4 |
+</div>
 
 ---
 
-## Prerequisites
+## Какую задачу решает
 
-- **Node.js 20+**
-- **npm 10+**
-- **Expo CLI** (`npm install -g expo-cli`)
-- **EAS CLI** (`npm install -g eas-cli`) — for builds
-- **Xcode** (macOS only) — for iOS development
-- **Android Studio** — for Android development
-- **Physical device or emulator** — for testing
+Полевая работа дистрибьютора ломается не в офисе, а у полки магазина — там, где нет ни компьютера, ни связи:
+
+| Где течёт | Что происходит на самом деле |
+|---|---|
+| **Заказ у полки** | Агент обещает то, чего нет на складе: остаток он видел утром. Вечером заказ переносится из тетради с ошибкой |
+| **Подвал магазина** | Связи нет — заказ «не отправился», визит «не отмечен», курьер «не привёз». Кнопку жмут второй раз, и на сервере появляется дубль |
+| **Маршрут** | Где был агент и был ли вообще, известно с его слов. План на день лежит в голове у супервайзера |
+| **Деньги** | Долг магазина агент помнит примерно; чужой чек в кармане курьера растворяется до кассы |
+
+Это приложение — рабочее место каждого из них. Агент оформляет заказ на телефоне и видит свободный остаток сервера, а не утренний; долг магазина — тот, что пересчитан из накладных и платежей. Курьер закрывает доставку с деньгами, отказом или частичным приёмом. Мерчандайзер сдаёт отчёт о визите с фотографией. Супервайзер видит агентов на карте, их след за день и заряд телефона.
+
+**Без связи — три очереди, а не одна.** Заказы, отметки курьера и визиты с фото откладываются на диск и уходят при первой связи, по одному и по порядку. Повторная отправка не создаёт дубль: у каждого заказа свой ключ идемпотентности, и сервер отвечает уже созданным.
+
+Сервер, веб-интерфейс и база живут отдельно: [Warehouse-Pro](https://github.com/Nightcall7442/Warehouse-Pro).
 
 ---
 
-## Quick Start
+## Что внутри
 
-### 1. Install dependencies
+**Агент**
+
+- Главная «Мой день»: визиты на сегодня, долги, кто ждёт звонка
+- Магазины по расстоянию от текущей точки, территории, новая точка с GPS и фото
+- Каталог с фотографиями, экран товара: цена, остаток, штрих-код, упаковка, описание
+- Новый заказ: корзина, скидки, способ оплаты, обещанный срок доставки, сканер штрих-кодов
+- Мои заказы и их судьба: собран, отгружен, доставлен, возвращён
+- Долги по моим заказам, зарплата за месяц с подтверждением получения
+- План визитов на день и отметка «посещён» — тоже без связи
+
+**Курьер**
+
+- Доставки на сегодня в порядке объезда
+- Закрытие: полностью, частично с причиной, отказ; деньги наличными или в долг
+- Возврат товара прямо с экрана доставки
+
+**Мерчандайзер**
+
+- План визитов, отчёт о визите с фотографиями и напоминаниями
+- Магазины своей территории
+
+**Супервайзер и директор**
+
+- Карта агентов: где сейчас, где был, заряд телефона
+- Планы визитов и нормы продаж по агентам
+- Должники по срокам долга — тот же расчёт, что и в веб-версии
+
+**Общее**
+
+- Русский и узбекский — переключатель в профиле, весь интерфейс двуязычный
+- Оформление арендатора: логотип, название, цвета — приложение одно на всех
+- Вход по e-mail и паролю, дальше — отпечаток или Face ID; экран запирается после простоя
+- Уведомления: заказы, платежи, остатки, системные; толчок при выдаче зарплаты
+
+---
+
+## Как устроено
+
+```mermaid
+flowchart TB
+    subgraph Phone["Телефон — Expo / React Native"]
+        UI["Экраны<br/>Expo Router · 25 экранов"]
+        ST["Состояние<br/>Zustand · TanStack Query"]
+        Q["Три очереди на диске<br/>заказы · доставки · визиты"]
+        BG["Фоновая геолокация<br/>expo-task-manager"]
+        SEC["Secure Store<br/>токен сессии"]
+    end
+
+    API["src/api.ts<br/>tRPC поверх fetch"]
+    S["Сервер Warehouse Pro<br/>Hono + tRPC"]
+
+    UI --> ST --> API
+    UI --> Q
+    Q -->|при появлении связи| API
+    BG -->|каждые N минут| API
+    SEC --> API
+    API -->|HTTPS| S
+```
+
+**Деньги считает сервер.** Приложение показывает свою сумму, но к оплате идёт та, что посчитал сервер по своим ценам на момент отправки. Себестоимости на телефоне нет вовсе — сервер не отдаёт её полевым ролям.
+
+**Остаток — свободный, а не общий.** Каталог показывает `available` с основного склада: то, что не зарезервировано под чужие заказы. Продажа с другого склада с телефона невозможна по решению владельца.
+
+**Роли задаёт сервер, вкладки — [src/lib/tabs.ts](src/lib/tabs.ts).** Правило видимости вынесено в чистую функцию и покрыто проверкой: вкладка, открывающая экран с отказом сервера, хуже отсутствующей.
+
+**Геолокация в фоне — с раскрытием.** Перед включением слежения показывается экран, который говорит, что записывается, как часто, кто увидит и как выключить. Отказ ничего не ломает. Это требование магазинов приложений, и оно же — честность перед сотрудником: [docs/store-release.md](docs/store-release.md).
+
+---
+
+## Технологии
+
+| Слой | Что используется |
+|---|---|
+| Каркас | Expo SDK 57, React Native 0.86, React 19 |
+| Навигация | Expo Router (файловые маршруты) |
+| Состояние | Zustand 5, TanStack Query 5 |
+| Сеть | tRPC поверх `fetch`, свой клиент в `src/api.ts`; заказу — длинный таймаут, остальным 15 с |
+| Хранилище | Secure Store (сессия), AsyncStorage (очереди, копии каталога, черновики) |
+| Устройство | expo-location + task-manager, expo-camera, expo-local-authentication, expo-notifications, expo-battery |
+| Карты | Яндекс.Карты в WebView (ключ — `EXPO_PUBLIC_YANDEX_MAPS_API_KEY`) |
+| Шрифты | Manrope, JetBrains Mono — с кириллицей |
+| Проверки | Jest (jest-expo, jsdom), Testing Library |
+| Сборка | EAS Build, TypeScript 6 |
+
+---
+
+## Быстрый старт
+
+Нужен **Node ≥ 22** и телефон с Expo Go или сборка для разработки.
 
 ```bash
-cd warehouse-pro-mobile/mobile
-npm install
+git clone https://github.com/Nightcall7442/Warehouse-Pro-Mobile.git
 ```
-
-### 2. Configure environment
-
-Create or edit `.env`:
 
 ```bash
-# Backend URL — your local network IP or ngrok URL
-EXPO_PUBLIC_API_URL=http://192.168.1.5:3000
-
-# Google Maps API keys (for supervisor tracking screen)
-GOOGLE_MAPS_ANDROID_API_KEY=your-key
-GOOGLE_MAPS_IOS_API_KEY=your-key
+npm ci
 ```
 
-**Finding your IP:**
-- Windows: `ipconfig` → IPv4 Address
-- Mac/Linux: `ifconfig | grep inet`
+> `legacy-peer-deps` уже объявлен в `.npmrc` — флаг руками не нужен.
 
-**Using ngrok (recommended for remote devices):**
-```bash
-# Install ngrok
-npm install -g ngrok
-
-# Expose local server
-ngrok http 3000
-
-# Copy the HTTPS URL to .env
-EXPO_PUBLIC_API_URL=https://your-id.ngrok-free.dev
-```
-
-### 3. Start development server
+Укажите адрес сервера. Для телефона в той же сети — IP компьютера, не `localhost`:
 
 ```bash
-npm run start
+echo EXPO_PUBLIC_API_URL=http://192.168.1.5:3000 > .env
 ```
 
-Or with cleared cache:
+Запустите:
+
 ```bash
-npm run start -- --clear
+npm start
 ```
 
-### 4. Run on device/emulator
+Отсканируйте QR в Expo Go или нажмите `a` для Android-эмулятора. Учётные записи — те же, что засевает сервер (`agent-urgench@demo-uz.uz` / `password123` и другие из README сервера).
 
-Press:
-- **a** — Run on Android emulator/device
-- **i** — Run on iOS simulator/device
-- **w** — Run on web browser
+**Карта без ключа не откроется** — экран так и скажет. Ключ Яндекс.Карт задаётся переменной `EXPO_PUBLIC_YANDEX_MAPS_API_KEY`; в профиле `preview` на EAS он уже есть, а для локального запуска добавьте его в `.env`.
 
 ---
 
-## Development Commands
+## Команды
 
 ```bash
-# Development
-npm run start              # Start Expo dev server
-npm run start:tunnel       # Start with tunnel (for remote devices)
-npm run start -- --clear   # Start with cleared cache
-npm run android            # Run on Android
-npm run ios                # Run on iOS
-npm run web                # Run on web
+npm start            # Expo dev server
+npm run android      # на Android-устройстве или эмуляторе
+npm run ios          # на iOS-симуляторе (macOS)
+```
 
-# Building
-npm run build:android      # Build for Android (EAS)
-npm run build:ios          # Build for iOS (EAS)
-npm run prebuild           # Regenerate native projects
+```bash
+npm run typecheck    # типы
+npm run lint         # линтер
+npm test             # проверки (Jest)
+```
 
-# Type checking
-npx tsc --noEmit           # TypeScript type check
+```bash
+npm run build:apk       # APK для внутренней раздачи (профиль preview)
+npm run build:android   # сборка для магазина (app-bundle, профиль production)
 ```
 
 ---
 
-## Project Structure
+## Проверки
+
+| Что | Сколько |
+|---|---|
+| Проверок | около 600 в 65 файлах |
+| Экранов | 25 |
+| Ролей | 6: агент, курьер, мерчандайзер, супервайзер, оператор, директор |
+| Языков | 2, храповик не даёт русской строке появиться без узбекской пары |
+
+Сборка CI из двух работ, обе — на каждой ветке:
+
+1. **Проверка** — типы, линтер, Jest, разбор `app.json` с раскрытием плагинов Expo. Последнее ловит то, чего не видят ни типы, ни линтер: сломанную настройку плагина или опечатку в разрешениях, которые иначе всплывают только в момент сборки, спустя минуты ожидания.
+2. **Контракт с сервером** — сюда выкачивается серверный репозиторий, и `src/api.ts` сверяется с типами роутеров tRPC. Сервер переименовал поле, убрал ручку или сменил `query` на `mutation` — работа краснеет до сборки APK, а не после.
+
+Что проверяется в самих тестах — не форма исходника, а сбои из поля: заказ без связи не пропадает, повторное нажатие не создаёт дубль, кнопка внизу экрана не уходит под системную панель Android, «плюс» не считает выше остатка, вкладка не показывается роли, которой сервер откажет.
+
+Чего в сборке **намеренно нет** — `expo-doctor` и `eas build`; причины записаны прямо в [ci.yml](.github/workflows/ci.yml).
+
+---
+
+## Структура
 
 ```
-warehouse-pro-mobile/mobile/
-├── app/                        # Expo Router screens
-│   ├── _layout.tsx             # Root layout (providers, splash screen)
-│   ├── (auth)/                 # Authentication screens
-│   │   ├── _layout.tsx         # Auth layout (stack navigator)
-│   │   └── login.tsx           # Login screen
-│   ├── (tabs)/                 # Main tab screens
-│   │   ├── _layout.tsx         # Tab navigator configuration
-│   │   ├── index.tsx           # Home screen (role-based)
-│   │   ├── shops.tsx           # Shop list screen
-│   │   ├── orders.tsx          # Order list screen
-│   │   ├── plans.tsx           # Daily plans screen
-│   │   ├── gps.tsx             # GPS tracking controls
-│   │   ├── tracking.tsx        # Agent tracking map (supervisor)
-│   │   ├── barcode.tsx         # Barcode scanner screen
-│   │   └── profile.tsx         # User profile screen
-│   ├── order/                  # Order detail screens
-│   │   ├── new.tsx             # Create new order (3-step wizard)
-│   │   └── [id].tsx            # Order detail view
-│   └── shop/                   # Shop detail screens
-│       └── [id].tsx            # Shop detail with edit
-├── src/                        # Shared source code
-│   ├── api.ts                  # API client (tRPC over axios)
-│   ├── storage.ts              # SecureStore wrapper for tokens
-│   ├── theme.ts                # Theme constants and colors
-│   ├── components/             # Shared UI components
-│   │   ├── ui.tsx              # Base UI components (Button, Card, etc.)
-│   │   ├── Animated.tsx        # Animation components
-│   │   ├── ErrorBoundary.tsx   # Error boundary component
-│   │   └── Toast.tsx           # Toast notification component
-│   └── store/                  # Zustand state stores
-│       ├── auth.ts             # Authentication state
-│       ├── offline.ts          # Offline order queue
-│       ├── branding.ts         # Tenant branding cache
-│       ├── theme.ts            # Theme state
-│       └── toast.ts            # Toast notification state
-├── assets/                     # Static assets (icons, splash screens)
-├── app.config.ts               # Expo configuration
-├── babel.config.js             # Babel configuration
-├── metro.config.js             # Metro bundler configuration
-├── tsconfig.json               # TypeScript configuration
-└── package.json
+├── app/                     экраны — файловые маршруты Expo Router
+│   ├── (auth)/              вход
+│   ├── (tabs)/              вкладки: главная, магазины, каталог, заказы,
+│   │                        планы, нормы, доставки, долги, карта, профиль
+│   ├── order/               новый заказ, заказ, закрытие доставки
+│   ├── product/[id]         карточка товара
+│   ├── shop/                магазин, новый магазин, ближайшие
+│   ├── merchandiser/        отчёт о визите
+│   └── debts · salary · notifications
+├── src/
+│   ├── api.ts               клиент tRPC — единственная дверь к серверу
+│   ├── store/               сессия, оформление, очереди офлайна, блокировка
+│   ├── lib/                 деньги заказа, скидки, единицы, статусы, маршрут курьера
+│   ├── hooks/               биометрия, автоблокировка, геолокация, уведомления
+│   ├── components/          общие детали и оформление
+│   ├── backgroundLocation.ts фоновая задача геолокации
+│   ├── i18n.ts              русский и узбекский
+│   └── __tests__/           проверки
+├── assets/brand/            логотип, значки, заставка
+├── docs/store-release.md    публикация в Google Play и App Store
+├── app.json · eas.json      конфигурация Expo и профили сборки
+└── .github/workflows/ci.yml
 ```
 
 ---
 
-## Architecture
+## Роли и экраны
 
-### Authentication Flow
-
-```
-Login Screen → API Login → SecureStore (token) → Zustand Auth Store → Tab Navigation
-                                    ↓
-App Launch → SecureStore (read token) → API GET /auth.me → Zustand Auth Store
-```
-
-### API Client
-
-The mobile app communicates with the backend via a tRPC-over-HTTP adapter:
-
-```typescript
-// src/api.ts
-const api = axios.create({
-  baseURL: `${API_BASE}/api/trpc`,
-  timeout: 15_000,
-});
-
-// Automatically attaches JWT token to all requests
-api.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync("session_token");
-  if (token) config.headers["Authorization"] = `Bearer ${token}`;
-  return config;
-});
-```
-
-### Offline Support
-
-Orders created offline are stored in AsyncStorage and synced when connectivity returns:
-
-```typescript
-// Create offline order
-await useOfflineStore.getState().addOrder({
-  id: uuid(),
-  input: { shopId: 1, items: [...] },
-  shopName: "Shop Name",
-  createdAt: new Date().toISOString(),
-  synced: false,
-});
-
-// Sync when online
-const result = await useOfflineStore.getState().syncAll();
-// { synced: 3, failed: 0 }
-```
-
-### State Management
-
-| Store | Purpose |
-|-------|---------|
-| `auth.ts` | User authentication state, login/logout/hydrate |
-| `offline.ts` | Offline order queue with sync |
-| `branding.ts` | Tenant branding cache |
-| `theme.ts` | Dark/light theme preference |
-| `toast.ts` | Toast notification queue |
+| Роль | Вкладки | Что ещё открывается |
+|---|---|---|
+| `agent` | Главная, Магазины, Каталог, Заказы, Профиль | План на день, долги, зарплата, GPS, сканер, карточка товара |
+| `courier` | Главная, Доставки, Профиль | Закрытие доставки, возврат |
+| `merchandiser` | Главная, Магазины, План, Профиль | Отчёт о визите |
+| `supervisor` | Главная, Магазины, Планы, Нормы, Долги, Карта | Карточка магазина с правкой |
+| `ceo` | то же, что супервайзер | — |
+| `operator` | Главная, Магазины, Планы, Нормы, Долги | Карты агентов нет: сервер её оператору не отдаёт |
 
 ---
 
-## Screens Overview
+## Сборка и выпуск
 
-### Tab Navigation
-
-| Tab | Screen | Role | Description |
-|-----|--------|------|-------------|
-| Home | `index.tsx` | All | Role-based dashboard (agent KPIs or supervisor overview) |
-| Shops | `shops.tsx` | Agent | List of assigned shops with search/filter |
-| Orders | `orders.tsx` | Agent | List of orders with status filters |
-| Plans | `plans.tsx` | Agent/Supervisor | Daily visit plans |
-| Profile | `profile.tsx` | All | User settings, password change |
-
-### Additional Screens
-
-| Screen | Role | Description |
-|--------|------|-------------|
-| `tracking.tsx` | Supervisor | Real-time agent location map |
-| `gps.tsx` | Agent | GPS tracking controls (auto/manual) |
-| `barcode.tsx` | Agent | Barcode scanner for product lookup |
-| `order/new.tsx` | Agent | 3-step order creation wizard |
-| `order/[id].tsx` | Agent | Order detail with items |
-| `shop/[id].tsx` | Agent | Shop detail with edit/photo upload |
-
----
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `EXPO_PUBLIC_API_URL` | Yes | Backend API URL |
-| `GOOGLE_MAPS_ANDROID_API_KEY` | For tracking | Google Maps API key for Android |
-| `GOOGLE_MAPS_IOS_API_KEY` | For tracking | Google Maps API key for iOS |
-
-### Expo Config (`app.config.ts`)
-
-Key configuration:
-- **Bundle ID:** `com.warehousepro.agent`
-- **Scheme:** `warehousepro` (for deep linking)
-- **Orientation:** Portrait
-- **Splash:** Dark background (#0A0B10)
-- **Plugins:** expo-router, expo-secure-store, expo-location, expo-camera, expo-image-picker, expo-notifications
-
----
-
-## Building for Production
-
-### EAS Build (Recommended)
+Локальной сборки нет — на машине разработчика не нужны ни JDK, ни Android SDK. Всё собирает **EAS**:
 
 ```bash
-# Install EAS CLI
-npm install -g eas-cli
-
-# Login to Expo
-eas login
-
-# Configure EAS
-eas build:configure
-
-# Build for Android
-eas build --platform android
-
-# Build for iOS
-eas build --platform ios
+npx eas-cli@latest build --platform android --profile preview --non-interactive --no-wait
 ```
 
-### Local Build (Android)
+| Профиль | Что даёт |
+|---|---|
+| `development` | сборка для разработки с dev-клиентом |
+| `preview` | **APK** для внутренней раздачи — ставится обновлением поверх установленного |
+| `production` | app-bundle для Google Play, номер версии ведёт сервер EAS |
 
-```bash
-# Generate native project
-npx expo prebuild --clean
+Проект EAS принадлежит владельцу (`owner` в `app.json`). Сборка под другой учётной записью получит **другой ключ подписи**, и приложение не встанет обновлением — его придётся сносить с каждого телефона. Перед сборкой проверьте вход: `npx eas-cli@latest whoami`.
 
-# Build APK
-cd android && ./gradlew assembleRelease
-```
-
-### App Store Deployment
-
-1. Build with EAS: `eas build --platform ios --profile production`
-2. Submit to App Store: `eas submit --platform ios`
-3. For Android: Build AAB and upload to Google Play Console
+Публикация в магазины — отдельный документ с тем, что готово, что делает владелец руками и где могут отклонить: [docs/store-release.md](docs/store-release.md). Главный риск там не технический: приложение записывает местоположение сотрудника в фоне, и оба магазина проверяют такие приложения пристальнее всего остального.
 
 ---
 
-## Google Maps Setup
+## Документация
 
-The tracking screen (`tracking.tsx`) requires Google Maps API keys:
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a project (or use existing)
-3. Enable "Maps SDK for Android" and "Maps SDK for iOS"
-4. Create API keys for each platform
-5. Add keys to `.env`:
-   ```
-   GOOGLE_MAPS_ANDROID_API_KEY=your-android-key
-   GOOGLE_MAPS_IOS_API_KEY=your-ios-key
-   ```
-
-Without keys, the tracking screen shows a gray empty map without errors.
+- [Публикация в Google Play и App Store](docs/store-release.md)
+- [Сервер и веб-интерфейс](https://github.com/Nightcall7442/Warehouse-Pro) — архитектура, развёртывание, роли
+- [Руководство дистрибьютора](https://github.com/Nightcall7442/Warehouse-Pro/tree/main/docs/manual) — по ролям, со снимками экранов телефона
 
 ---
 
-## Troubleshooting
+## Лицензия
 
-### `EXPO_PUBLIC_API_URL` warnings
-
-Set the variable in `.env` before starting:
-```bash
-EXPO_PUBLIC_API_URL=http://your-local-ip:3000
-```
-
-### App can't connect to backend
-
-1. Ensure the backend server is running (`npm run dev` in web project)
-2. Ensure your device/emulator can reach the server IP
-3. For physical devices, use your machine's local network IP (not `localhost`)
-4. Consider using ngrok for remote access
-
-### Camera/Location permissions not working
-
-Ensure you granted permissions on first launch. To reset:
-- iOS: Settings → Warehouse Pro → Reset Location/Privacy
-- Android: Settings → Apps → Warehouse Pro → Permissions
-
-### TypeScript errors
-
-```bash
-npx tsc --noEmit
-```
-
-If errors persist after installing dependencies:
-```bash
-rm -rf node_modules
-npm install
-```
-
-### Build fails on EAS
-
-Check the build logs. Common issues:
-- Missing `EXPO_PUBLIC_API_URL` in EAS environment
-- Node version mismatch (use Node 20+)
-- Outdated dependencies (run `npm install` to update)
-
-### Barcode scanner not working
-
-- Ensure camera permission is granted
-- Test on a physical device (emulators may not have cameras)
-- Check lighting conditions
-
----
-
-## Related Documentation
-
-- [Web App README](../../warehouse-pro-web/web/README.md)
-- [API Reference](../../warehouse-pro-web/web/docs/api/README.md)
-- [Architecture Overview](../../warehouse-pro-web/web/docs/architecture/README.md)
-- [Changelog](../../CHANGELOG.md)
+Проприетарная, все права защищены. Условия — в [LICENSE](https://github.com/Nightcall7442/Warehouse-Pro/blob/main/LICENSE) основного репозитория.
