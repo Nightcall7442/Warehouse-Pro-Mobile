@@ -1,6 +1,9 @@
 // Warehouse Pro — Agent Shops v2 (cold palette, Card from ui.tsx)
-import React, { useMemo, useState , useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { View, Text, RefreshControl, ScrollView, Modal, Pressable, FlatList, BackHandler } from "react-native";
+import { useScrollTopOnFocus } from "../../src/hooks/useScrollTopOnFocus";
+import { useScrollTopOnChange } from "../../src/hooks/useScrollTopOnChange";
+
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
@@ -112,6 +115,11 @@ export default function ShopsScreen() {
   // its own when it isn't, since every distance is Infinity then).
   const [sortByDistance, setSortByDistance] = useState(true);
   const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
+  // Один ref на оба вида списка: по расстоянию (FlatList) и по территориям
+  // (ScrollView) — одновременно смонтирован только один из них.
+  const listRef = useRef<FlatList | ScrollView>(null);
+  useScrollTopOnFocus(listRef);
+  useScrollTopOnChange(listRef, [search, sortByDistance, selectedTerritory]);
   const [showWorkZones, setShowWorkZones] = useState(false);
   const { location } = useLocation();
 
@@ -299,6 +307,7 @@ export default function ShopsScreen() {
       ) : sortByDistance && location ? (
         // Distance mode: flat list
         <FlatList
+          ref={listRef as React.RefObject<FlatList>}
           data={filtered}
           keyExtractor={s => String(s.id)}
           contentContainerStyle={{ paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }}
@@ -315,7 +324,7 @@ export default function ShopsScreen() {
         />
       ) : (
         // Territory drill-down view
-        <ScrollView contentContainerStyle={{ paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false}
+        <ScrollView ref={listRef as React.RefObject<ScrollView>} contentContainerStyle={{ paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.accent.primary} />}>
           {/* All shops button */}
           <PressableScale onPress={() => { setSelectedTerritory("__all__"); }} haptic="none" style={{ marginBottom: Spacing.sm }}>
