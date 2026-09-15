@@ -10,9 +10,24 @@
 Агент, курьер, мерчандайзер и супервайзер — каждый видит свою работу, и всё это работает без связи.
 
 [![CI](https://github.com/Nightcall7442/Warehouse-Pro-Mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/Nightcall7442/Warehouse-Pro-Mobile/actions/workflows/ci.yml)
-![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020)
-![React Native](https://img.shields.io/badge/React%20Native-0.86-61dafb)
-![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6)
+![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)
+![React Native](https://img.shields.io/badge/React%20Native-0.86-20232a?logo=react&logoColor=61dafb)
+![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6?logo=typescript&logoColor=white)
+![Node](https://img.shields.io/badge/Node-%E2%89%A522-5fa04e?logo=node.js&logoColor=white)
+
+![Expo Router](https://img.shields.io/badge/Expo_Router-файловые_маршруты-000020?logo=expo&logoColor=white)
+![Zustand](https://img.shields.io/badge/Zustand-5-443e38)
+![TanStack Query](https://img.shields.io/badge/TanStack_Query-5-ff4154?logo=reactquery&logoColor=white)
+![tRPC](https://img.shields.io/badge/tRPC-клиент-2596be?logo=trpc&logoColor=white)
+![Яндекс.Карты](https://img.shields.io/badge/%D0%AF%D0%BD%D0%B4%D0%B5%D0%BA%D1%81.%D0%9A%D0%B0%D1%80%D1%82%D1%8B-WebView-fc3f1d)
+![Офлайн](https://img.shields.io/badge/офлайн-3_очереди-8a6d3b)
+
+![Jest](https://img.shields.io/badge/Jest-590%2B_проверок-c21325?logo=jest&logoColor=white)
+![EAS Build](https://img.shields.io/badge/EAS_Build-APK_%C2%B7_AAB-000020?logo=expo&logoColor=white)
+![Android](https://img.shields.io/badge/Android-APK-3ddc84?logo=android&logoColor=white)
+![iOS](https://img.shields.io/badge/iOS-Face_ID-000?logo=apple&logoColor=white)
+![Языки](https://img.shields.io/badge/языки-RU_%C2%B7_UZ-8a6d3b)
+![Лицензия](https://img.shields.io/badge/лицензия-проприетарная-555)
 
 </div>
 
