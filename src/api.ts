@@ -1589,3 +1589,146 @@ export interface OrderPayment {
 export async function getOrderPayments(orderId: number): Promise<OrderPayment[]> {
   return trpcQuery("order.getOrderPayments", { orderId });
 }
+// ── Касса: наличные на руках, сдачи, PIN ─────────────────────────────────────
+
+/*
+  «У меня на руках вот столько, вот я сдал в кассу» — просьба владельца.
+  Веб это показывал (MyCashCard), телефон — нет, а деньги носят именно те,
+  у кого веба нет. Ручка cash.mine отдаёт ровно то, что нужно человеку:
+  сколько сдать, до какого часа, что уже сдано и есть ли долг по недостачам.
+*/
+export interface MyCashDocument {
+  id: number;
+  kind: "pko" | "rko";
+  number: number;
+  amount: string;
+  expectedAmount: string | null;
+  discrepancy: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface MyCash {
+  onHand: number;
+  debt: number;
+  todayIn: number;
+  todayCount: number;
+  limit: number;
+  deadline: string;
+  documents: MyCashDocument[];
+  nonCashTransit: { count: number; total: number };
+}
+
+export async function getMyCash(): Promise<MyCash> {
+  return trpcQuery("cash.mine");
+}
+
+/** PIN кассы — подпись сотрудника под сдачей наличных и под загрузкой машины. */
+export async function setCashPin(pin: string): Promise<{ ok: boolean }> {
+  return trpcMutation("cash.setPin", { pin });
+}
+
+// ── Ван-селлинг: моя машина, продажа с колёс, чек ────────────────────────────
+
+export interface VanStatus {
+  enabled: boolean;
+  planAllows: boolean;
+}
+
+export interface MyVan {
+  id: number;
+  name: string;
+  plate: string | null;
+  driverId: number | null;
+  driverName: string | null;
+  status: string;
+  items: number;
+  units: number;
+  value: number;
+  lastLoadAt: string | null;
+}
+
+export interface VanStockLine {
+  productId: number;
+  name: string;
+  code: string;
+  unit: string;
+  unitPrice: number;
+  onHand: number;
+  available: number;
+  sellable: number;
+}
+
+export interface VanSaleInput {
+  vanId: number;
+  shopId: number;
+  items: Array<{ productId: number; quantity: string }>;
+  paymentMethod: "cash" | "card" | "transfer" | "debt";
+  paidAmount?: number;
+  notes?: string;
+  idempotencyKey?: string;
+}
+
+export interface VanSaleResult {
+  id: number;
+  orderNumber: string;
+  total: number;
+  paid: number;
+  idempotent: boolean;
+}
+
+export interface VanSaleRow {
+  id: number;
+  orderNumber: string;
+  shopName: string;
+  total: string;
+  paymentMethod: string;
+  deliveredAt: string | null;
+  vanName: string;
+}
+
+export interface OrderReceipt {
+  url: string;
+  number: string;
+  total: number;
+  html: string;
+}
+
+export async function getVanStatus(): Promise<VanStatus> {
+  return trpcQuery("van.status");
+}
+
+/** Водителю приходят только его машины — сервер режет по driverId. */
+export async function getMyVans(): Promise<MyVan[]> {
+  return trpcQuery("van.list");
+}
+
+export async function getVanStock(vanId: number): Promise<VanStockLine[]> {
+  return trpcQuery("van.stock", { vanId });
+}
+
+export async function vanSale(input: VanSaleInput): Promise<VanSaleResult> {
+  return trpcMutation("van.sale", input, { timeout: 30_000 });
+}
+
+export async function getVanSales(input: { vanId?: number; from: string; to: string }): Promise<VanSaleRow[]> {
+  return trpcQuery("van.sales", input);
+}
+
+/** Чек по заказу: HTML 58 мм с QR и подписанная ссылка. */
+export async function getOrderReceipt(id: number): Promise<OrderReceipt> {
+  return trpcQuery("order.receipt", { id });
+}
+
+export interface VanShop {
+  id: number;
+  name: string;
+  ownerName: string | null;
+  debt: string;
+  address: string | null;
+}
+
+/** Магазины для продажи с машины — водителю (курьеру справочник агента закрыт). */
+export async function getVanShops(search?: string): Promise<VanShop[]> {
+  return trpcQuery("van.shops", search ? { search } : undefined);
+}

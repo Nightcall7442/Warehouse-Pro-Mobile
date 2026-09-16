@@ -259,6 +259,31 @@ export default function ProfileScreen() {
           </FadeInItem>
         )}
 
+        {/* Наличные и PIN — тем же, кто носит деньги: курьеру и агенту. */}
+        {(isAgent || isCourier) && (
+          <FadeInItem delay={80}>
+            <PressableScale onPress={() => router.push("/cash")} haptic="light">
+              <Card style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.lg, marginTop: Spacing.base }}>
+                <View style={{
+                  width: 38, height: 38, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center",
+                  backgroundColor: colors.status.successDim,
+                }}>
+                  <Feather name="briefcase" size={18} color={colors.status.success} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
+                    {t("Наличные и PIN", "Naqd pul va PIN")}
+                  </Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }}>
+                    {t("На руках, сдано в кассу, PIN для сдачи", "Qo'lda, kassaga topshirilgan, topshirish PIN-i")}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
+              </Card>
+            </PressableScale>
+          </FadeInItem>
+        )}
+
         {/*
           Долги по моим заказам.
 

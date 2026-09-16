@@ -19,6 +19,7 @@ import { orderStatusLabel, orderStatusColor, deliveryStatusLabel } from "../../s
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
+import { CashCard, VanCard } from "../../src/components/MoneyAndVanCards";
 import { money } from "../../src/components/order/OrderStyles";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -407,6 +408,10 @@ function AgentHome() {
           </PressableScale>
         </View>
       </FadeInItem>
+
+      {/* ── Наличные на руках и моя машина — тем, кто носит деньги и товар ── */}
+      {isAgent && <CashCard delay={195} />}
+      {isAgent && <VanCard delay={200} />}
 
       {/* ── Долги: кому идти собирать ─────────────────────────────────────── */}
       {isAgent && debtSummary && debtSummary.shops > 0 && (
@@ -1045,6 +1050,10 @@ function CourierHome() {
           </PressableScale>
         </View>
       </FadeInItem>
+
+      {/* ── Наличные на руках и моя машина ─────────────────────────────────── */}
+      <CashCard delay={180} />
+      <VanCard delay={190} />
 
       {/* ── Recent deliveries (matching web recent orders style) ───────────── */}
       <FadeInItem delay={200}>
