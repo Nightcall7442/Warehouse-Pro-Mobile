@@ -7,7 +7,13 @@
  */
 import { formatMoney, useBrandingStore } from "../store/branding";
 import { useThemeStore } from "../store/theme";
-import { readableInk, shade } from "../lib/contrast";
+import { contrastRatio } from "../lib/contrast";
+import { hexToOklch } from "../lib/brand-palette";
+
+const hueDiff = (a: string, b: string) => {
+  const d = Math.abs(hexToOklch(a)!.H - hexToOklch(b)!.H) % 360;
+  return Math.min(d, 360 - d);
+};
 
 const setCurrency = (currencySymbol: string, symbolPosition: "before" | "after") =>
   useBrandingStore.setState(s => ({ branding: { ...s.branding, currencySymbol, symbolPosition } }));
@@ -41,17 +47,30 @@ describe("валюта арендатора", () => {
 describe("цвет арендатора в палитре", () => {
   afterEach(() => useThemeStore.getState().applyBranding("auto", null));
 
-  it("светлый фирменный цвет получает тёмные чернила", () => {
+  it("фирменный цвет садится на тему: тон его, надпись на заливке читается", () => {
+    // Жёлтый в светлой теме — не «вырви глаз», а заливка средней светлоты с читаемой надписью.
     useThemeStore.getState().applyBranding("light", "#ffe600");
-    const { colors, isDark } = useThemeStore.getState();
-    expect(isDark).toBe(false);
-    expect(colors.brand.primary).toBe("#ffe600");
-    expect(colors.brand.ink).toBe("#1c1a17");
+    const light = useThemeStore.getState();
+    expect(light.isDark).toBe(false);
+    expect(light.colors.brand.primary).not.toBe("#ffe600");
+    expect(hueDiff(light.colors.brand.primary, "#ffe600")).toBeLessThanOrEqual(12);
+    expect(contrastRatio(light.colors.brand.primary, light.colors.brand.ink)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(light.colors.bg.card, light.colors.brand.primary)).toBeGreaterThanOrEqual(3);
+
+    // Тёмно-синий в тёмной теме светлеет до читаемого — не грязь на графите.
+    useThemeStore.getState().applyBranding("dark", "#1b2a5e");
+    const dark = useThemeStore.getState();
+    expect(hueDiff(dark.colors.brand.primary, "#1b2a5e")).toBeLessThanOrEqual(12);
+    expect(contrastRatio(dark.colors.bg.card, dark.colors.brand.primary)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(dark.colors.brand.primary, dark.colors.brand.ink)).toBeGreaterThanOrEqual(4.5);
+    expect(dark.colors.brand.primaryLight).not.toBe(dark.colors.brand.primary);
   });
 
-  it("тёмный фирменный цвет оставляет белые чернила", () => {
-    useThemeStore.getState().applyBranding("dark", "#1b2a5e");
-    expect(useThemeStore.getState().colors.brand.ink).toBe("#ffffff");
+  it("латунь продукта в тёмной теме система не портит; серый не розовеет", () => {
+    useThemeStore.getState().applyBranding("dark", "#c9a227");
+    expect(useThemeStore.getState().colors.brand.primary).toBe("#c9a227");
+    useThemeStore.getState().applyBranding("dark", "#808080");
+    expect(hexToOklch(useThemeStore.getState().colors.brand.primary)!.C).toBeLessThan(0.01);
   });
 
   it("выбор пользователя сильнее настройки организации", () => {
@@ -67,10 +86,15 @@ describe("цвет арендатора в палитре", () => {
     expect(useThemeStore.getState().colors.brand.primary).toBe("#f26d6d");
   });
 
-  it("второй край градиента уходит от фона, а не в него", () => {
-    // Светлый цвет темнеет, тёмный светлеет — иначе кнопка сливается с карточкой.
-    expect(readableInk(shade("#ffe600"))).toBe("#1c1a17");
-    expect(shade("#ffe600") < "#ffe600").toBe(true);
-    expect(shade("#102040") > "#102040").toBe(true);
+  it("второй край градиента — шаг светлоты того же тона, а не второй цвет", () => {
+    useThemeStore.getState().applyBranding("light", "#2563eb");
+    const { brand, gradient } = useThemeStore.getState().colors;
+    expect(gradient.primary).toEqual([brand.primary, brand.primaryLight]);
+    expect(hueDiff(brand.primary, brand.primaryLight)).toBeLessThanOrEqual(3);
+    // В светлой теме наведение темнее, в тёмной — светлее: от фона, не в него.
+    expect(hexToOklch(brand.primaryLight)!.L).toBeLessThan(hexToOklch(brand.primary)!.L);
+    useThemeStore.getState().applyBranding("dark", "#2563eb");
+    const d = useThemeStore.getState().colors.brand;
+    expect(hexToOklch(d.primaryLight)!.L).toBeGreaterThan(hexToOklch(d.primary)!.L);
   });
 });

@@ -22,7 +22,8 @@
 // надпись — в accent.
 // ──────────────────────────────────────────────────────────────────────────────
 
-import { isHexColor, readableInk, shade } from "./lib/contrast";
+import { isHexColor } from "./lib/contrast";
+import { derivePalette } from "./lib/brand-palette";
 
 /**
  * Пара цветов для LinearGradient.
@@ -246,8 +247,17 @@ export type ThemeColors = typeof DarkColors | typeof LightColors;
  * ошибка, предупреждение): их цвет означает состояние, а не принадлежность,
  * и перекрасить его в фирменный значит отнять смысл.
  */
-function withBrandColor(base: ThemeColors, primary: string): ThemeColors {
-  const second = shade(primary);
+function withBrandColor(base: ThemeColors, brand: string, isDark: boolean): ThemeColors {
+  /*
+    Цвет арендатора — оттенок, не готовая заливка. Сырой hex шёл в обе темы
+    как есть: тёмно-синий на тёмной карточке — грязь, жёлтый на светлой —
+    вырви глаз. Палитра (lib/brand-palette, та же, что в вебе) оставляет тон
+    и подгоняет светлоту и насыщенность под тему: контраст надписи и текста
+    4.5:1 гарантирован, наведение — шаг светлоты того же тона.
+  */
+  const p = derivePalette(brand, isDark ? "dark" : "light");
+  if (!p) return base;
+  const primary = p.primary;
   return {
     ...base,
     accent: { ...base.accent, primary },
@@ -255,19 +265,19 @@ function withBrandColor(base: ThemeColors, primary: string): ThemeColors {
     brand: {
       ...base.brand,
       primary,
-      primaryLight: second,
+      primaryLight: p.hover,
       // Прозрачность добавляется восемью знаками (#rrggbbaa) — так же, как
       // это уже делают экраны (colors.status.danger + "30").
       primaryDim: primary + "1f",
       glow: primary + "59",
       glowSoft: primary + "24",
-      ink: readableInk(primary),
+      ink: p.onPrimary,
     },
     tab: { ...base.tab, active: primary },
     gradient: {
       ...base.gradient,
-      primary: g(primary, second),
-      profileHeader: g(primary, second),
+      primary: g(primary, p.hover),
+      profileHeader: g(primary, p.hover),
     },
   };
 }
@@ -289,7 +299,7 @@ export function setBrandPrimary(hex: string | null): void {
 /** Палитра темы с учётом цвета арендатора, если он задан. */
 export function paletteFor(isDark: boolean): ThemeColors {
   const base = isDark ? DarkColors : LightColors;
-  return brandPrimary ? withBrandColor(base, brandPrimary) : base;
+  return brandPrimary ? withBrandColor(base, brandPrimary, isDark) : base;
 }
 
 // Colors will be updated by theme store - initially dark

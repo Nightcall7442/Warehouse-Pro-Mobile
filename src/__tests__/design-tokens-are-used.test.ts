@@ -82,10 +82,11 @@ describe("оформление берётся из темы", () => {
 
       order-status.ts: палитра состояний заказа нарочно не следует за темой —
       зелёный «доставлен» обязан быть зелёным в обеих. YandexMapView: цвета
-      меток на чужой карте, тема к ней отношения не имеет. contrast.ts: сами
-      константы, по которым считается читаемость.
+      меток на чужой карте, тема к ней отношения не имеет. contrast.ts и
+      brand-palette.ts: сами константы, по которым считается читаемость —
+      фон карточки каждой темы нужен числом, от него идёт контраст.
     */
-    const ALLOWED = /^(src\/lib\/order-status\.ts|src\/components\/YandexMapView\.tsx|src\/lib\/contrast\.ts|src\/theme\.ts)$/;
+    const ALLOWED = /^(src\/lib\/order-status\.ts|src\/components\/YandexMapView\.tsx|src\/lib\/contrast\.ts|src\/lib\/brand-palette\.ts|src\/theme\.ts)$/;
 
     const offenders = FILES
       .filter(f => !ALLOWED.test(f.rel))
