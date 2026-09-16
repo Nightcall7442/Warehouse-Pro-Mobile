@@ -1732,3 +1732,50 @@ export interface VanShop {
 export async function getVanShops(search?: string): Promise<VanShop[]> {
   return trpcQuery("van.shops", search ? { search } : undefined);
 }
+
+// ── Возвратная тара ────────────────────────────────────────────────────────
+// Тара следует за товаром сама (сервер); водителю на телефоне — одно дело:
+// принять пустую тару от магазина на свою машину. Сколько у магазина числится,
+// говорит сервер; больше принять нельзя.
+
+export interface TareLine {
+  tareTypeId: number;
+  name: string;
+  qty: number;
+  deposit: number;
+}
+
+export interface TareHolder {
+  id: number;
+  name: string;
+  van: boolean;
+  lines: TareLine[];
+  units: number;
+  deposit: number;
+}
+
+export interface TareOverview {
+  warehouses: TareHolder[];
+  shops: TareHolder[];
+  totals: { atShops: number; depositAtShops: number };
+}
+
+export interface ShopTareLine extends TareLine {
+  depositPrice: number;
+}
+
+export async function getTareStatus(): Promise<{ enabled: boolean; planAllows: boolean }> {
+  return trpcQuery("tare.status");
+}
+
+export async function getTareOverview(): Promise<TareOverview> {
+  return trpcQuery("tare.overview");
+}
+
+export async function getShopTare(shopId: number): Promise<ShopTareLine[]> {
+  return trpcQuery("tare.shop", { shopId });
+}
+
+export async function returnTareFromShop(input: { shopId: number; warehouseId: number; items: Array<{ tareTypeId: number; quantity: number }>; note?: string }): Promise<{ units: number }> {
+  return trpcMutation("tare.returnFromShop", input, { timeout: 20_000 });
+}

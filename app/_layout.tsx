@@ -228,6 +228,7 @@ export default function RootLayout() {
               <Stack.Screen name="van/index" options={{ headerShown: false }} />
               <Stack.Screen name="van/sell" options={{ headerShown: false }} />
               <Stack.Screen name="van/receipt" options={{ headerShown: false }} />
+              <Stack.Screen name="van/tare" options={{ headerShown: false }} />
             </Stack>
             {/* Поверх всего: экран блокировки по простою. Ниже Stack, чтобы
                 закрывать любой открытый экран, включая модальные. */}
