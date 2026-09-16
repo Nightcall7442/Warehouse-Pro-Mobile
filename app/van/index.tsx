@@ -8,7 +8,7 @@ import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Spacing, Radii, soft } from "../../src/theme";
 import { Card, Button, EmptyState } from "../../src/components/ui";
 import { QueryState } from "../../src/components/QueryState";
-import { getMyVans, getVanStock, getVanSales } from "../../src/api";
+import { getMyVans, getVanStock, getVanSales, getTareStatus, getTareOverview } from "../../src/api";
 import { formatMoney } from "../../src/store/branding";
 import { formatQty } from "../../src/lib/units";
 import { useT } from "../../src/i18n";
@@ -37,12 +37,17 @@ export default function VanScreen() {
     return { from: d.toISOString(), to: new Date(d.getTime() + 86_400_000).toISOString() };
   }, []);
   const sales = useQuery({ queryKey: ["vanSales", van?.id, range.from], queryFn: () => getVanSales({ vanId: van!.id, ...range }), enabled: !!van, retry: false });
+  // Тара — только когда фирма её считает: иначе ни карточки, ни кнопки.
+  const tareStatus = useQuery({ queryKey: ["tareStatus"], queryFn: getTareStatus, retry: false });
+  const tareOn = tareStatus.data?.enabled === true;
+  const tare = useQuery({ queryKey: ["tareOverview"], queryFn: getTareOverview, enabled: tareOn && !!van, retry: false });
+  const vanTare = (tare.data?.warehouses ?? []).find((w) => w.id === van?.id)?.lines ?? [];
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { await Promise.all([vans.refetch(), stock.refetch(), sales.refetch()]); }
+    try { await Promise.all([vans.refetch(), stock.refetch(), sales.refetch(), tareOn ? tare.refetch() : Promise.resolve()]); }
     finally { setRefreshing(false); }
-  }, [vans, stock, sales]);
+  }, [vans, stock, sales, tare, tareOn]);
 
   const label = { fontFamily: Typography.fontSemibold, fontSize: Typography.size.xs, letterSpacing: 0.6, color: colors.text.tertiary };
   const soldToday = (sales.data ?? []).reduce((s, r) => s + Number(r.total), 0);
@@ -110,6 +115,25 @@ export default function VanScreen() {
                   ))}
                 </QueryState>
               </View>
+
+              {tareOn && (
+                <View>
+                  <Text style={{ ...label, marginBottom: Spacing.sm, paddingHorizontal: 2 }}>{t("ТАРА В КУЗОВЕ", "KUZOVDAGI IDISH")}</Text>
+                  <Card style={{ padding: Spacing.lg }}>
+                    {vanTare.length === 0 ? (
+                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.tertiary }}>{t("Пустой тары в кузове нет", "Kuzovda bo'sh idish yo'q")}</Text>
+                    ) : vanTare.map((l) => (
+                      <View key={l.tareTypeId} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}>
+                        <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>{l.name}</Text>
+                        <Text style={{ fontFamily: Typography.fontMono, fontSize: Typography.size.md, color: colors.text.primary }}>{formatQty(l.qty)}</Text>
+                      </View>
+                    ))}
+                    <Button variant="secondary" fullWidth icon="box" style={{ marginTop: Spacing.md }} onPress={() => router.push({ pathname: "/van/tare", params: { vanId: String(van.id) } })}>
+                      {t("Принять тару от магазина", "Do'kondan idish qabul qilish")}
+                    </Button>
+                  </Card>
+                </View>
+              )}
 
               {(sales.data ?? []).length > 0 && (
                 <View>
