@@ -34,6 +34,12 @@ export function luminance(hex: string): number {
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
+/** Отношение контраста двух цветов по WCAG 2.1: от 1 (одинаковые) до 21. */
+export function contrastRatio(a: string, b: string): number {
+  const la = luminance(a), lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
 /** Тёмные чернила на светлом фоне, светлые — на тёмном. */
 export function readableInk(background: string): string {
   return luminance(background) > 0.179 ? "#1c1a17" : "#ffffff";
