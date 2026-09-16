@@ -1,5 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { View, Text, FlatList, RefreshControl, ActivityIndicator, Pressable, ScrollView, Linking } from "react-native";
+import { useScrollTopOnFocus } from "../../src/hooks/useScrollTopOnFocus";
+import { useScrollTopOnChange } from "../../src/hooks/useScrollTopOnChange";
+
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
@@ -47,6 +50,9 @@ export default function DebtorsScreen() {
   const [bucket, setBucket] = useState<AgeBucket | null>(null);
   const [byAmount, setByAmount] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const listRef = useRef<FlatList>(null);
+  useScrollTopOnFocus(listRef);
+  useScrollTopOnChange(listRef, [search, bucket, byAmount]);
 
   const q = useQuery({ queryKey: ["receivablesAging"], queryFn: getReceivablesAging, retry: false });
 
@@ -254,6 +260,7 @@ export default function DebtorsScreen() {
         />
       ) : (
         <FlatList
+          ref={listRef}
           data={rows}
           keyExtractor={(r) => String(r.shopId)}
           renderItem={renderRow}

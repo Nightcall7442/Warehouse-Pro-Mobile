@@ -1,6 +1,7 @@
 // Warehouse Pro — Orders v2 (cold palette, ProgressRing donuts)
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
+import { useScrollTopOnFocus } from "../../src/hooks/useScrollTopOnFocus";
 import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -62,6 +63,8 @@ function confirmDiscard(what: string, onConfirm: () => void) {
 
 export default function OrdersScreen() {
   const router = useRouter();
+  const listRef = useRef<FlatList>(null);
+  useScrollTopOnFocus(listRef);
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const t = useT();
@@ -333,6 +336,7 @@ export default function OrdersScreen() {
 
       {/* List */}
       <FlatList
+        ref={listRef}
         data={items}
         keyExtractor={item => item.key}
         contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.lg }}

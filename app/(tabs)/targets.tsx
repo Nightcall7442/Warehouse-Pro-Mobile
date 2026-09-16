@@ -1,6 +1,8 @@
 // Warehouse Pro — Targets dashboard (READ-ONLY view of all metrics)
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useRefreshOnFocus } from "../../src/hooks/useRefreshOnFocus";
+import { useScrollTopOnFocus } from "../../src/hooks/useScrollTopOnFocus";
+import { useScrollTopOnChange } from "../../src/hooks/useScrollTopOnChange";
 import { View, Text, FlatList, SectionList, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
@@ -37,6 +39,11 @@ export default function TargetsScreen() {
   const [section, setSection] = useState<Section>("targets");
   const [date, setDate] = useState(new Date());
   const [filterAgentId, setFilterAgentId] = useState<number | null>(null);
+  // Один ref на списки разделов — смонтирован всегда один. SectionList
+  // прокрутки к началу не отдаёт, к нему ref не привязан.
+  const listRef = useRef<FlatList>(null);
+  useScrollTopOnFocus(listRef);
+  useScrollTopOnChange(listRef, [section, date, filterAgentId]);
   const t = useT();
   const lang = useLang();
 
@@ -115,6 +122,7 @@ export default function TargetsScreen() {
       {/* ── SECTION: Targets (quotas) ───────────────────────────────────── */}
       {section === "targets" && (
         <FlatList
+          ref={listRef}
           data={summary ?? []}
           keyExtractor={item => String(item.userId)}
           contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.md, paddingBottom: insets.bottom + 100 }}
@@ -254,7 +262,7 @@ export default function TargetsScreen() {
               ListEmptyComponent={<EmptyState icon="calendar" title={t("На этот день планов нет", "Bu kun uchun reja yo'q")} />}
             />
           ) : (
-            <FlatList data={plans ?? []} keyExtractor={p => String(p.id)}
+            <FlatList ref={listRef} data={plans ?? []} keyExtractor={p => String(p.id)}
               contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: insets.bottom + 100 }}
               ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
               refreshControl={<RefreshControl refreshing={plansFetching} onRefresh={refetchPlans} tintColor={colors.accent.primary} />}

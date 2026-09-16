@@ -3,6 +3,8 @@
 // карточке — быстрый заказ одной позиции, как и раньше.
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useRefreshOnFocus } from "../../src/hooks/useRefreshOnFocus";
+import { useScrollTopOnFocus } from "../../src/hooks/useScrollTopOnFocus";
+import { useScrollTopOnChange } from "../../src/hooks/useScrollTopOnChange";
 import {
   View, Text, FlatList, TouchableOpacity, Modal, Pressable,
   ScrollView, useWindowDimensions, RefreshControl, ActivityIndicator,
@@ -257,6 +259,9 @@ export default function CatalogScreen() {
 
   const [search, setSearch] = useState("");
   const [selectedCat, setSelectedCat] = useState("all");
+  const listRef = useRef<FlatList>(null);
+  useScrollTopOnFocus(listRef);
+  useScrollTopOnChange(listRef, [search, selectedCat]);
   const [showShopPicker, setShowShopPicker] = useState(false);
   const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
   const [pendingQty, setPendingQty] = useState(1);
@@ -453,6 +458,7 @@ export default function CatalogScreen() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={filtered}
           keyExtractor={item => String(item.id)}
           numColumns={2}
