@@ -7,6 +7,7 @@ import { View, Text, FlatList, SectionList, RefreshControl } from "react-native"
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { getSalesTargetSummary, getPlans, getAgentsList, Plan } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Spacing, Radii, Gradients, soft } from "../../src/theme";
@@ -29,6 +30,7 @@ export default function TargetsScreen() {
   // на него — подробности в самом хуке.
   useRefreshOnFocus([["salesTargetSummary"], ["agentsList"]]);
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   // Шапка в тёмной теме залита тёмным (Gradients.dark), а в светлой — цветом
@@ -98,9 +100,16 @@ export default function TargetsScreen() {
       <LinearGradient colors={isDark ? Gradients.dark : [colors.brand.primary, colors.brand.primaryLight]}
         style={{ paddingTop: insets.top + 16, paddingBottom: 16, paddingHorizontal: Spacing.base }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <PressableScale onPress={() => router.back()} haptic="light">
+              <View accessibilityRole="button" accessibilityLabel={t("Назад", "Orqaga")} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="arrow-left" size={18} color={headerInk} />
+              </View>
+            </PressableScale>
+            <View>
             <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: headerInk }}>{t("Показатели", "Ko'rsatkichlar")}</Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: headerInkSoft, marginTop: 4 }}>{currentMonth}</Text>
+            </View>
           </View>
         </View>
 

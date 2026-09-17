@@ -65,11 +65,12 @@ export function fmt(dateStr: string) {
  */
 export const money = formatMoney;
 
-export function makeStyles(colors: ThemeColors, topInset: number = 56) {
+export function makeStyles(colors: ThemeColors, topInset: number = 56, bottomInset: number = 0) {
   return {
     root: { flex: 1, backgroundColor: colors.bg.primary },
     container: { flex: 1, backgroundColor: colors.bg.primary },
-    content: { padding: Spacing.base, paddingTop: 0 },
+    // Низ: на iPhone под содержимым лежит домашняя полоска — последняя карточка не должна упираться в неё.
+    content: { padding: Spacing.base, paddingTop: 0, paddingBottom: Spacing.base + bottomInset + 24 },
 
     // Top bar
     topBar: {

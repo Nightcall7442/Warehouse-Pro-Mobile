@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { View, Text, FlatList, SectionList, RefreshControl, TextInput, KeyboardAvoidingView, Platform, ScrollView, Modal } from "react-native";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getPlans, getAgentsList, createSalesTarget, Plan } from "../../api";
@@ -24,6 +24,7 @@ import { useT, useLang } from "../../i18n";
 
 export function SupervisorPlansView() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const qc = useQueryClient();
@@ -98,6 +99,12 @@ export function SupervisorPlansView() {
         title={t("Планы", "Rejalar")}
         right={
           <View style={{ flexDirection: "row", gap: 8 }}>
+            {/* Нормы и визиты: экран норм ушёл из панели вкладок — дверь сюда. */}
+            <PressableScale onPress={() => router.push("/(tabs)/targets")} haptic="light">
+              <View style={{ backgroundColor: colors.bg.elevated, borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center", ...soft(isDark).raisedSm }}>
+                <Feather name="trending-up" size={18} color={colors.text.primary} />
+              </View>
+            </PressableScale>
             <PressableScale onPress={() => setShowCreateTarget(true)} haptic="light">
               <View style={{ backgroundColor: colors.accent.warning, borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="target" size={18} color="#fff" />

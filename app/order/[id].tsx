@@ -59,7 +59,7 @@ export default function OrderDetailScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const styles = makeStyles(colors, insets.top);
+  const styles = makeStyles(colors, insets.top, insets.bottom);
   const t = useT();
   const queryClient = useQueryClient();
   const fadeIn = useSharedValue(0);

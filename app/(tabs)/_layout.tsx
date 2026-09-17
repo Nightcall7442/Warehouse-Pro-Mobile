@@ -53,7 +53,7 @@ function CustomTabBar(props: BottomTabBarProps) {
   const { user } = useAuthStore();
 
   // Агент: Главная, Магазины, Каталог, Заказы, Профиль
-  // Надзор:  Главная, Магазины, Планы, Нормы, Карта
+  // Надзор:  Главная, Карта, Планы, Магазины («Нормы» — из «Планов»)
   //
   // Правило вынесено в src/lib/tabs.ts и проверяется тестом: его ошибка не
   // выглядит поломкой — экран остаётся в приложении, просто до него нечем
@@ -187,6 +187,7 @@ export default function TabsLayout() {
         name="index"
         options={{ title: t("Главная", "Bosh sahifa"), headerShown: false }}
       />
+      <Tabs.Screen name="tracking" options={{ title: t("Карта", "Xarita"), headerShown: false }} />
       <Tabs.Screen
         name="shops"
         options={{ title: t("Магазины", "Do'konlar"), headerShown: false }}
@@ -195,7 +196,7 @@ export default function TabsLayout() {
         name="catalog"
         options={{ title: t("Каталог", "Katalog"), headerShown: false }}
       />
-      <Tabs.Screen name="orders" options={{ title: t("Заказы", "Buyurtmalar") }} />
+      <Tabs.Screen name="orders" options={{ title: t("Заказы", "Buyurtmalar"), headerShown: false }} />
       <Tabs.Screen
         name="plan"
         options={{ title: t("План", "Reja"), headerShown: false }}
@@ -220,9 +221,9 @@ export default function TabsLayout() {
         name="debtors"
         options={{ title: t("Долги", "Qarzlar"), headerShown: false }}
       />
-      <Tabs.Screen name="gps" options={{ tabBarButton: () => null }} />
-      <Tabs.Screen name="tracking" options={{ title: t("Карта", "Xarita"), headerShown: false }} />
-      <Tabs.Screen name="barcode" options={{ tabBarButton: () => null }} />
+      {/* Скрытые экраны рисуют свою шапку — навигатор свою не показывает: иначе на iOS две шапки, а у gps в ней имя маршрута. */}
+      <Tabs.Screen name="gps" options={{ title: t("Геолокация", "Geolokatsiya"), tabBarButton: () => null, headerShown: false }} />
+      <Tabs.Screen name="barcode" options={{ title: t("Сканер", "Skaner"), tabBarButton: () => null, headerShown: false }} />
     </Tabs>
   );
 }

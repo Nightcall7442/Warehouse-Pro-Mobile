@@ -81,7 +81,14 @@ export function isTabVisible(name: string, role: string | undefined): boolean {
   if (name === "tracking") return canSeeAgentMap(role);
 
   // Надзорные экраны: планы визитов и нормы.
-  if (name === "plans" || name === "targets") return oversight;
+  /*
+    «Нормы» из панели убраны (владелец, 17.09.2026: «у супервайзера слишком
+    много табов, хватит 3–4»). Надзору остаются четыре: главная, карта,
+    планы, магазины. Экран норм жив и открывается кнопкой из «Планов» —
+    дверь есть, просто не в панели.
+  */
+  if (name === "targets") return false;
+  if (name === "plans") return oversight;
 
   /*
     Долги магазинов — надзорным ролям.
@@ -94,7 +101,9 @@ export function isTabVisible(name: string, role: string | undefined): boolean {
     (app/debts.tsx), и там разговор про накладные, а не про объезд чужих
     маршрутов.
   */
-  if (name === "debtors") return oversight;
+  // «Долги» из панели убраны вместе с «нормами»: у надзора четыре вкладки.
+  // Дверь — карточка «Долги магазинов» на главной (когда долг есть).
+  if (name === "debtors") return false;
 
   // Магазины — всем, кроме курьера: он едет по заказам, а не по точкам.
   if (name === "shops") return !courier;

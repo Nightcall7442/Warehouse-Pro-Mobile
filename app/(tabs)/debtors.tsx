@@ -7,8 +7,8 @@ import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Sizes } from "../../src/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
+import { Typography, Spacing, Radii, Sizes, soft } from "../../src/theme";
 import { Card, EmptyState, SearchInput } from "../../src/components/ui";
 import { getReceivablesAging, type ShopAging, type AgeBucket } from "../../src/api";
 import { formatMoney } from "../../src/store/branding";
@@ -41,6 +41,7 @@ import { useT, useLang } from "../../src/i18n";
  */
 export default function DebtorsScreen() {
   const router = useRouter();
+  const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const t = useT();
@@ -155,9 +156,15 @@ export default function DebtorsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary, paddingTop: insets.top + Spacing.md }}>
       <View style={{ paddingHorizontal: Spacing.base }}>
-        <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: colors.text.primary }}>
-          {t("Долги магазинов", "Do'konlar qarzi")}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+          <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("Назад", "Orqaga")}
+            style={{ width: 36, height: 36, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.card, ...soft(isDark).raisedSm }}>
+            <Feather name="arrow-left" size={18} color={colors.text.primary} />
+          </Pressable>
+          <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: colors.text.primary }}>
+            {t("Долги магазинов", "Do'konlar qarzi")}
+          </Text>
+        </View>
 
         {/* ── Итог и возраст ────────────────────────────────────────────── */}
         <Card style={{ marginTop: Spacing.md }}>
