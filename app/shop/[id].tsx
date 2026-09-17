@@ -1,7 +1,6 @@
 // Warehouse Pro — Shop Detail v2 (cold palette, Card, Badge, FadeInItem)
 import { useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Linking, RefreshControl, Alert } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -11,7 +10,7 @@ import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { Typography, Spacing, Radii, Gradients, soft } from "../../src/theme";
+import { Typography, Spacing, Radii, soft } from "../../src/theme";
 import { getShop, getShopForSupervisor, updateShop, uploadShopPhoto, uploadFile, getTerritories, Territory } from "../../src/api";
 import { Card, Badge, Button, InfoRow } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
@@ -180,7 +179,7 @@ export default function ShopDetailScreen() {
         {shop.photoUrl ? (
           <SecureImage uri={shop.photoUrl} style={{ width: "100%", height: "100%", position: "absolute" }} resizeMode="cover" />
         ) : (
-          <LinearGradient colors={Gradients.primary} style={{ flex: 1 }} />
+          <View style={{ flex: 1, backgroundColor: colors.brand.primary }} />
         )}
         <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.3)" }} />
         {photoMutation.isPending && <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color="#fff" size="large" /></View>}
@@ -320,10 +319,10 @@ export default function ShopDetailScreen() {
               haptic="medium"
               style={{ borderRadius: Radii.xl, overflow: "hidden", marginTop: 4 }}
             >
-              <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, paddingHorizontal: 20, borderRadius: Radii.xl }}>
+              <View style={{ backgroundColor: colors.brand.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, paddingHorizontal: 20, borderRadius: Radii.xl }}>
                 <Feather name="shopping-cart" size={20} color="#fff" />
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: "#fff" }}>{t("Новый заказ", "Yangi buyurtma")}</Text>
-              </LinearGradient>
+              </View>
             </PressableScale>
           </FadeInItem>
         )}
