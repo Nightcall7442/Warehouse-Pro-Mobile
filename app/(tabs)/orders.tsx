@@ -20,7 +20,6 @@ import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
 import { Card, Badge } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale } from "../../src/components/Animated";
-import { LinearGradient } from "expo-linear-gradient";
 import { Gradients } from "../../src/theme";
 
 const BOTTOM_TAB_HEIGHT = 80;
@@ -153,11 +152,11 @@ export default function OrdersScreen() {
             </Text>
           </View>
           <PressableScale onPress={() => router.push("/order/new")} haptic="light">
-            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radii.md }}>
+            <View
+              style={{ backgroundColor: colors.brand.primary, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radii.md }}>
               <Feather name="plus" size={14} color="#fff" />
               <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff" }}>{t("Новый", "Yangi")}</Text>
-            </LinearGradient>
+            </View>
           </PressableScale>
         </View>
       </View>

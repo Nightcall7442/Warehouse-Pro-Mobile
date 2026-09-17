@@ -16,7 +16,7 @@
 // ── Про два коралла ───────────────────────────────────────────────────────────
 //
 // Их именно два, и это не небрежность. Яркий #f26d6d хорош заливкой и никуда
-// не годится надписью: на холсте #e7eaf0 у него контраст 2.4:1. Для надписей
+// не годится надписью: на холсте #efedea у него контраст низкий. Для надписей
 // и мелких знаков стоит затемнённый #d64a45 — 3.6:1, то есть годен для
 // крупного текста и элементов управления. Заливка живёт в brand и gradient,
 // надпись — в accent.
@@ -137,22 +137,28 @@ export const LightColors = {
     вкладка) собираются градиентом elevated → sunken, это те самые «блик
     сверху-слева, тень снизу-справа» из референса.
   */
+  /*
+    Тёплая бумага — та же, что в веб-приложении (src/index.css: --color-surface
+    #efedea, raised #f2f0ec, light #f6f4f0). Раньше здесь стоял холодный
+    серо-голубой холст из референса, и телефон рядом с вебом читался чужим
+    продуктом (владелец, 17.09.2026: «не сочетается с вебом»).
+  */
   bg: {
-    primary: "#e7eaf0",
-    secondary: "#eef1f5",
-    card: "#e7eaf0",
-    elevated: "#f4f6f9",
-    input: "#e7eaf0",
-    overlay: "rgba(231,234,240,0.9)",
-    glass: "rgba(238,241,245,0.8)",
-    glassCard: "rgba(238,241,245,0.85)",
+    primary: "#efedea",
+    secondary: "#f2f0ec",
+    card: "#efedea",
+    elevated: "#f6f4f0",
+    input: "#efedea",
+    overlay: "rgba(239,237,234,0.9)",
+    glass: "rgba(242,240,236,0.8)",
+    glassCard: "rgba(242,240,236,0.85)",
     overlayDark: "rgba(0,0,0,0.4)",
     glassButton: "rgba(255,255,255,0.55)",
   },
   border: {
-    default: "#d5dae3",
-    subtle: "#dde0e7",
-    strong: "#c3c8d2",
+    default: "#d8d5cd",
+    subtle: "#e0ddd7",
+    strong: "#c4c0b8",
     focus: "#f26d6d",
     glass: "rgba(0,0,0,0.05)",
   },
@@ -166,12 +172,12 @@ export const LightColors = {
     5.0:1 и 4.6:1.
   */
   text: {
-    primary: "#3b414c",
-    secondary: "#5c636f",
-    tertiary: "#626976",
-    muted: "#626976",
+    primary: "#2b2a28",
+    secondary: "#5e5b54",
+    tertiary: "#6b6760", // 4.81:1 на #efedea — как в вебе
+    muted: "#6b6760",
     inverse: "#ffffff",
-    onGlass: "rgba(59,65,76,0.92)",
+    onGlass: "rgba(43,42,40,0.92)",
   },
   /*
     Коралл здесь — для надписей и мелких знаков: 3.6:1, то есть крупный текст
@@ -396,62 +402,62 @@ export const Radii = {
 // Neumorphic shadow system — matches web index.css.
 // RN can't do true dual-tone (light+dark sides), so we use the dominant
 // dark-side shadow. The top highlight line in ui.tsx Card compensates.
-// Светлая тема: прохладный серо-голубой #c3c8d2 — тот же тон, что у холста,
-// только темнее. Прежний тёплый бежевый на новом холсте отдавал грязью: тень
-// в неоморфизме обязана быть цветом фона, иначе объём читается как пятно.
+// Светлая тема: тёплый #c9c3b8 — тон бумажного холста, только темнее (в вебе
+// --shadow-* строится на rgba(160,152,140)). Тень в неоморфизме обязана быть
+// цветом фона, иначе объём читается как пятно.
 // Тёмная: чистый чёрный.
 export const Shadows = {
   xs: {
-    shadowColor: "#c3c8d2",
+    shadowColor: "#c9c3b8",
     shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 0.22,
     shadowRadius: 4,
     elevation: 1,
   },
   sm: {
-    shadowColor: "#c3c8d2",
+    shadowColor: "#c9c3b8",
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 0.28,
     shadowRadius: 8,
     elevation: 2,
   },
   md: {
-    shadowColor: "#c3c8d2",
+    shadowColor: "#c9c3b8",
     shadowOffset: { width: 6, height: 6 },
     shadowOpacity: 0.32,
     shadowRadius: 16,
     elevation: 4,
   },
   lg: {
-    shadowColor: "#c3c8d2",
+    shadowColor: "#c9c3b8",
     shadowOffset: { width: 8, height: 8 },
     shadowOpacity: 0.38,
     shadowRadius: 24,
     elevation: 8,
   },
   xl: {
-    shadowColor: "#c3c8d2",
+    shadowColor: "#c9c3b8",
     shadowOffset: { width: 10, height: 10 },
     shadowOpacity: 0.4,
     shadowRadius: 32,
     elevation: 12,
   },
   card: {
-    shadowColor: "#c3c8d2",
+    shadowColor: "#c9c3b8",
     shadowOffset: { width: 7, height: 7 },
     shadowOpacity: 0.35,
     shadowRadius: 14,
     elevation: 4,
   },
   panel: {
-    shadowColor: "#c3c8d2",
+    shadowColor: "#c9c3b8",
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 0.28,
     shadowRadius: 8,
     elevation: 2,
   },
   panelRaised: {
-    shadowColor: "#c3c8d2",
+    shadowColor: "#c9c3b8",
     shadowOffset: { width: 6, height: 6 },
     shadowOpacity: 0.32,
     shadowRadius: 16,
@@ -479,7 +485,7 @@ export const Shadows = {
     elevation: 6,
   },
   inner: {
-    shadowColor: "#c3c8d2",
+    shadowColor: "#c9c3b8",
     shadowOffset: { width: -3, height: -3 },
     shadowOpacity: 0.28,
     shadowRadius: 6,
@@ -505,7 +511,7 @@ export const DarkShadowColor = "#000000";
 // 2/5 и 3/7 у вдавленного.
 
 /** Светлая тема: тень цвета холста, но темнее; блик — чистый белый. */
-const LIGHT_DARK_FACE = "#c3c8d2";
+const LIGHT_DARK_FACE = "#c9c3b8";
 const LIGHT_LIGHT_FACE = "#ffffff";
 
 /*

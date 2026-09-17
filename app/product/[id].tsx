@@ -19,7 +19,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Gradients, soft, safeBottomPadding } from "../../src/theme";
+import { Typography, Spacing, Radii, soft, safeBottomPadding } from "../../src/theme";
 import { getProducts, Product } from "../../src/api";
 import { Card, InfoRow } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
@@ -104,9 +104,9 @@ export default function ProductScreen() {
           {product.photoUrl ? (
             <SecureImage uri={product.photoUrl} style={{ width: "100%", height: "100%", position: "absolute" }} resizeMode="cover" />
           ) : (
-            <LinearGradient colors={Gradients.primary} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.brand.primary }}>
               <Feather name="package" size={72} color="rgba(255,255,255,0.7)" />
-            </LinearGradient>
+            </View>
           )}
           {/* Затемнение только у нижнего края — под подпись; сама фотография остаётся светлой */}
           <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.62)"]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: heroH * 0.45 }} />
@@ -178,12 +178,12 @@ export default function ProductScreen() {
           </PressableScale>
         </View>
         <PressableScale onPress={goOrder} disabled={!canAdd} haptic="medium" style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden" }}>
-          <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, paddingHorizontal: 14, borderRadius: Radii.xl }}>
+          <View style={{ backgroundColor: colors.brand.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, paddingHorizontal: 14, borderRadius: Radii.xl }}>
             <Feather name={outOfStock ? "slash" : "shopping-cart"} size={18} color="#fff" />
             <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: "#fff" }} numberOfLines={1}>
               {outOfStock ? t("Нет в наличии", "Omborda yo'q") : t(`В заказ · ${formatMoney(price * qty)}`, `Buyurtmaga · ${formatMoney(price * qty)}`)}
             </Text>
-          </LinearGradient>
+          </View>
         </PressableScale>
       </View>
     </View>

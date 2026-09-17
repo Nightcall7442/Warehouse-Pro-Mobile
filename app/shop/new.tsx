@@ -1,7 +1,6 @@
 // Warehouse Pro — New Shop v2 (cold palette, Card, Button, PressableScale)
 import React, { useState, useRef } from "react";
 import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Alert } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,7 +9,7 @@ import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Radii, Gradients, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
+import { Typography, Radii, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
 import { Card, Button } from "../../src/components/ui";
 import { createShop, uploadFile, getTerritories, Territory } from "../../src/api";
 import { uuidv4 } from "../../src/store/offline";
@@ -211,7 +210,7 @@ export default function NewShopScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg.primary }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       {/* Header gradient */}
-      <LinearGradient colors={Gradients.primary} style={{ paddingTop: insets.top + 12, paddingBottom: 20, paddingHorizontal: 20 }}>
+      <View style={{ paddingTop: insets.top + 12, paddingBottom: 16, paddingHorizontal: 20, backgroundColor: colors.bg.secondary, ...soft(isDark).raisedSm }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           {/* Крестик стирал заполненную анкету без единого вопроса.
               Магазин заводят при живом разговоре с владельцем: название,
@@ -220,14 +219,14 @@ export default function NewShopScreen() {
           <TouchableOpacity
             onPress={requestClose}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
+            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.bg.card, ...soft(isDark).raisedSm, alignItems: "center", justifyContent: "center" }}
           >
-            <Feather name="x" size={20} color="#fff" />
+            <Feather name="x" size={20} color={colors.text.primary} />
           </TouchableOpacity>
-          <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: "#fff" }}>{t("Новый магазин", "Yangi do'kon")}</Text>
+          <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.text.primary }}>{t("Новый магазин", "Yangi do'kon")}</Text>
           <View style={{ width: 36 }} />
         </View>
-      </LinearGradient>
+      </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: safeBottomPadding(insets.bottom, 32) }} showsVerticalScrollIndicator={false}>
         <FadeInItem delay={0}>

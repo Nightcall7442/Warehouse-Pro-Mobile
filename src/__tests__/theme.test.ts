@@ -6,9 +6,10 @@ describe('Theme', () => {
   });
 
   it('LightColors should have primary background', () => {
-    // Холст светлой темы: прохладный серо-голубой из референса. Прежний
-    // тёплый бежевый #e8e6e1 ушёл вместе со всей палитрой v7.
-    expect(LightColors.bg.primary).toBe('#e7eaf0');
+    // Холст светлой темы — та же тёплая бумага, что в веб-приложении
+    // (src/index.css --color-surface): телефон и веб — один продукт.
+    expect(LightColors.bg.primary).toBe('#efedea');
+    expect(LightColors.text.primary).toBe('#2b2a28');
   });
 
   it('Typography should define font sizes', () => {

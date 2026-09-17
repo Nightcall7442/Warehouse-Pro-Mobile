@@ -14,7 +14,7 @@ import { debtorTotals } from "../../src/lib/debtors";
 import { formatMoney } from "../../src/store/branding";
 import { Card } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
-import { Typography, Spacing, Radii, KpiColors, Gradients, soft, type ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii, KpiColors, soft, type ThemeColors } from "../../src/theme";
 import { orderStatusLabel, orderStatusColor, deliveryStatusLabel } from "../../src/lib/order-status";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -811,13 +811,13 @@ function SupervisorHome() {
       <FadeInItem delay={180}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           <PressableScale onPress={() => router.push("/(tabs)/tracking")} haptic="light" style={{ flex: 1 }}>
-            <LinearGradient colors={Gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
+            <View
+              style={{ backgroundColor: colors.brand.primary, alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
               <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
                 <Feather name="map-pin" size={18} color="#fff" />
               </View>
               <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>{t("ТРЕКИНГ", "KUZATUV")}</Text>
-            </LinearGradient>
+            </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/plans")} haptic="light" style={{ flex: 1 }}>
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>

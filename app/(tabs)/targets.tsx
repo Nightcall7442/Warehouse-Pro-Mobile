@@ -18,7 +18,6 @@ import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/component
 import { PlanRow } from "../../src/components/plans/PlanRow";
 import { DateNav } from "../../src/components/plans/DateNav";
 import { fmtDate } from "../../src/components/plans/PlanHelpers";
-import { LinearGradient } from "expo-linear-gradient";
 import { formatMoney } from "../../src/store/branding";
 import { useT, useLang } from "../../src/i18n";
 
@@ -36,8 +35,9 @@ export default function TargetsScreen() {
   // Шапка в тёмной теме залита тёмным (Gradients.dark), а в светлой — цветом
   // арендатора. Белые надписи были прописаны на оба случая: у организации со
   // светлым фирменным цветом заголовок «Показатели» пропадал целиком.
-  const headerInk = isDark ? "#fff" : colors.brand.ink;
-  const headerInkSoft = headerInk === "#fff" ? "rgba(255,255,255,0.7)" : "rgba(28,26,23,0.7)";
+  // Шапка ровная, цвета bg.secondary (как ScreenHeader и веб) — чернила обычные.
+  const headerInk = colors.text.primary;
+  const headerInkSoft = colors.text.secondary;
   const [section, setSection] = useState<Section>("targets");
   const [date, setDate] = useState(new Date());
   const [filterAgentId, setFilterAgentId] = useState<number | null>(null);
@@ -97,12 +97,11 @@ export default function TargetsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       {/* Header */}
-      <LinearGradient colors={isDark ? Gradients.dark : [colors.brand.primary, colors.brand.primaryLight]}
-        style={{ paddingTop: insets.top + 16, paddingBottom: 16, paddingHorizontal: Spacing.base }}>
+      <View style={{ paddingTop: insets.top + 16, paddingBottom: 16, paddingHorizontal: Spacing.base, backgroundColor: colors.bg.secondary, ...soft(isDark).raisedSm }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <PressableScale onPress={() => router.back()} haptic="light">
-              <View accessibilityRole="button" accessibilityLabel={t("Назад", "Orqaga")} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
+              <View accessibilityRole="button" accessibilityLabel={t("Назад", "Orqaga")} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.bg.card, ...soft(isDark).raisedSm, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="arrow-left" size={18} color={headerInk} />
               </View>
             </PressableScale>
@@ -114,19 +113,19 @@ export default function TargetsScreen() {
         </View>
 
         {/* Section switcher */}
-        <View style={{ flexDirection: "row", backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 12, padding: 3 }}>
+        <View style={{ flexDirection: "row", backgroundColor: colors.bg.card, borderRadius: 12, padding: 3, ...soft(isDark).inset }}>
           <PressableScale onPress={() => setSection("targets")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ paddingVertical: 10, borderRadius: 10, backgroundColor: section === "targets" ? "rgba(255,255,255,0.25)" : "transparent", alignItems: "center" }}>
+            <View style={{ paddingVertical: 10, borderRadius: 10, backgroundColor: section === "targets" ? colors.bg.elevated : "transparent", alignItems: "center" }}>
               <Text style={{ fontFamily: section === "targets" ? Typography.fontBold : Typography.fontMedium, fontSize: 13, color: headerInk }}>{t("Нормы", "Normalar")}</Text>
             </View>
           </PressableScale>
           <PressableScale onPress={() => setSection("visits")} haptic="light" style={{ flex: 1 }}>
-            <View style={{ paddingVertical: 10, borderRadius: 10, backgroundColor: section === "visits" ? "rgba(255,255,255,0.25)" : "transparent", alignItems: "center" }}>
+            <View style={{ paddingVertical: 10, borderRadius: 10, backgroundColor: section === "visits" ? colors.bg.elevated : "transparent", alignItems: "center" }}>
               <Text style={{ fontFamily: section === "visits" ? Typography.fontBold : Typography.fontMedium, fontSize: 13, color: headerInk }}>{t("Визиты", "Tashriflar")}</Text>
             </View>
           </PressableScale>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* ── SECTION: Targets (quotas) ───────────────────────────────────── */}
       {section === "targets" && (
