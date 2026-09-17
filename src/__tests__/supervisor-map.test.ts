@@ -38,11 +38,11 @@ describe("вкладка с картой", () => {
 });
 
 describe("остальные вкладки не поехали", () => {
-  it("у супервайзера — главная, магазины, планы, нормы", () => {
-    for (const name of ["index", "shops", "plans", "targets"]) {
+  it("у супервайзера — четыре: главная, карта, планы, магазины; «нормы» — из «Планов», не из панели", () => {
+    for (const name of ["index", "tracking", "plans", "shops"]) {
       expect(isTabVisible(name, "supervisor")).toBe(true);
     }
-    for (const name of ["catalog", "orders", "profile"]) {
+    for (const name of ["catalog", "orders", "profile", "targets"]) {
       expect(isTabVisible(name, "supervisor")).toBe(false);
     }
   });

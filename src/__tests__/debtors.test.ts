@@ -167,11 +167,13 @@ const LAYOUT = read("app/(tabs)/_layout.tsx");
 const API = read("src/api.ts");
 
 describe("экран доступен", () => {
-  it("вкладка есть у надзорных ролей", () => {
+  it("вкладки нет и у надзорных ролей: панель — четыре, дверь к долгам — карточка на главной", () => {
     const { isTabVisible } = jest.requireActual("../lib/tabs") as typeof import("../lib/tabs");
     for (const role of ["supervisor", "ceo", "operator"]) {
-      must(isTabVisible("debtors", role), `роль ${role} не видит вкладку долгов`);
+      must(!isTabVisible("debtors", role), `роль ${role} видит вкладку долгов — панель снова тесная`);
     }
+    must(HOME.includes('router.push("/debtors")'), "с главной к долгам не дойти");
+    must(SCREEN.includes("router.back()") && SCREEN.includes('<Feather name="arrow-left"'), "с экрана долгов не вернуться");
   });
 
   it("и её нет у тех, кому сервер откажет", () => {

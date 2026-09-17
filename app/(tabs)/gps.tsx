@@ -1,6 +1,7 @@
 // Warehouse Pro — GPS v2 (cold palette, Card, Badge, FadeInItem)
 import { useState, useEffect, useRef } from "react";
-import { View, Text, Switch, ScrollView, RefreshControl } from "react-native";
+import { View, Text, Switch, ScrollView, RefreshControl, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, cancelAnimation } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
@@ -10,8 +11,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { saveLocation } from "../../src/api";
 import { Card, Button, Badge } from "../../src/components/ui";
-import { Typography, Spacing, Radii, Gradients, ThemeColors } from "../../src/theme";
-import { useThemeColors } from "../../src/store/theme";
+import { Typography, Spacing, Radii, Gradients, ThemeColors, soft } from "../../src/theme";
+import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LocationDisclosure } from "../../src/components/LocationDisclosure";
 import { FadeInItem } from "../../src/components/Animated";
@@ -48,6 +49,8 @@ function AccuracyBar({ accuracy, colors }: { accuracy: number; colors: ThemeColo
 const AUTO_TRACK_KEY = "gps_auto_track";
 
 export default function GpsScreen() {
+  const router = useRouter();
+  const { isDark } = useThemeStore();
   const colors = useThemeColors();
   const t = useT();
   const lang = useLang();
@@ -256,8 +259,20 @@ export default function GpsScreen() {
   }[state];
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
+      {/* Своя шапка, как у остальных экранов: навигаторная на iOS показывала имя маршрута «gps». */}
+      <View style={{ paddingTop: insets.top + 8, paddingBottom: 12, paddingHorizontal: Spacing.lg, backgroundColor: colors.bg.secondary, flexDirection: "row", alignItems: "center", gap: Spacing.md, ...soft(isDark).raisedSm }}>
+        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("Назад", "Orqaga")}
+          style={{ width: 36, height: 36, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.card, ...soft(isDark).raisedSm }}>
+          <Feather name="arrow-left" size={18} color={colors.text.primary} />
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xxl, color: colors.text.primary }}>{t("Геолокация", "Geolokatsiya")}</Text>
+          <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2 }}>{t("координаты уходят сами при визите", "koordinatalar tashrifda o'zi ketadi")}</Text>
+        </View>
+      </View>
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.bg.primary }}
+      style={{ flex: 1 }}
       contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + 100, gap: Spacing.sm }}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent.primary} />}
@@ -390,5 +405,6 @@ export default function GpsScreen() {
         </Card>
       </FadeInItem>
     </ScrollView>
+    </View>
   );
 }
