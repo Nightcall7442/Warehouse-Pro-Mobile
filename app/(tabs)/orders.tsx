@@ -20,7 +20,6 @@ import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
 import { Card, Badge } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale } from "../../src/components/Animated";
-import { Gradients } from "../../src/theme";
 
 const BOTTOM_TAB_HEIGHT = 80;
 
