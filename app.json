@@ -60,8 +60,7 @@
       "expo-notifications",
       "expo-font",
       "expo-splash-screen",
-      "expo-status-bar",
-      "expo-sharing"
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
