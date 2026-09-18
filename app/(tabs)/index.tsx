@@ -19,7 +19,7 @@ import { orderStatusLabel, orderStatusColor, deliveryStatusLabel } from "../../s
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
-import { CashCard, VanCard } from "../../src/components/MoneyAndVanCards";
+import { CashCard } from "../../src/components/CashCard";
 import { money } from "../../src/components/order/OrderStyles";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -409,9 +409,8 @@ function AgentHome() {
         </View>
       </FadeInItem>
 
-      {/* ── Наличные на руках и моя машина — тем, кто носит деньги и товар ── */}
+      {/* ── Наличные на руках — тем, кто носит деньги ── */}
       {isAgent && <CashCard delay={195} />}
-      {isAgent && <VanCard delay={200} />}
 
       {/* ── Долги: кому идти собирать ─────────────────────────────────────── */}
       {isAgent && debtSummary && debtSummary.shops > 0 && (
@@ -1051,9 +1050,8 @@ function CourierHome() {
         </View>
       </FadeInItem>
 
-      {/* ── Наличные на руках и моя машина ─────────────────────────────────── */}
+      {/* ── Наличные на руках ──────────────────────────────────────────────── */}
       <CashCard delay={180} />
-      <VanCard delay={190} />
 
       {/* ── Recent deliveries (matching web recent orders style) ───────────── */}
       <FadeInItem delay={200}>
