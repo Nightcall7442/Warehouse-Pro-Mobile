@@ -843,8 +843,13 @@ export async function addOrderComment(orderId: number, content: string, parentId
   return trpcMutation("order.addComment", { orderId, content, parentId });
 }
 
-export async function getProducts(search?: string): Promise<Product[]> {
-  const res = await trpcQuery<Product[] | { data: Product[] }>("product.listAll", search ? { search } : undefined);
+/**
+ * Каталог. С shopId — цены магазина (его прайс-лист, иначе карточка): те же,
+ * по которым сервер посчитает заказ. Без shopId — карточка, как в справочнике.
+ */
+export async function getProducts(search?: string, shopId?: number): Promise<Product[]> {
+  const input = search || shopId ? { ...(search ? { search } : {}), ...(shopId ? { shopId } : {}) } : undefined;
+  const res = await trpcQuery<Product[] | { data: Product[] }>("product.listAll", input);
   return Array.isArray(res) ? res : (res as { data?: Product[] })?.data ?? [];
 }
 

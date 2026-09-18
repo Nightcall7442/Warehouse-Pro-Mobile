@@ -246,7 +246,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
 }
 
 // ── Step 2: Product Picker + Cart ────────────────────────────────────────────
-function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors }) {
+function ProductStep({ lines, onChange, colors, shopId }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors; shopId?: number }) {
   const { isDark } = useThemeStore();
   const t = useT();
   const lang = useLang();
@@ -359,7 +359,7 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
       })}
 
       {/* Product picker modal */}
-      <ProductPicker visible={showPicker} onClose={() => setShowPicker(false)} lines={lines} onChange={onChange} colors={colors} />
+      <ProductPicker visible={showPicker} onClose={() => setShowPicker(false)} lines={lines} onChange={onChange} colors={colors} shopId={shopId} />
     </View>
   );
 }
@@ -375,8 +375,10 @@ function ProductStep({ lines, onChange, colors }: { lines: OrderLine[]; onChange
   или кода товара прибавляет единицу.
 */
 // ── Product Picker Modal ─────────────────────────────────────────────────────
-function ProductPicker({ visible, onClose, lines, onChange, colors }: {
+function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
   visible: boolean; onClose: () => void; lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors;
+  /** Магазин заказа: цены — его прайс-листа, как посчитает сервер. */
+  shopId?: number;
 }) {
   const { isDark } = useThemeStore();
   const t = useT();
@@ -388,7 +390,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors }: {
   const debouncedSearch = useDebounce(search, 300);
   const [onlyInStock, setOnlyInStock] = useState(true);
   // Тот же запасной путь, что у магазинов: см. ShopPicker.
-  const { data: liveProducts, isLoading: liveLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
+  const { data: liveProducts, isLoading: liveLoading } = useQuery({ queryKey: ["products", shopId ?? 0], queryFn: () => getProducts(undefined, shopId) });
   const { data: products, fromCopy, savedAt } = useOfflineCopy<typeof liveProducts>("products", liveProducts);
   const isLoading = liveLoading && !products;
   const copyNotice = fromCopy && savedAt
@@ -1019,7 +1021,7 @@ export default function NewOrderScreen() {
       {/* Content */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); addRecentShopSafely(s.id); }} colors={colors} />}
-        {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} />}
+        {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} shopId={selectedShop?.id} />}
         {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} promisedAt={promisedAt} onPromisedChange={setPromisedAt} colors={colors} />}
       </ScrollView>
 

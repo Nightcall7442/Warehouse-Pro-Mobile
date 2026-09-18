@@ -132,8 +132,9 @@ export default function OrderDetailScreen() {
   */
   const [needCatalog, setNeedCatalog] = useState(false);
   const { data: catalog } = useQuery({
-    queryKey: ["catalog", "orderEdit"],
-    queryFn: () => getProducts().catch(() => []),
+    queryKey: ["catalog", "orderEdit", order?.shop?.id ?? 0],
+    // Цены — магазина заказа: те же, что подставит сервер новой строке.
+    queryFn: () => getProducts(undefined, order?.shop?.id).catch(() => []),
     enabled: needCatalog,
     retry: false,
   });
