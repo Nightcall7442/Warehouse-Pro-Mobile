@@ -113,6 +113,21 @@ describe("заказы уходят по одному", () => {
   });
 });
 
+describe("время события — из очереди", () => {
+  it("отметки курьера уходят с recordedAt = когда отмечено, а не когда ушло", async () => {
+    apiMock.markDelivered.mockResolvedValue(undefined);
+    apiMock.completeDelivery.mockResolvedValue({ success: true });
+    const at = "2026-09-18T18:50:00.000Z";
+    useOfflineStore.setState({ deliveryActions: [
+      { id: "d", action: { type: "markDelivered", orderId: 7, cashAmount: "100" }, createdAt: at, synced: false, ownerId: 10 },
+      { id: "c", action: { type: "completeDelivery", input: { orderId: 8, result: "paid", paymentMethod: "cash" } }, createdAt: at, synced: false, ownerId: 10 },
+    ] });
+    await useOfflineStore.getState().syncDeliveryActions();
+    expect(apiMock.markDelivered).toHaveBeenCalledWith(7, "100", at);
+    expect(apiMock.completeDelivery).toHaveBeenCalledWith(expect.objectContaining({ orderId: 8, recordedAt: at }));
+  });
+});
+
 describe("очередь визитов видна", () => {
   const plans: Plan[] = [
     { id: 1, status: "planned", shopName: "А" } as Plan,
@@ -139,7 +154,7 @@ describe("очередь визитов видна", () => {
     ] });
     await useVisitQueue.getState().retry("r");
     await new Promise(r => setTimeout(r, 0));
-    expect(apiMock.updatePlanStatus).toHaveBeenCalledWith(2, "visited");
+    expect(apiMock.updatePlanStatus).toHaveBeenCalledWith(2, "visited", "2026-09-19T10:01:00Z");
     expect(useVisitQueue.getState().actions).toEqual([]);
   });
 
