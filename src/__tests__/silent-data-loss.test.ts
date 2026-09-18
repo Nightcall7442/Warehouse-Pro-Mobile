@@ -65,19 +65,12 @@ describe("Ручная отправка точки GPS", () => {
   });
 });
 
-describe("Быстрый заказ из каталога", () => {
-  const src = readFileSync(join(root, "app", "(tabs)", "catalog.tsx"), "utf8");
-
-  test("не пропадает без связи", () => {
-    /**
-     * Здесь показывалось только сообщение с текстом ошибки, и заказ пропадал:
-     * ни на сервере, ни в очереди. Обман усиливался тем, что этот же экран
-     * офлайн рисует полосу «Офлайн данные» и оставляет кнопки живыми.
-     */
-    expect(src).toContain("isRetryableError");
-    expect(src).toContain("addOrder");
-    // Прежнее признание в коде — «this quick-add flow has no offline queue» —
-    // больше не должно быть правдой.
-    expect(src).not.toContain("this quick-add flow has no offline queue");
+describe("Заказ из каталога", () => {
+  // Быстрого заказа на одну позицию больше нет: корзина ведёт на экран заказа,
+  // у которого своя очередь офлайна (см. catalog-cart.test).
+  test("каталог не создаёт заказ сам", () => {
+    const src = readFileSync(join(root, "app", "(tabs)", "catalog.tsx"), "utf8");
+    expect(src).not.toContain("createOrder(");
+    expect(src).toContain("useCartStore");
   });
 });

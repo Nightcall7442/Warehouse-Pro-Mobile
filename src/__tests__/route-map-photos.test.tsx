@@ -126,8 +126,8 @@ describe("каталог", () => {
     expect(src).toContain("placeholderData: keepPreviousData");
   });
 
-  it("после быстрого заказа остаток перестаёт быть вчерашним", () => {
-    expect(src).toContain('[["myOrders"], ["products"], ["availableShops"], ["plans"]]');
+  it("каталог не создаёт заказ сам — остаток сбрасывает экран заказа", () => {
+    expect(src).not.toContain("createOrder(");
   });
 
   it("остаток печатается количеством, а не «150.00»", () => {
