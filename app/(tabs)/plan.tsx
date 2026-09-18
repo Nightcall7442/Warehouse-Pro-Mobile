@@ -23,6 +23,7 @@ import { isRetryableError } from "../../src/store/offline";
 import { sendVisitPing } from "../../src/lib/visit-ping";
 import { formatMoney } from "../../src/store/branding";
 import { useT, useLang } from "../../src/i18n";
+import { GpsOffHint } from "../../src/components/plans/GpsOffHint";
 
 type IconName = keyof typeof Feather.glyphMap;
 
@@ -367,6 +368,7 @@ export default function PlanScreen() {
         </FadeInItem>
 
         <View style={{ marginTop: Spacing.md }}>
+          <GpsOffHint colors={colors} />
           {plansLoading ? (
             <View style={{ gap: 8 }}>
               {[1, 2, 3].map(i => <ShimmerSkeleton key={i} height={64} radius={Radii.lg} />)}

@@ -28,6 +28,7 @@ import { sendVisitPing } from "../../lib/visit-ping";
 import { useVisitQueue } from "../../store/visit-queue";
 import { isRetryableError } from "../../store/offline";
 import { useT, useLang } from "../../i18n";
+import { GpsOffHint } from "./GpsOffHint";
 
 export function AgentPlansView() {
   const insets = useSafeAreaInsets();
@@ -347,6 +348,7 @@ export function AgentPlansView() {
           // добирается к вечеру. Запаса в 24 точки хватало только на отступ от
           // края экрана, но не на саму панель.
           contentContainerStyle={{ padding: Spacing.base, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.lg }}
+          ListHeaderComponent={<GpsOffHint colors={colors} />}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
           refreshControl={
             <RefreshControl
