@@ -16,6 +16,7 @@ import { notify } from "../../src/store/toast";
 import { Card, Badge, Button, IconCircle } from "../../src/components/ui";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
 import { useT } from "../../src/i18n";
+import { ErrorState } from "../../src/components/QueryState";
 
 interface ChecklistItem {
   productId: number;
@@ -137,7 +138,7 @@ export default function MerchandiserVisitScreen() {
   const [competitorNotes, setCompetitorNotes] = useState("");
   const draftChecked = useRef(false);
 
-  const { data: products, isLoading: productsLoading } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
+  const { data: products, isLoading: productsLoading, isError: productsError, error: productsErr, refetch: refetchProducts, isFetching: productsFetching } = useQuery({ queryKey: ["products"], queryFn: () => getProducts() });
 
   useEffect(() => {
     if (!products || rows.length > 0) return;
@@ -252,8 +253,45 @@ export default function MerchandiserVisitScreen() {
   const totalItems = rows.length;
   const completionPct = totalItems > 0 ? Math.round((presentCount / totalItems) * 100) : 0;
 
+  /*
+    Подтверждение — с цифрами, а не «Отчёт будет отправлен».
+
+    Пустой отчёт (0 фото, 0 отметок) проходил молча: визит закрыт, а в
+    руководстве написано «визит без фото не подтверждён». Пустые визиты —
+    оплаченная нерабочая смена. Без фото — отдельный вопрос с дорогой к камере.
+  */
+  const confirmSubmit = () => {
+    const summary = t(`${photos.length} фото · есть ${presentCount} из ${totalItems}`, `${photos.length} ta rasm · bor ${presentCount} / ${totalItems}`);
+    if (photos.length === 0) {
+      Alert.alert(
+        t("Без фото визит не будет подтверждён", "Rasmsiz tashrif tasdiqlanmaydi"),
+        summary,
+        [
+          { text: t("Сделать фото", "Rasmga olish"), onPress: () => pickPhoto(true) },
+          { text: t("Отправить без фото", "Rasmsiz yuborish"), style: "destructive", onPress: () => submitReport.mutate() },
+          { text: t("Отмена", "Bekor"), style: "cancel" },
+        ],
+      );
+      return;
+    }
+    Alert.alert(t("Завершить визит?", "Tashrifni yakunlaysizmi?"), summary, [
+      { text: t("Отмена", "Bekor"), style: "cancel" },
+      { text: t("Отправить", "Yuborish"), onPress: () => submitReport.mutate() },
+    ]);
+  };
+
   if (productsLoading) {
     return <View style={{ flex: 1, backgroundColor: colors.bg.primary, justifyContent: "center", alignItems: "center" }}><ActivityIndicator size="large" color={colors.accent.primary} /></View>;
+  }
+
+  // Каталог не доехал (подвал ТЦ) — раньше экран открывался с нулём товаров,
+  // «0/0 (0 %)», и «Завершить визит» закрывал его пустым отчётом.
+  if (productsError && rows.length === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg.primary, paddingTop: insets.top, justifyContent: "center" }}>
+        <ErrorState what={t("каталог", "katalog")} error={productsErr} onRetry={() => { void refetchProducts(); }} retrying={productsFetching} />
+      </View>
+    );
   }
 
   return (
@@ -372,7 +410,7 @@ export default function MerchandiserVisitScreen() {
         <Button variant="primary" size="lg" fullWidth icon="send" loading={submitReport.isPending}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            Alert.alert(t("Завершить визит?", "Tashrifni yakunlaysizmi?"), t("Отчёт будет отправлен", "Hisobot yuboriladi"), [{ text: t("Отмена", "Bekor"), style: "cancel" }, { text: t("Отправить", "Yuborish"), onPress: () => submitReport.mutate() }]);
+            confirmSubmit();
           }}>
           {t("Завершить визит", "Tashrifni yakunlash")}
         </Button>
