@@ -914,6 +914,11 @@ function CourierHome() {
     queryFn: () => import("../../src/api").then(m => m.listMyDeliveries()),
     retry: false,
   });
+  const { data: todayKpi, refetch: refetchToday } = useQuery({
+    queryKey: ["courierKpi", "today"],
+    queryFn: () => import("../../src/api").then(m => m.getCourierKpi("today")),
+    retry: false,
+  });
   const [refreshing, setRefreshing] = useState(false);
 
   const hour = new Date().getHours();
@@ -922,14 +927,16 @@ function CourierHome() {
 
   const assigned = (deliveries ?? []).filter(d => d.deliveryStatus === "assigned").length;
   const inTransit = (deliveries ?? []).filter(d => d.deliveryStatus === "out_for_delivery").length;
-  const delivered = (deliveries ?? []).filter(d => d.deliveryStatus === "delivered").length;
-  const total = (deliveries ?? []).length;
+  // Список отдаёт только не довезённое — «Доставлено» из него было нулём весь
+  // день. Довезённое за сегодня считает сервер (kpi.courierKpi, период today).
+  const delivered = todayKpi?.delivered ?? 0;
+  const total = assigned + inTransit + delivered;
   const deliveryPct = total > 0 ? Math.round((delivered / total) * 100) : 0;
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { await refetch(); } finally { setRefreshing(false); }
-  }, [refetch]);
+    try { await Promise.all([refetch(), refetchToday()]); } finally { setRefreshing(false); }
+  }, [refetch, refetchToday]);
 
   const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent.primary} />;
 

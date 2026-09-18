@@ -23,6 +23,7 @@ import { useOfflineStore, isRetryableError } from "../../src/store/offline";
 import { useT } from "../../src/i18n";
 import { unitShort } from "../../src/lib/units";
 import { paymentMethodLabel } from "../../src/lib/order-status";
+import { parseAmount } from "../../src/lib/order-money";
 
 type DeliveryResult = "paid" | "partial_paid" | "returned" | "partial_returned";
 
@@ -178,7 +179,7 @@ export default function DeliveryScreen() {
     return Math.max(0, Math.round((orderTotal - returnedValue) * 100) / 100);
   }, [order, result, orderTotal, returnedQty]);
   const owed = result === "partial_returned" ? keptTotal : orderTotal;
-  const debt = useMemo(() => Math.max(0, owed - Number(paidAmount || 0)), [owed, paidAmount]);
+  const debt = useMemo(() => Math.max(0, owed - parseAmount(paidAmount)), [owed, paidAmount]);
 
   const setItemReturnedQty = (itemId: number, maxQty: number, value: string) => {
     const clamped = Math.max(0, Math.min(maxQty, Number(value) || 0));
@@ -218,7 +219,7 @@ export default function DeliveryScreen() {
 
     const cur = branding.currencySymbol;
     const total = orderTotal.toLocaleString("ru");
-    const paidStr = Number(paidAmount || 0).toLocaleString("ru");
+    const paidStr = parseAmount(paidAmount).toLocaleString("ru");
     const debtStr = debt.toLocaleString("ru");
     const n = returnedItemsList.length;
     const labels: Record<string, string> = {
@@ -242,7 +243,7 @@ export default function DeliveryScreen() {
               orderId: Number(id),
               result,
               paidAmount: result === "paid" ? String(orderTotal)
-                : result === "partial_paid" || result === "partial_returned" ? String(Number(paidAmount || 0))
+                : result === "partial_paid" || result === "partial_returned" ? String(parseAmount(paidAmount))
                 : undefined,
               paymentMethod,
               debtDueDate: dueIso ?? undefined,
@@ -388,7 +389,7 @@ export default function DeliveryScreen() {
                 <TextInput
                   value={paidAmount}
                   onChangeText={setPaidAmount}
-                  keyboardType="numeric"
+                  keyboardType="decimal-pad"
                   placeholder="0"
                   placeholderTextColor={colors.text.muted}
                   style={{

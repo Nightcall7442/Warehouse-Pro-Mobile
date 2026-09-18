@@ -758,7 +758,7 @@ export interface CourierStats {
   successRate: number;
 }
 
-export async function getCourierKpi(period: "week" | "month" | "quarter" = "month"): Promise<CourierStats> {
+export async function getCourierKpi(period: "today" | "week" | "month" | "quarter" = "month"): Promise<CourierStats> {
   return trpcQuery<CourierStats>("kpi.courierKpi", { period });
 }
 
