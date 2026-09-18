@@ -12,6 +12,7 @@ jest.mock("../api", () => ({
 }));
 
 import { useOfflineStore } from "../store/offline";
+import { useAuthStore } from "../store/auth";
 import { createOrder } from "../api";
 
 const mockCreateOrder = createOrder as jest.MockedFunction<typeof createOrder>;
@@ -45,6 +46,8 @@ function makeOrder(id: string, extra: Record<string, unknown> = {}) {
 describe("Удалённое во время синхронизации", () => {
   beforeEach(() => {
     useOfflineStore.setState({ orders: [], loaded: true, syncingOrders: false });
+    // Записи помечены владельцем 1 — и отправляются только под его входом.
+    useAuthStore.setState({ user: { id: 1, name: "Агент", role: "agent" } as never });
     mockCreateOrder.mockReset();
   });
 
