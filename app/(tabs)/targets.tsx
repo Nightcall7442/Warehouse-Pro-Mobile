@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { getSalesTargetSummary, getPlans, getAgentsList, Plan } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Spacing, Radii, Gradients, soft } from "../../src/theme";
+import { Typography, Spacing, Radii, soft } from "../../src/theme";
 import { Card, EmptyState } from "../../src/components/ui";
 import { ErrorState } from "../../src/components/QueryState";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
@@ -32,10 +32,9 @@ export default function TargetsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
-  // Шапка в тёмной теме залита тёмным (Gradients.dark), а в светлой — цветом
-  // арендатора. Белые надписи были прописаны на оба случая: у организации со
-  // светлым фирменным цветом заголовок «Показатели» пропадал целиком.
   // Шапка ровная, цвета bg.secondary (как ScreenHeader и веб) — чернила обычные.
+  // Раньше она была залита цветом арендатора с белыми надписями, и у организации
+  // со светлым фирменным цветом заголовок «Показатели» пропадал целиком.
   const headerInk = colors.text.primary;
   const headerInkSoft = colors.text.secondary;
   const [section, setSection] = useState<Section>("targets");
