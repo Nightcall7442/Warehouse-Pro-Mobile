@@ -11,6 +11,7 @@ import { Card, IconCircle } from "../ui";
 import { FadeInItem } from "../Animated";
 import { money, makeStyles } from "./OrderStyles";
 import { unitShort } from "../../lib/units";
+import { useT } from "../../i18n";
 import type { OrderDetail } from "../../api";
 
 /** Single product line in the order */
@@ -18,6 +19,7 @@ function ItemRow({ name, code, qty, price, discount, total, colors, unit, delive
   name: string; code?: string; qty: number; price: number; discount?: number; total: number; colors: ThemeColors;
   unit?: string; deliveredQty?: number | null; returnReason?: string | null;
 }) {
+  const t = useT();
   const styles = makeStyles(colors);
   // Единица — из общего справочника. Своя таблица была здесь третьей копией и
   // расходилась с остальными: ящик (box) и блок (block) назывались одним словом
@@ -33,7 +35,7 @@ function ItemRow({ name, code, qty, price, discount, total, colors, unit, delive
           {hasPartial ? (
             <View>
               <Text style={[styles.itemQty, { textDecorationLine: "line-through", color: colors.text.muted }]}>{qty} {unitName}</Text>
-              <Text style={[styles.itemQty, { color: colors.status.warning, fontFamily: Typography.fontBold }]}>Отдано: {deliveredQty} {unitName}</Text>
+              <Text style={[styles.itemQty, { color: colors.status.warning, fontFamily: Typography.fontBold }]}>{t("Отдано", "Berildi")}: {deliveredQty} {unitName}</Text>
               {returnReason && <Text style={[styles.itemCode, { color: colors.status.danger, marginTop: 2 }]}>{returnReason}</Text>}
             </View>
           ) : (
@@ -57,13 +59,14 @@ function ItemRow({ name, code, qty, price, discount, total, colors, unit, delive
 
 /** Items list card */
 export function OrderItemsList({ order, colors }: { order: OrderDetail; colors: ThemeColors }) {
+  const t = useT();
   return (
     <FadeInItem delay={40}>
       {order.items && order.items.length > 0 ? (
         <Card style={{ marginBottom: Spacing.sm, padding: 0, overflow: "hidden" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: Spacing.base, paddingBottom: 12 }}>
             <IconCircle name="package" size={15} variant="brand" />
-            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Товары ({order.items.length})</Text>
+            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Товары", "Tovarlar")} ({order.items.length})</Text>
           </View>
           <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />
           {order.items.map((item, idx) => (
@@ -86,7 +89,7 @@ export function OrderItemsList({ order, colors }: { order: OrderDetail; colors: 
       ) : (
         <Card style={{ marginBottom: Spacing.sm, alignItems: "center", paddingVertical: 32, gap: 10 }}>
           <Feather name="package" size={28} color={colors.text.muted} />
-          <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>Список товаров недоступен</Text>
+          <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>{t("Список товаров недоступен", "Tovarlar ro'yxati mavjud emas")}</Text>
         </Card>
       )}
     </FadeInItem>
@@ -97,30 +100,31 @@ export function OrderItemsList({ order, colors }: { order: OrderDetail; colors: 
 export function OrderFinancialSummary({ order, subtotal, discount, colors }: {
   order: OrderDetail; subtotal: number; discount: number; colors: ThemeColors;
 }) {
+  const t = useT();
   return (
     <FadeInItem delay={80}>
       <Card style={{ marginBottom: Spacing.sm, padding: 0, overflow: "hidden" }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: Spacing.base, paddingBottom: 12 }}>
           <IconCircle name="dollar-sign" size={15} variant="brand" />
-          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>Итог</Text>
+          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Итог", "Yakun")}</Text>
         </View>
         <View style={{ height: 1, backgroundColor: colors.border.subtle, marginHorizontal: Spacing.base }} />
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingVertical: 10 }}>
-          <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary }}>Сумма товаров</Text>
+          <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary }}>{t("Сумма товаров", "Tovarlar summasi")}</Text>
           <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.text.primary }}>{money(subtotal)}</Text>
         </View>
         {discount > 0 && (
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingVertical: 10 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Feather name="tag" size={13} color={colors.status.success} />
-              <Text style={{ fontSize: Typography.size.sm, color: colors.status.success }}>Скидка</Text>
+              <Text style={{ fontSize: Typography.size.sm, color: colors.status.success }}>{t("Скидка", "Chegirma")}</Text>
             </View>
             <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.status.success }}>−{discount}%</Text>
           </View>
         )}
         <View style={{ height: 1, backgroundColor: colors.border.default, marginHorizontal: Spacing.base, marginVertical: 4 }} />
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, paddingTop: 10 }}>
-          <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.text.primary }}>Итого</Text>
+          <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontBold, color: colors.text.primary }}>{t("Итого", "Jami")}</Text>
           <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingHorizontal: 14, paddingVertical: 7 }}>
             {/* Плашка итога залита фирменным цветом — цифра подбирается по
                 его яркости, иначе у светлого бренда сумма пропадает. */}
