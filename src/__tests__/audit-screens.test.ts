@@ -403,19 +403,23 @@ describe("merchandiser/visit: чек-лист на большом каталог
       Array.from({ length: 300 }, (_, i) => product(i + 1, `Товар ${i + 1}`)));
   });
 
+  // Строка — сегмент «Есть · Нет»; поля цены и акции появляются только у
+  // того, что есть на полке (см. feat/checklist-tristate).
+  const rowsMounted = () => screen.getAllByLabelText(/^Есть: /);
+
   async function renderVisit() {
     const VisitScreen = require("../../app/merchandiser/visit").default;
     render(withQueryClient(React.createElement(VisitScreen)));
-    await waitFor(() => expect(screen.getAllByPlaceholderText("Цена").length).toBeGreaterThan(0));
+    await waitFor(() => expect(rowsMounted().length).toBeGreaterThan(0));
   }
 
   it("не монтирует все строки каталога разом", async () => {
     await renderVisit();
 
-    // Каталог на 300 SKU — это 600 нативных полей ввода, если рисовать всё
+    // Каталог на 300 SKU — это сотни нативных полей ввода, если рисовать всё
     // сразу: экран отчёта открывался с многосекундной паузой. Список
     // виртуализован, поэтому смонтирована только видимая часть.
-    const mounted = screen.getAllByPlaceholderText("Цена").length;
+    const mounted = rowsMounted().length;
     expect(mounted).toBeGreaterThan(0);
     expect(mounted).toBeLessThan(100);
 
@@ -429,7 +433,11 @@ describe("merchandiser/visit: чек-лист на большом каталог
   it("правка цены остаётся в своей строке", async () => {
     await renderVisit();
 
+    // Цена спрашивается только у того, что есть: отмечаем две строки.
+    await act(async () => { fireEvent.click(screen.getByLabelText("Есть: Товар 1")); });
+    await act(async () => { fireEvent.click(screen.getByLabelText("Есть: Товар 2")); });
     const priceInputs = screen.getAllByPlaceholderText("Цена");
+    expect(priceInputs).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await act(async () => { fireEvent.change(priceInputs[0], { target: { value: "12500" } } as any); });
 
