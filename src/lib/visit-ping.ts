@@ -1,5 +1,5 @@
 import * as Location from "expo-location";
-import * as Battery from "expo-battery";
+import { batteryPercent } from "./battery";
 import { saveLocation } from "../api";
 import { bufferLocation } from "../backgroundLocation";
 import { isRetryableError } from "../store/offline";
@@ -52,14 +52,14 @@ export async function sendVisitPing(): Promise<void> {
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("GPS timeout")), FIX_TIMEOUT_MS)),
       ]),
-      Battery.getBatteryLevelAsync().catch(() => null),
+      batteryPercent(),
     ]);
 
     const point = {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
       accuracy: pos.coords.accuracy ?? 999,
-      batteryLevel: battery !== null ? Math.round(battery * 100) : undefined,
+      batteryLevel: battery,
       // Время съёмки: точка, пролежавшая без связи, должна встать на карту
       // туда, где агент БЫЛ, а не туда, где телефон дозвонился.
       recordedAt: new Date().toISOString(),

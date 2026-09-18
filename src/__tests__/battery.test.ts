@@ -156,6 +156,11 @@ describe("автоматическая съёмка не будит спутни
     const BG = strip(read("src/backgroundLocation.ts"));
     expect(BG).toContain("distanceInterval:");
     expect(BG).toContain("deferredUpdatesInterval:");
+    // deferredUpdatesInterval только копит и отдаёт пачкой; без timeInterval
+    // Balanced снимал точку на каждые 50 м, но не реже раза в 3 секунды.
+    expect(BG).toContain("timeInterval: 120_000");
+    // iOS сам ставит обновления на паузу у стоящего агента и не возобновляет.
+    expect(BG).toContain("pausesUpdatesAutomatically: false");
     expect(BG).toContain("Accuracy.Balanced");
   });
 });

@@ -1,6 +1,6 @@
 import * as TaskManager from "expo-task-manager";
 import * as Location from "expo-location";
-import * as Battery from "expo-battery";
+import { batteryPercent } from "./lib/battery";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { saveLocation } from "./api";
 
@@ -15,7 +15,10 @@ const BACKGROUND_LOCATION_TASK = "background-location-task";
  * first, since the recent ones are what the office actually looks at.
  */
 const PENDING_KEY = "pending_locations";
-const PENDING_MAX = 200;
+// 2000 точек ≈ 200 КБ JSON — безопасно для AsyncStorage. Двухсот хватало на
+// 12 минут езды без связи: за городом мёртвые зоны длиннее, и начало отрезка
+// стиралось навсегда.
+const PENDING_MAX = 2000;
 
 /**
  * Сколько точек отдаём за один заход и какая пауза между ними.
@@ -159,8 +162,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   const locations = (data as { locations?: Location.LocationObject[] } | null)?.locations;
   if (!locations || locations.length === 0) return;
 
-  const battery = await Battery.getBatteryLevelAsync().catch(() => null);
-  const batteryLevel = battery !== null ? Math.round(battery * 100) : undefined;
+  const batteryLevel = await batteryPercent();
   const points: PendingPoint[] = locations.map((location) => ({
     lat: location.coords.latitude,
     lng: location.coords.longitude,
@@ -238,8 +240,17 @@ export async function startBackgroundTracking(): Promise<{ success: boolean; rea
       await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
         accuracy: Location.Accuracy.Balanced,
         distanceInterval: 50, // Only update if moved 50m
+        // deferredUpdatesInterval только копит точки в фоне и отдаёт пачкой —
+        // без timeInterval Balanced снимал точку на каждые 50 м, но не реже раза
+        // в 3 секунды: ~1000 точек в час езды, батарея и лимит запросов. Обещано
+        // на экране «не чаще раза в 2 минуты» — вот оно.
+        timeInterval: 120_000,
         deferredUpdatesInterval: 120_000, // Max once per 2 minutes
         showsBackgroundLocationIndicator: true,
+        // iOS по умолчанию сам ставит обновления на паузу у стоящего агента
+        // (магазин, обед) и не возобновляет, пока приложение не выйдет на экран.
+        pausesUpdatesAutomatically: false,
+        activityType: Location.ActivityType.OtherNavigation,
         foregroundService: {
           notificationTitle: "Warehouse Pro",
           notificationBody: "Геолокация активна",

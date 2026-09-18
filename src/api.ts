@@ -1193,7 +1193,10 @@ export interface SubmitReportInput {
 }
 
 export async function submitVisitReport(input: SubmitReportInput): Promise<{ success: boolean; reportId: number }> {
-  return trpcMutation<{ success: boolean; reportId: number }>("merchandiser.submitReport", input);
+  // Отчёт с чек-листом на сотни строк и ссылками на фото шёл с таймаутом
+  // по умолчанию в 15 с: на слабой связи в магазине он рвался после того,
+  // как сервер уже вставил строку, и повтор давал второй отчёт по плану.
+  return trpcMutation<{ success: boolean; reportId: number }>("merchandiser.submitReport", input, { timeout: 120_000 });
 }
 
 export async function getReportById(id: number): Promise<VisitReport | null> {

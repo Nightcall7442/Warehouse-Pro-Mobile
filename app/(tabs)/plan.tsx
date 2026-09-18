@@ -19,6 +19,8 @@ import { useRouter } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { useAuthStore } from "../../src/store/auth";
 import { useVisitQueue } from "../../src/store/visit-queue";
+import { useQueuedPlans } from "../../src/lib/plan-queue";
+import { QueueNote } from "../../src/components/plans/QueueNote";
 import { isRetryableError } from "../../src/store/offline";
 import { sendVisitPing } from "../../src/lib/visit-ping";
 import { formatMoney } from "../../src/store/branding";
@@ -262,11 +264,13 @@ export default function PlanScreen() {
   const t = useT();
   const lang = useLang();
 
-  const { data: plans, isLoading: plansLoading, isError: plansError, refetch: refetchPlans } = useQuery({
+  const { data: serverPlans, isLoading: plansLoading, isError: plansError, refetch: refetchPlans } = useQuery({
     queryKey: ["plans"],
     queryFn: async () => { const r = await getPlans(); return Array.isArray(r) ? r : []; },
     retry: false,
   });
+  // Очередь визитов наложена на список: отмеченный без связи — отмечен.
+  const { plans, queued } = useQueuedPlans(serverPlans);
 
   const router = useRouter();
   const { user } = useAuthStore();
@@ -387,8 +391,8 @@ export default function PlanScreen() {
             <EmptyState icon="calendar" title={t("На сегодня визитов нет", "Bugun tashrif yo'q")} description={t("Планы визитов появятся здесь", "Tashrif rejalari shu yerda chiqadi")} />
           ) : (
             plans.map((plan, idx) => (
+              <View key={plan.id}>
               <VisitCard
-                key={plan.id}
                 plan={plan}
                 colors={colors}
                 isDark={isDark}
@@ -403,6 +407,8 @@ export default function PlanScreen() {
                 // приём уже применён в app/(tabs)/deliveries.tsx.
                 isPending={updateMutation.isPending && updateMutation.variables?.planId === plan.id}
               />
+              {queued.has(plan.id) && <QueueNote action={queued.get(plan.id)!} colors={colors} />}
+              </View>
             ))
           )}
         </View>
