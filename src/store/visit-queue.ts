@@ -84,16 +84,17 @@ async function send(a: VisitAction): Promise<string | undefined> {
     try {
       ({ dataUrl } = await preparePhoto(a.photoUri));
     } catch {
-      await updatePlanStatus(a.planId, a.status);
+      await updatePlanStatus(a.planId, a.status, a.createdAt);
       return tt("Снимок пропал с телефона — визит отмечен без фото", "Rasm telefondan yo'qolgan — tashrif rasmsiz belgilandi");
     }
     url = await uploadFile(dataUrl, "visits");
   }
+  // Время отметки — из очереди: визит стоит в журнале тогда, когда был.
   if (url) {
-    await saveVisitPhoto(a.planId, url);
+    await saveVisitPhoto(a.planId, url, undefined, a.createdAt);
     return;
   }
-  await updatePlanStatus(a.planId, a.status);
+  await updatePlanStatus(a.planId, a.status, a.createdAt);
 }
 
 export const useVisitQueue = create<VisitQueue>((set, get) => ({

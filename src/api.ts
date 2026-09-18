@@ -540,11 +540,17 @@ export async function getPlans(agentId?: number, date?: string): Promise<Plan[]>
   return trpcQuery<Plan[]>("agent.getPlans", { agentId, date });
 }
 
+/**
+ * recordedAt — когда отметка сделана на телефоне. Шлёт только очередь: визит,
+ * отмеченный утром без связи и ушедший вечером, в журнале стоит утром, а не
+ * «18:40» вместе со всеми остальными. Онлайн-путь ничего не шлёт — «сейчас».
+ */
 export async function updatePlanStatus(
   planId: number,
-  status: Plan["status"]
+  status: Plan["status"],
+  recordedAt?: string,
 ): Promise<void> {
-  await trpcMutation("agent.updatePlanStatus", { planId, status });
+  await trpcMutation("agent.updatePlanStatus", { planId, status, recordedAt });
 }
 
 export async function saveLocation(
@@ -583,9 +589,10 @@ export async function saveLocation(
 export async function saveVisitPhoto(
   planId: number,
   photoUrl: string,
-  notes?: string
+  notes?: string,
+  recordedAt?: string,
 ): Promise<void> {
-  await trpcMutation("agent.saveVisitPhoto", { planId, photoUrl, notes });
+  await trpcMutation("agent.saveVisitPhoto", { planId, photoUrl, notes, recordedAt });
 }
 
 // ── Barcode Lookup ───────────────────────────────────────────────────────────
@@ -1131,8 +1138,9 @@ export async function markOutForDelivery(orderId: number): Promise<void> {
   await trpcMutation("courier.markOutForDelivery", { orderId }, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
-export async function markDelivered(orderId: number, cashAmount?: string): Promise<void> {
-  await trpcMutation("courier.markDelivered", { orderId, cashAmount }, { timeout: DELIVERY_TIMEOUT_MS });
+/** recordedAt — когда отметка сделана (шлёт очередь): доставка в 23:50 без связи остаётся во вчерашнем дне. */
+export async function markDelivered(orderId: number, cashAmount?: string, recordedAt?: string): Promise<void> {
+  await trpcMutation("courier.markDelivered", { orderId, cashAmount, recordedAt }, { timeout: DELIVERY_TIMEOUT_MS });
 }
 
 export async function markFailed(orderId: number, reason?: string): Promise<void> {
@@ -1141,6 +1149,8 @@ export async function markFailed(orderId: number, reason?: string): Promise<void
 
 export interface CompleteDeliveryInput {
   orderId: number;
+  /** Когда отметка сделана на телефоне; шлёт очередь. */
+  recordedAt?: string;
   result: "paid" | "partial_paid" | "returned" | "partial_returned";
   paidAmount?: string;
   paymentMethod?: "cash" | "card" | "transfer";

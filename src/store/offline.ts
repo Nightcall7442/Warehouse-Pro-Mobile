@@ -419,9 +419,11 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
         if (networkDown) { skipped.add(entry.id); continue; }
         const { action } = entry;
         try {
+          // Время отметки — из очереди (createdAt): доставка в 23:50 без связи
+          // остаётся во вчерашнем дне, а не уезжает в следующий с отправкой.
           const value = action.type === "markOutForDelivery" ? await markOutForDelivery(action.orderId)
-            : action.type === "markDelivered" ? await markDelivered(action.orderId, action.cashAmount)
-            : action.type === "completeDelivery" ? await completeDelivery(action.input)
+            : action.type === "markDelivered" ? await markDelivered(action.orderId, action.cashAmount, entry.createdAt)
+            : action.type === "completeDelivery" ? await completeDelivery({ ...action.input, recordedAt: entry.createdAt })
             : await markFailed(action.orderId, action.reason);
           results.push({ status: "fulfilled", value });
         } catch (reason) {
@@ -667,8 +669,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       const { markOutForDelivery, markDelivered, markFailed, completeDelivery } = await import("../../src/api");
       const act = action.action;
       if (act.type === "markOutForDelivery") await markOutForDelivery(act.orderId);
-      else if (act.type === "markDelivered") await markDelivered(act.orderId, act.cashAmount);
-      else if (act.type === "completeDelivery") await completeDelivery(act.input);
+      else if (act.type === "markDelivered") await markDelivered(act.orderId, act.cashAmount, action.createdAt);
+      else if (act.type === "completeDelivery") await completeDelivery({ ...act.input, recordedAt: action.createdAt });
       else if (act.type === "markFailed") await markFailed(act.orderId, act.reason);
 
       const final = get().deliveryActions.map((a) =>
