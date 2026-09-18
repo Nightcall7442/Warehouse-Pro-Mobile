@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, Alert } from "react-native";
+import { View, Text, Alert, Modal } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useLockStore } from "../store/lock";
@@ -89,16 +89,23 @@ export function LockScreen() {
 
   if (!locked) return null;
 
+  /*
+    Замок — в собственном системном окне (Modal), а не в оверлее JS-дерева.
+
+    Абсолютный View с zIndex накрывал только экраны навигатора: RN Modal —
+    отдельное окно системы и рисуется поверх любого JS-оверлея. Открытый лист
+    товара с ценами и остатком или окно доставки так и стояли поверх «замка».
+    Смысл замка — скрыть содержимое; своё окно выше всех остальных.
+  */
   return (
+    <Modal visible transparent={false} animationType="none" statusBarTranslucent onRequestClose={() => { /* «назад» замок не снимает — только отпечаток или выход */ }}>
     <View
       style={{
-        position: "absolute",
-        top: 0, left: 0, right: 0, bottom: 0,
+        flex: 1,
         backgroundColor: colors.bg.primary,
         alignItems: "center",
         justifyContent: "center",
         padding: Spacing.base * 1.5,
-        zIndex: 999,
       }}
     >
       <View style={{
@@ -135,5 +142,6 @@ export function LockScreen() {
         {t("Выйти из аккаунта", "Hisobdan chiqish")}
       </Button>
     </View>
+    </Modal>
   );
 }
