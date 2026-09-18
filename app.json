@@ -45,7 +45,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Приложение использует геолокацию в фоне для отслеживания местоположения агентов и доставок",
           "isAndroidBackgroundLocationEnabled": true,
-          "isAndroidForegroundServiceEnabled": true
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true
         }
       ],
       [

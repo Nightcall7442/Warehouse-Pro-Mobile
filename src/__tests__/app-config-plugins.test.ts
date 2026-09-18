@@ -19,3 +19,13 @@ describe("плагины app.json", () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe("геолокация в фоне", () => {
+  it("включена и на iOS, и на Android — агентов и доставки ведут с обеих платформ", () => {
+    const loc = app.expo.plugins.find(p => Array.isArray(p) && p[0] === "expo-location") as [string, Record<string, unknown>] | undefined;
+    expect(loc).toBeTruthy();
+    // Имя опции — как в плагине expo-location (withLocation.js): «Ios», не «IOS».
+    expect(loc![1].isIosBackgroundLocationEnabled).toBe(true);
+    expect(loc![1].isAndroidBackgroundLocationEnabled).toBe(true);
+  });
+});
