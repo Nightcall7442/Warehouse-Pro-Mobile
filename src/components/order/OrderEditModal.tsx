@@ -63,6 +63,8 @@ interface OrderEditModalProps {
   /** Экран узнаёт, что каталог понадобился, и грузит его. */
   onNeedCatalog?: () => void;
   onSave: () => void;
+  /** Вкладка «Детали» (заметки, скидка) идёт в order.update — на сервере только офис. Агенту её не показываем. */
+  canEditDetails?: boolean;
   onClose: () => void;
   colors: ThemeColors;
 }
@@ -70,6 +72,7 @@ interface OrderEditModalProps {
 export function OrderEditModal({
   visible, notes, discount, items, saving, catalog, onNeedCatalog,
   onNotesChange, onDiscountChange, onSaveItems, onSave, onClose, colors,
+  canEditDetails = true,
 }: OrderEditModalProps) {
   const { isDark } = useThemeStore();
   const t = useT();
@@ -281,6 +284,7 @@ export function OrderEditModal({
                 color: activeTab === "items" ? "#fff" : colors.text.tertiary,
               }}>{t("Товары", "Mahsulotlar")}</Text>
             </TouchableOpacity>
+            {canEditDetails && (
             <TouchableOpacity
               onPress={() => setActiveTab("details")}
               style={{
@@ -294,6 +298,7 @@ export function OrderEditModal({
                 color: activeTab === "details" ? "#fff" : colors.text.tertiary,
               }}>{t("Детали", "Tafsilotlar")}</Text>
             </TouchableOpacity>
+            )}
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "70%" }}>

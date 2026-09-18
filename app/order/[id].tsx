@@ -53,10 +53,13 @@ import { Card } from "../../src/components/ui";
 import { Spacing } from "../../src/theme";
 import { errorText } from "../../src/lib/error-text";
 import { useT } from "../../src/i18n";
+import { useAuthStore } from "../../src/store/auth";
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const user = useAuthStore(st => st.user);
+  const office = user?.role === "ceo" || user?.role === "operator";
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors, insets.top, insets.bottom);
@@ -84,9 +87,9 @@ export default function OrderDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
     },
-    onError: () => {
+    onError: (e) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error(t("Не удалось отменить заказ. Попробуйте ещё раз.", "Buyurtmani bekor qilib bo'lmadi. Yana urinib ko'ring."));
+      notify.error(errorText(e));
     },
   });
 
@@ -97,9 +100,9 @@ export default function OrderDetailScreen() {
       notify.success(t("Заказ удалён", "Buyurtma o'chirildi"));
       router.back();
     },
-    onError: () => {
+    onError: (e) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error(t("Не удалось удалить заказ. Попробуйте ещё раз.", "Buyurtmani o'chirib bo'lmadi. Yana urinib ko'ring."));
+      notify.error(errorText(e));
     },
   });
 
@@ -116,9 +119,9 @@ export default function OrderDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
     },
-    onError: () => {
+    onError: (e) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error(t("Не удалось обновить заказ", "Buyurtmani yangilab bo'lmadi"));
+      notify.error(errorText(e));
     },
   });
 
@@ -153,9 +156,9 @@ export default function OrderDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
     },
-    onError: () => {
+    onError: (e) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      notify.error(t("Не удалось обновить количество", "Miqdorni yangilab bo'lmadi"));
+      notify.error(errorText(e));
     },
   });
 
@@ -288,7 +291,12 @@ export default function OrderDetailScreen() {
   }
 
   const canCancel = order.status === "new" || order.status === "processing";
-  const canDelete = order.status === "new" || order.status === "processing" || order.status === "cancelled";
+  // Удаление и «Детали» (заметки, скидка) на сервере — только офис
+  // (order.delete / order.update = operatorQuery); состав — пока заказ не
+  // ушёл к курьеру (FIELD_EDITABLE_STATUSES). Кнопки — только там, где
+  // действие пройдёт: раньше агент упирался в «Не удалось…» без причины.
+  const canEdit = order.status === "new" || order.status === "processing" || order.status === "pending";
+  const canDelete = office && (order.status === "new" || order.status === "processing" || order.status === "cancelled");
   const subtotal = Number(order.subtotal ?? order.total ?? 0);
   const discountAmount = Number(order.discount ?? 0);
   // OrderFinancialSummary renders this as "−{discount}%" — order.discount is
@@ -340,6 +348,7 @@ export default function OrderDetailScreen() {
         <OrderItemsList order={order} colors={colors} />
         <OrderFinancialSummary order={order} subtotal={subtotal} discount={discount} colors={colors} />
         <OrderActions
+          canEdit={canEdit}
           canCancel={canCancel}
           canDelete={canDelete}
           cancelPending={cancelMutation.isPending}
@@ -362,6 +371,7 @@ export default function OrderDetailScreen() {
 
       <OrderEditModal
         visible={showEditModal}
+        canEditDetails={office}
         notes={editNotes}
         discount={editDiscount}
         items={(order?.items ?? []).map(item => ({
