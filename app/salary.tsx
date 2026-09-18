@@ -188,8 +188,18 @@ export default function SalaryScreen() {
                 flexDirection: "row", gap: Spacing.lg, marginTop: Spacing.lg,
                 paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.subtle,
               }}>
-                <Money label={t("Выдано", "Berilgan")} value={paid} colors={colors} />
-                <Money label={t("Остаток", "Qoldiq")} value={due} colors={colors} accent={due > 0} />
+                {period === "month" ? (
+                  <>
+                    <Money label={t("Выдано", "Berilgan")} value={paid} colors={colors} />
+                    <Money label={t("Остаток", "Qoldiq")} value={due} colors={colors} accent={due > 0} />
+                  </>
+                ) : (
+                  // Выдачи идут помесячно: «квартал минус выдачи за месяц» — число,
+                  // которого никто не должен, и повод для спора «мне недоплатили».
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }}>
+                    {t("Выдано и остаток считаются по месяцу — выберите «Месяц»", "Berilgan va qoldiq oy bo'yicha hisoblanadi — «Oy»ni tanlang")}
+                  </Text>
+                )}
               </View>
             </Card>
 

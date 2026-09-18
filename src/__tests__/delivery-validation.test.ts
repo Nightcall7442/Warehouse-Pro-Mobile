@@ -54,6 +54,10 @@ describe("оплачен частично", () => {
     expect(validateDeliveryForm(form({ result: "partial_paid", paidAmount: "200000" }))).toBeNull();
   });
 
+  it("сумма с запятой и пробелами — тоже сумма, а не «укажите сумму»", () => {
+    expect(validateDeliveryForm(form({ result: "partial_paid", paidAmount: "200 000,50" }))).toBeNull();
+  });
+
   it("сумма, равная итогу, — это полная оплата, а не частичная", () => {
     // Пропустив её, получили бы заказ с долгом в ноль и пометкой «частично».
     expect(validateDeliveryForm(form({ result: "partial_paid", paidAmount: "500000" })))

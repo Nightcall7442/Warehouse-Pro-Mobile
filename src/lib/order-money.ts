@@ -44,7 +44,8 @@ export interface MoneyLine {
  * бывает.
  */
 export function parseAmount(value: string | number | null | undefined): number {
-  const num = typeof value === "number" ? value : Number(String(value ?? "").replace(",", "."));
+  // Запятая — десятичный знак, пробелы (и неразрывные) — разряды: «1 500,50».
+  const num = typeof value === "number" ? value : Number(String(value ?? "").replace(/[\s\u00a0]/g, "").replace(",", "."));
   if (!Number.isFinite(num) || num < 0) return 0;
   return num;
 }

@@ -21,6 +21,7 @@
  */
 
 import { tt } from "../i18n";
+import { parseAmount } from "./order-money";
 
 export type DeliveryResult =
   | "paid"
@@ -46,7 +47,7 @@ export interface DeliveryFormState {
  * Порядок проверок — от частого к редкому: первое сообщение и увидит человек.
  */
 export function validateDeliveryForm(form: DeliveryFormState): string | null {
-  const paid = Number(form.paidAmount || 0);
+  const paid = parseAmount(form.paidAmount);
 
   if (form.result === "partial_paid") {
     if (!(paid > 0)) return tt("Укажите сумму оплаты", "To'lov summasini kiriting");
