@@ -1,7 +1,114 @@
 # Публикация в Google Play и App Store
 
 Что готово, что делаете вы, и где именно нас могут отклонить.
-Составлено 11.09.2026.
+Составлено 11.09.2026; раздел 0 — 19.09.2026, перед подачей в App Store.
+
+---
+
+## 0. App Store: подача 19.09.2026 — что уже есть и что заполнить
+
+Состояние: Apple Developer Program оплачен, приложение заведено в App Store
+Connect (ASC App ID `6813618628`, Apple Team `FC362FD37X`), сборка
+**1.0.0 (5)** загружена в TestFlight командой
+`npx eas-cli@latest submit -p ios --latest` (ascAppId прописан в `eas.json`,
+диалог больше не нужен). В сборке фирменный значок — у (3) и (4) был кубик.
+
+### 0.1 Форма распространения — Unlisted
+
+Приложение только для сотрудников подключённых организаций. Apple для таких
+предлагает **Unlisted App Distribution**: карточка в App Store есть, ставится
+по прямой ссылке, в поиске не показывается, ревью — обычное. Запрос подаётся
+формой https://developer.apple.com/contact/request/unlisted-app/ **после**
+того, как сборка прошла ревью хотя бы раз (Apple просит указать уже
+одобренную версию). Порядок: подать на ревью как обычное → одобрили →
+запросить unlisted → в «Pricing and Availability» появится переключатель.
+
+### 0.2 Карточка (App Store Connect → App Information / Version)
+
+| Поле | Значение |
+|---|---|
+| Name (30) | `Warehouse Pro` |
+| Subtitle (30) | `Заказы, склад и визиты агентов` |
+| Category | Business; вторичная — Productivity |
+| Age rating | 4+ (анкета: везде «нет»; «Unrestricted Web Access» — нет) |
+| Copyright | `© 2026 Warehouse Pro` (или юрлицо) |
+| Support URL | `https://www.warehouse-pro.uz` |
+| Marketing URL | то же, необязательно |
+| Privacy Policy URL | `https://www.warehouse-pro.uz/privacy` |
+| Keywords (100) | `дистрибуция,оптовая торговля,торговый агент,заказы,склад,долги,визиты,курьер,маршрут,CRM` |
+| Promotional text (170) | `Рабочее приложение торгового агента, курьера и супервайзера: заказ в магазине за минуту, долги, визиты и маршрут дня.` |
+| Description | текст из раздела 4 (полное описание) — целиком, включая абзац про отслеживание |
+| What's New (1.0.0) | `Первый выпуск.` |
+| Sign in with Apple | не требуется — сторонних входов (Google/Facebook) в приложении нет |
+| Content Rights | «не содержит стороннего контента» |
+
+### 0.3 Скриншоты — снять с TestFlight-сборки (5)
+
+Обязателен один набор **6.9″** (iPhone 16 Pro Max / 15 Pro Max — 1320×2868)
+— ASC масштабирует его на остальные размеры; iPad не нужен, если в ASC
+снять галочку iPad в «Availability» (приложение iPhone-only).
+
+Пять экранов, в этом порядке — первые три видны без прокрутки:
+1. Главная агента (план дня, визиты);
+2. Новый заказ — каталог с картинками и корзина;
+3. Долги магазинов;
+4. Карта «Где сотрудники» (супервайзер);
+5. Визит с фотоотчётом.
+
+Снимать на демо-организации (см. 0.5), не на боевых данных: телефоны и
+суммы настоящих магазинов в стор не выкладывать.
+
+### 0.4 App Privacy — ответы (раздел 5 ниже, кратко)
+
+Precise Location · Name · Email · Phone · Photos · Device ID — все «App
+Functionality», «Linked to user», tracking — **No**. «Data Used to Track
+You» — пусто. Crash/analytics SDK в приложении нет — ничего сверх этого не
+объявлять.
+
+### 0.5 App Review Information
+
+* Demo-доступ **обязателен**: без входа — только форма. Завести отдельную
+  организацию (Super Admin → «Песочница для интеграторов» или обычная
+  регистрация) с агентом, парой магазинов, десятком товаров и остатками;
+  указать email/пароль в «Sign-in required». Не давать доступ к живой
+  организации.
+* Заметка проверяющему — раздел 6, плюс два абзаца, которые Apple спрашивает
+  чаще всего:
+
+```
+Account creation and deletion: accounts are provisioned by the employer
+organisation; the app has no self-registration, so there is nothing to
+delete in-app. An employee can ask their organisation's administrator to
+delete the account, and the organisation itself can be deleted with all its
+data (Settings → Organisation).
+
+Background location (UIBackgroundModes: location): used only for the
+employee's working-day route and store-visit confirmation. It is off by
+default, enabled by the employee on the GPS tab after an in-app disclosure
+(what is recorded, how often, who sees it, how to turn it off), and can be
+turned off with one tap. Nothing is recorded while the tracking is off or
+the employee is stationary.
+```
+
+* Contact: телефон и email того, кто ответит ревьюеру в течение суток.
+
+### 0.6 Экспортный контроль
+
+`ITSAppUsesNonExemptEncryption: false` объявлен в `app.json` — приложение
+шифрует только HTTPS, это освобождённая категория. Без этого каждая сборка в
+ASC висела с «Missing Compliance». Тест: `src/__tests__/app-config-plugins.test.ts`.
+
+### 0.7 Порядок на этой неделе
+
+1. TestFlight → проверить (5) на своём iPhone: значок, вход, заказ, GPS.
+2. Демо-организация и учётная запись для ревью (0.5).
+3. Скриншоты (0.3).
+4. Заполнить карточку (0.2), App Privacy (0.4), Review Information (0.5),
+   в «Build» выбрать 1.0.0 (5) → **Submit for Review**.
+5. Ответ Apple — 1–3 дня. Типовые вопросы и ответы — раздел 8.
+6. После одобрения — запрос Unlisted (0.1); агентам давать прямую ссылку
+   на App Store. До этого агентов держать на TestFlight (внешняя группа,
+   публичная ссылка).
 
 ---
 

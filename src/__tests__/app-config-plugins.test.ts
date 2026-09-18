@@ -29,3 +29,15 @@ describe("геолокация в фоне", () => {
     expect(loc![1].isAndroidBackgroundLocationEnabled).toBe(true);
   });
 });
+
+/*
+  Экспортный контроль: приложение шифрует только HTTPS — это освобождённая
+  категория. Без явного «false» каждая сборка в App Store Connect висит с
+  «Missing Compliance», и в TestFlight её не раздать, пока не ответишь руками.
+*/
+describe("экспортный контроль", () => {
+  it("ITSAppUsesNonExemptEncryption = false объявлен в infoPlist", () => {
+    const app = JSON.parse(readFileSync(join(__dirname, "../../app.json"), "utf8"));
+    expect(app.expo.ios.infoPlist.ITSAppUsesNonExemptEncryption).toBe(false);
+  });
+});

@@ -20,7 +20,8 @@
         "NSLocationWhenInUseUsageDescription": "Приложение использует геолокацию для определения местоположения магазинов и построения маршрутов",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Приложение использует геолокацию в фоне для отслеживания местоположения агентов и доставок",
         "NSLocationAlwaysUsageDescription": "Приложение использует геолокацию в фоне для отслеживания местоположения агентов и доставок",
-        "NSPhotoLibraryUsageDescription": "Приложение использует галерею для загрузки фотографий"
+        "NSPhotoLibraryUsageDescription": "Приложение использует галерею для загрузки фотографий",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
