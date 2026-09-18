@@ -2,9 +2,11 @@ import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "./auth";
 import { errorText } from "../lib/error-text";
-import { isRetryableError, uuidv4 } from "./offline";
+import { isRetryableError, shouldAutoSync, uuidv4 } from "./offline";
 import { updatePlanStatus, saveVisitPhoto, uploadFile, type Plan } from "../api";
 import { preparePhoto } from "../lib/prepare-photo";
+import { notify } from "./toast";
+import { tt } from "../i18n";
 
 /*
   Третья очередь: отметки визитов и фото.
@@ -26,6 +28,8 @@ export interface VisitAction {
   status: Plan["status"];
   /** Локальный файл снимка (из камеры); грузится при отправке. */
   photoUri?: string;
+  /** Снимок уже в хранилище, а привязка к визиту сорвалась по сети: осталось привязать. */
+  photoUrl?: string;
   planName?: string;
   createdAt: string;
   ownerId?: number;
@@ -56,17 +60,34 @@ interface VisitQueue {
   remove: (id: string) => Promise<void>;
 }
 
-/** Только своё и только не отправленное: телефон в поле бывает общим. */
-function mine(a: VisitAction, userId: number | undefined): boolean {
-  if (a.synced) return false;
-  if (a.retryable === false) return false;
-  return a.ownerId === undefined || userId === undefined || a.ownerId === userId;
-}
+/** Только своё и только не отправленное: телефон в поле бывает общим (правило — одно на все очереди). */
+const mine = shouldAutoSync;
 
-async function send(a: VisitAction): Promise<void> {
-  if (a.photoUri) {
-    const { dataUrl } = await preparePhoto(a.photoUri);
-    const url = await uploadFile(dataUrl, "visits");
+/**
+ * Отправить одну запись. Возвращает предупреждение, если визит ушёл без снимка.
+ *
+ * Снимок лежит ссылкой на файл в кэше камеры, а кэш система чистит сама, когда
+ * место кончается. Раньше пропавший файл ронял preparePhoto не-сетевой ошибкой,
+ * запись получала retryable:false и исчезала из прохода навсегда — вместе с
+ * визитом, который так и оставался неотмеченным. Визит важнее фото: без файла
+ * отметка уходит обычным путём, а агент узнаёт, что снимок пропал.
+ *
+ * Отказ сервера на сам снимок (подлог, битые данные) на отметку НЕ
+ * подменяется: у saveVisitPhoto есть проверка на подлог, у updatePlanStatus нет.
+ */
+async function send(a: VisitAction): Promise<string | undefined> {
+  let url = a.photoUrl;
+  if (a.photoUri && !url) {
+    let dataUrl: string;
+    try {
+      ({ dataUrl } = await preparePhoto(a.photoUri));
+    } catch {
+      await updatePlanStatus(a.planId, a.status);
+      return tt("Снимок пропал с телефона — визит отмечен без фото", "Rasm telefondan yo'qolgan — tashrif rasmsiz belgilandi");
+    }
+    url = await uploadFile(dataUrl, "visits");
+  }
+  if (url) {
     await saveVisitPhoto(a.planId, url);
     return;
   }
@@ -100,11 +121,13 @@ export const useVisitQueue = create<VisitQueue>((set, get) => ({
 
       let synced = 0, failed = 0, networkDown = false;
       const outcome = new Map<string, Partial<VisitAction>>();
+      const warnings = new Set<string>();
       for (const a of pending) {
         // Не дошли до отправки — обратно в ожидание, без пометки об ошибке.
         if (networkDown) { outcome.set(a.id, { status_: "pending" }); continue; }
         try {
-          await send(a);
+          const warning = await send(a);
+          if (warning) warnings.add(warning);
           synced++;
           outcome.set(a.id, { synced: true, status_: "pending", error: undefined });
         } catch (e) {
@@ -120,6 +143,7 @@ export const useVisitQueue = create<VisitQueue>((set, get) => ({
         .filter(a => !a.synced);
       set({ actions: merged });
       await write(merged);
+      warnings.forEach(w => notify.warning(w));
       return { synced, failed };
     } finally {
       set({ syncing: false });

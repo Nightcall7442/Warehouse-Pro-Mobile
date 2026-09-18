@@ -31,7 +31,7 @@ const FLUSH_GAP_MS = 250;
 
 const delay = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms); });
 
-interface PendingPoint {
+export interface PendingPoint {
   lat: number;
   lng: number;
   accuracy: number;
@@ -67,6 +67,20 @@ async function writePending(points: PendingPoint[]): Promise<void> {
   } catch { /* buffer is best-effort */ }
 }
 
+/*
+  Буфер трогает не один поток: фоновая задача на каждую точку от системы,
+  ручная точка с экрана, точка при отметке визита и проход при возврате связи.
+  Два одновременных «прочитать → отправить → записать остаток» теряют точки:
+  последний писатель затирает то, что дописал первый. Все обращения к буферу
+  идут по одному, в порядке поступления.
+*/
+let turn: Promise<unknown> = Promise.resolve();
+function withBuffer<T>(fn: () => Promise<T>): Promise<T> {
+  const next = turn.then(fn, fn);
+  turn = next.catch(() => undefined);
+  return next;
+}
+
 /**
  * Did the server permanently reject the point, or should it be retried?
  *
@@ -91,31 +105,40 @@ function isPermanentlyRejected(e: unknown): boolean {
   return status >= 400 && status < 500;
 }
 
-/** Drain whatever the last dead zone left behind, oldest first — порцией. */
-async function flushPending(): Promise<void> {
-  const pending = await readPending();
-  if (pending.length === 0) return;
+/**
+ * Drain whatever the last dead zone left behind, oldest first — порцией.
+ *
+ * Зовётся и снаружи — проходом синхронизации при старте и возврате связи:
+ * у агента без фонового сбора точки визитов и ручные точки без этого лежали
+ * в буфере до тех пор, пока фоновая задача не принесёт следующую — то есть
+ * никогда.
+ */
+export function flushPendingLocations(): Promise<void> {
+  return withBuffer(async () => {
+    const pending = await readPending();
+    if (pending.length === 0) return;
 
-  const remaining = [...pending];
-  let sent = 0;
-  while (remaining.length > 0 && sent < FLUSH_BATCH) {
-    const point = remaining[0];
-    try {
-      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt, point.mocked);
-      remaining.shift();
-      sent += 1;
-      // Пауза между точками: залп подряд упирается в лимит запросов и роняет
-      // заодно экранные запросы того же агента.
-      if (remaining.length > 0 && sent < FLUSH_BATCH) await delay(FLUSH_GAP_MS);
-    } catch (e) {
-      // Still offline, or session needs refreshing — stop draining and keep
-      // the rest for the next fix. Only a point the server definitively
-      // rejected as bad data is not worth retrying forever.
-      if (isPermanentlyRejected(e)) remaining.shift();
-      else break;
+    const remaining = [...pending];
+    let sent = 0;
+    while (remaining.length > 0 && sent < FLUSH_BATCH) {
+      const point = remaining[0];
+      try {
+        await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt, point.mocked);
+        remaining.shift();
+        sent += 1;
+        // Пауза между точками: залп подряд упирается в лимит запросов и роняет
+        // заодно экранные запросы того же агента.
+        if (remaining.length > 0 && sent < FLUSH_BATCH) await delay(FLUSH_GAP_MS);
+      } catch (e) {
+        // Still offline, or session needs refreshing — stop draining and keep
+        // the rest for the next fix. Only a point the server definitively
+        // rejected as bad data is not worth retrying forever.
+        if (isPermanentlyRejected(e)) remaining.shift();
+        else break;
+      }
     }
-  }
-  await writePending(remaining);
+    await writePending(remaining);
+  });
 }
 
 TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
@@ -171,12 +194,9 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
       if (!isPermanentlyRejected(e)) { toBuffer.push(point); serverRefusing = true; }
     }
   }
-  if (toBuffer.length > 0) {
-    const pending = await readPending();
-    await writePending([...pending, ...toBuffer]);
-  }
+  if (toBuffer.length > 0) await bufferLocation(...toBuffer);
   // Разбирать накопленное имеет смысл только если сервер сейчас отвечает.
-  if (!serverRefusing) await flushPending();
+  if (!serverRefusing) await flushPendingLocations();
 });
 
 /**
@@ -189,10 +209,11 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
  * Буфер выливается сам при следующей точке от системы, то есть не дольше двух
  * минут после возвращения связи.
  */
-export async function bufferLocation(point: PendingPoint): Promise<void> {
-  const pending = await readPending();
-  pending.push(point);
-  await writePending(pending);
+export function bufferLocation(...points: PendingPoint[]): Promise<void> {
+  return withBuffer(async () => {
+    const pending = await readPending();
+    await writePending([...pending, ...points]);
+  });
 }
 
 export async function startBackgroundTracking(): Promise<{ success: boolean; reason?: string }> {
@@ -227,7 +248,7 @@ export async function startBackgroundTracking(): Promise<{ success: boolean; rea
       });
     }
     // Coming back into coverage is the natural moment to clear the backlog.
-    void flushPending();
+    void flushPendingLocations();
     return { success: true };
   } catch (e) {
     /*

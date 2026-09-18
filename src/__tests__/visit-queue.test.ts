@@ -117,6 +117,61 @@ describe("очередь визитов", () => {
     expect(r).toEqual({ synced: 0, failed: 0 });
     expect(apiMock.updatePlanStatus).not.toHaveBeenCalled();
   });
+
+  it("холодный старт: вошедший ещё неизвестен — запись с владельцем ждёт", async () => {
+    // Сессия читается с диска дольше, чем очередь; пока пользователя нет,
+    // отметка ушла бы под первым попавшимся токеном (общий телефон).
+    useAuthStore.setState({ user: null as never });
+    useVisitQueue.setState({ actions: [
+      { id: "x", planId: 9, status: "visited", createdAt: at(1), synced: false, ownerId: 10 },
+    ] });
+    const r = await useVisitQueue.getState().sync();
+    expect(r).toEqual({ synced: 0, failed: 0 });
+    expect(apiMock.updatePlanStatus).not.toHaveBeenCalled();
+    expect(useVisitQueue.getState().actions.map(a => a.id)).toEqual(["x"]);
+  });
+
+  it("файл снимка пропал с телефона — визит отмечен без фото, агент предупреждён", async () => {
+    // Кэш камеры система чистит сама. Раньше запись получала retryable:false и
+    // исчезала из прохода навсегда — вместе с визитом.
+    const { preparePhoto } = require("../lib/prepare-photo") as { preparePhoto: jest.Mock };
+    preparePhoto.mockRejectedValueOnce(new Error("Could not open file"));
+    apiMock.updatePlanStatus.mockResolvedValue(undefined);
+    const { useToastStore } = require("../store/toast") as typeof import("../store/toast");
+    useVisitQueue.setState({ actions: [
+      { id: "p", planId: 3, status: "visited", photoUri: "file:///cam/gone.jpg", createdAt: at(1), synced: false, ownerId: 10 },
+    ] });
+    const r = await useVisitQueue.getState().sync();
+    expect(r).toEqual({ synced: 1, failed: 0 });
+    expect(apiMock.uploadFile).not.toHaveBeenCalled();
+    expect(apiMock.updatePlanStatus).toHaveBeenCalledWith(3, "visited");
+    expect(useVisitQueue.getState().actions).toEqual([]);
+    expect(useToastStore.getState().toast?.variant).toBe("warning");
+  });
+
+  it("снимок отвергнут сервером — отметка НЕ подменяется (у фото есть проверка на подлог)", async () => {
+    apiMock.uploadFile.mockResolvedValue("https://s3/visits/1.jpg");
+    apiMock.saveVisitPhoto.mockRejectedValueOnce({ serverRejected: true, trpcMessage: "Визит заблокирован системой фрод-мониторинга" });
+    useVisitQueue.setState({ actions: [
+      { id: "p", planId: 3, status: "visited", photoUri: "file:///cam/1.jpg", createdAt: at(1), synced: false, ownerId: 10 },
+    ] });
+    const r = await useVisitQueue.getState().sync();
+    expect(r).toEqual({ synced: 0, failed: 1 });
+    expect(apiMock.updatePlanStatus).not.toHaveBeenCalled();
+    expect(useVisitQueue.getState().actions[0].retryable).toBe(false);
+  });
+
+  it("снимок уже загружен, сорвалась привязка — уходит по готовой ссылке без повторной загрузки", async () => {
+    apiMock.saveVisitPhoto.mockResolvedValue(undefined);
+    useVisitQueue.setState({ actions: [
+      { id: "u", planId: 4, status: "visited", photoUrl: "https://s3/visits/9.jpg", createdAt: at(1), synced: false, ownerId: 10 },
+    ] });
+    const r = await useVisitQueue.getState().sync();
+    expect(r).toEqual({ synced: 1, failed: 0 });
+    expect(apiMock.uploadFile).not.toHaveBeenCalled();
+    expect(apiMock.saveVisitPhoto).toHaveBeenCalledWith(4, "https://s3/visits/9.jpg");
+    expect(apiMock.updatePlanStatus).not.toHaveBeenCalled();
+  });
 });
 
 describe("экран планов и запуск", () => {
@@ -128,5 +183,19 @@ describe("экран планов и запуск", () => {
     const layout = fs.readFileSync("app/_layout.tsx", "utf-8");
     expect(layout).toContain("useVisitQueue.getState().sync()");
     expect(layout).toContain("useVisitQueue.getState().load()");
+  });
+
+  it("привязка фото сорвалась по сети — в очередь с готовой ссылкой; визит из очереди снимает точку", () => {
+    const view = fs.readFileSync("src/components/plans/AgentPlansView.tsx", "utf-8");
+    expect(view).toContain('queueVisit.add({ planId: variables.planId, status: "visited", photoUrl: variables.photoUrl })');
+    // Три пути в очередь — три точки: без фото, с файлом, с готовой ссылкой.
+    expect(view.split("void sendVisitPing()").length - 1).toBe(5);
+  });
+
+  it("проход стартует только по входу и выливает буфер точек", () => {
+    const layout = fs.readFileSync("app/_layout.tsx", "utf-8");
+    expect(layout).toContain("if (!useAuthStore.getState().user) return;");
+    expect(layout).toContain("if (loaded && authed) runSync();");
+    expect(layout).toContain("tasks.push(flushPendingLocations());");
   });
 });

@@ -1,6 +1,8 @@
 import * as Location from "expo-location";
 import * as Battery from "expo-battery";
 import { saveLocation } from "../api";
+import { bufferLocation } from "../backgroundLocation";
+import { isRetryableError } from "../store/offline";
 
 /**
  * Точка агента в момент отметки визита.
@@ -53,16 +55,23 @@ export async function sendVisitPing(): Promise<void> {
       Battery.getBatteryLevelAsync().catch(() => null),
     ]);
 
-    await saveLocation(
-      pos.coords.latitude,
-      pos.coords.longitude,
-      pos.coords.accuracy ?? undefined,
-      battery !== null ? Math.round(battery * 100) : undefined,
+    const point = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      accuracy: pos.coords.accuracy ?? 999,
+      batteryLevel: battery !== null ? Math.round(battery * 100) : undefined,
       // Время съёмки: точка, пролежавшая без связи, должна встать на карту
       // туда, где агент БЫЛ, а не туда, где телефон дозвонился.
-      new Date().toISOString(),
-      pos.mocked === true,
-    );
+      recordedAt: new Date().toISOString(),
+      mocked: pos.mocked === true,
+    };
+    try {
+      await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt, point.mocked);
+    } catch (e) {
+      // Точка снята, а связи нет (визит из очереди, обрыв сразу после отметки):
+      // в буфер фонового сбора — уйдёт с первой связью, с временем съёмки.
+      if (isRetryableError(e)) await bufferLocation(point);
+    }
   } catch {
     /*
       Молчание намеренное, и это единственное место, где оно уместно.
