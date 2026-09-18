@@ -1589,41 +1589,21 @@ export interface OrderPayment {
 export async function getOrderPayments(orderId: number): Promise<OrderPayment[]> {
   return trpcQuery("order.getOrderPayments", { orderId });
 }
-// ── Касса: наличные на руках, сдачи, PIN ─────────────────────────────────────
+
+// ── Наличные на руках — по расчёту заказов ───────────────────────────────────
 
 /*
-  «У меня на руках вот столько, вот я сдал в кассу» — просьба владельца.
-  Веб это показывал (MyCashCard), телефон — нет, а деньги носят именно те,
-  у кого веба нет. Ручка cash.mine отдаёт ровно то, что нужно человеку:
-  сколько сдать, до какого часа, что уже сдано и есть ли долг по недостачам.
+  Касса убрана (владелец, 18.09.2026): деньги живут в заказе. Наличные,
+  записанные курьером или агентом при доставке и сборе долга, — «на руках»,
+  пока офис не примет их, закрывая расчёт по заказу. Ручка отдаёт ровно то,
+  что нужно человеку вечером: сколько сдать и по скольким заказам.
 */
-export interface MyCashDocument {
-  id: number;
-  kind: "pko" | "rko";
-  number: number;
-  amount: string;
-  expectedAmount: string | null;
-  discrepancy: string | null;
-  note: string | null;
-  createdAt: string;
-}
-
 export interface MyCash {
-  onHand: number;
-  debt: number;
-  todayIn: number;
-  todayCount: number;
-  limit: number;
-  deadline: string;
-  documents: MyCashDocument[];
-  nonCashTransit: { count: number; total: number };
+  amount: number;
+  orders: number;
+  since: string | null;
 }
 
 export async function getMyCash(): Promise<MyCash> {
-  return trpcQuery("cash.mine");
-}
-
-/** PIN кассы — подпись сотрудника под сдачей наличных. */
-export async function setCashPin(pin: string): Promise<{ ok: boolean }> {
-  return trpcMutation("cash.setPin", { pin });
+  return trpcQuery("order.myCash");
 }
