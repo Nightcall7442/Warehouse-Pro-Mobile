@@ -84,6 +84,11 @@ async function show(over: Partial<Product> = {}) {
   await waitFor(() => expect(screen.getByText(product(over).name)).toBeTruthy());
 }
 
+// Первый require экрана на полном наборе занимает секунды (шрифты, иконки,
+// навигация под нагрузкой других воркеров): греем модуль до тестов, иначе
+// первый из них упирался в 5-секундный предел jest.
+beforeAll(() => { require("../../app/product/[id]"); }, 30_000);
+
 beforeEach(() => {
   mockPush.mockReset(); mockBack.mockReset();
   mockRouteParams = { id: "1" };

@@ -58,6 +58,8 @@ interface VisitQueue {
   add: (a: Omit<VisitAction, "id" | "createdAt" | "synced">) => Promise<boolean>;
   sync: () => Promise<{ synced: number; failed: number }>;
   remove: (id: string) => Promise<void>;
+  /** Отвергнутую сервером запись — снова в очередь и сразу в проход (причину могли исправить в офисе). */
+  retry: (id: string) => Promise<void>;
 }
 
 /** Только своё и только не отправленное: телефон в поле бывает общим (правило — одно на все очереди). */
@@ -154,5 +156,12 @@ export const useVisitQueue = create<VisitQueue>((set, get) => ({
     const actions = get().actions.filter(a => a.id !== id);
     set({ actions });
     await write(actions);
+  },
+
+  retry: async (id) => {
+    const actions = get().actions.map(a => (a.id === id ? { ...a, retryable: undefined, status_: "pending" as const, error: undefined } : a));
+    set({ actions });
+    await write(actions);
+    void get().sync();
   },
 }));

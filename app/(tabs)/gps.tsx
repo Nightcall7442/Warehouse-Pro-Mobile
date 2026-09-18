@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, cancelAnimation } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
-import * as Battery from "expo-battery";
+import { batteryPercent } from "../../src/lib/battery";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
@@ -85,15 +85,20 @@ export default function GpsScreen() {
     давал. Разрешения нет — трекинг остаётся выключенным, и когда человек
     включит его сам, он снова увидит раскрытие.
   */
+  // Пока флаг не дочитан с диска, ни писать его, ни трогать задачу нельзя:
+  // первый рендер видел autoTrack=false, снимал системную задачу и записывал
+  // «false», а через сотни миллисекунд восстановление включало всё заново.
+  // Убитый в этом окне процесс оставлял слежение выключенным молча.
+  const hydrated = useRef(false);
   useEffect(() => {
     AsyncStorage.getItem(AUTO_TRACK_KEY).then(async v => {
-      if (v !== "true") return;
-      const { status } = await Location.getBackgroundPermissionsAsync();
-      if (status === "granted") setAutoTrack(true);
+      const granted = v === "true" && (await Location.getBackgroundPermissionsAsync()).status === "granted";
+      hydrated.current = true;
+      if (granted) setAutoTrack(true);
     });
   }, []);
 
-  useEffect(() => { AsyncStorage.setItem(AUTO_TRACK_KEY, String(autoTrack)); }, [autoTrack]);
+  useEffect(() => { if (hydrated.current) AsyncStorage.setItem(AUTO_TRACK_KEY, String(autoTrack)); }, [autoTrack]);
 
   const locate = async () => {
     if (isLocating.current) return;
@@ -133,10 +138,10 @@ export default function GpsScreen() {
             Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error("GPS timeout")), 15_000)),
           ]),
-          Battery.getBatteryLevelAsync().catch(() => null),
+          batteryPercent(),
         ]);
         c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 999, mocked: pos.mocked === true };
-        batteryPct = battery !== null ? Math.round(battery * 100) : undefined;
+        batteryPct = battery;
       } catch {
         // Вот здесь виноват действительно GPS: координат нет.
         setError("gps");
@@ -197,7 +202,7 @@ export default function GpsScreen() {
   useEffect(() => {
     if (!autoTrack) {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-      stopBackgroundTracking();
+      if (hydrated.current) stopBackgroundTracking();
       // Пометка про «только на экране» без слежения не нужна — снять в
       // продолжении, а не синхронно (см. ниже).
       void Promise.resolve().then(() => setTrackNotice(""));

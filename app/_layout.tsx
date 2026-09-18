@@ -67,10 +67,15 @@ function AutoSync() {
   const qc = useQueryClient();
   const wasOffline = useRef(false);
   const syncing = useRef(false);
+  // Связь вернулась, пока проход ещё висел на таймаутах, — событие не
+  // теряется: проход повторится сразу по завершении.
+  const rerun = useRef(false);
+  // Себя же по ссылке: функция не может сослаться на своё имя до объявления.
+  const runSyncRef = useRef<() => void>(() => {});
 
   // Helper to run sync if there are pending items
   const runSync = useCallback(() => {
-    if (syncing.current) return;
+    if (syncing.current) { rerun.current = true; return; }
     // Пока не известно, кто вошёл, не отправляем ничего: записи с владельцем
     // ушли бы под первым попавшимся токеном (см. shouldAutoSync).
     if (!useAuthStore.getState().user) return;
@@ -101,8 +106,12 @@ function AutoSync() {
     // без фонового сбора их иначе некому вылить.
     tasks.push(flushPendingLocations());
 
-    Promise.all(tasks).finally(() => { syncing.current = false; });
+    Promise.all(tasks).finally(() => {
+      syncing.current = false;
+      if (rerun.current) { rerun.current = false; runSyncRef.current(); }
+    });
   }, [syncAll, syncDeliveryActions, qc]);
+  useEffect(() => { runSyncRef.current = runSync; }, [runSync]);
 
   // Sync once the queue has actually been read off disk — catches pending
   // items from a previous session.
@@ -132,8 +141,11 @@ function AutoSync() {
 
       wasOffline.current = !online;
     });
+    // Возврат из фона — третий повод: у курьера и мерчандайзера нет вкладки
+    // «Заказы», и без флапа сети их очередь ждала часами.
+    const app = AppState.addEventListener("change", (s: AppStateStatus) => { if (s === "active") runSync(); });
 
-    return unsub;
+    return () => { unsub(); app.remove(); };
   }, [runSync]);
 
   return null;
