@@ -2,19 +2,13 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
 /**
- * Наличные на телефоне.
+ * Наличные на руках — по расчёту заказов (касса убрана 18.09.2026: «деньги
+ * живут в заказе»).
  *
- * Владелец: «в мобилке не хватило — у меня на руках вот столько, вот я сдал
- * в кассу».
- *
- *   · ручки cash.mine / cash.setPin позваны из api.ts;
- *   · экран заявлен в навигации со своей шапкой;
- *   · на главной у агента и курьера — карточка «наличные», в профиле —
- *     ссылка на наличные и PIN;
- *   · PIN на телефоне заводится дважды и только цифрами.
- *
- * Ван-селлинг и тара убраны 18.09.2026 (владелец: «интегрируем с другой
- * программой») — экранов van/*, ручек van.* и tare.* в мобилке нет.
+ *   · ручка order.myCash позвана из api.ts; ручек cash.* нет;
+ *   · экрана cash и ссылки на него нет; van/* и tare.* тоже нет;
+ *   · на главной у агента и курьера — карточка «на руках», и она молчит,
+ *     когда сдавать нечего.
  */
 const root = join(__dirname, "..", "..");
 const read = (...p: string[]) => readFileSync(join(root, ...p), "utf8").replace(/\r\n/g, "\n");
@@ -24,49 +18,25 @@ const API = strip(read("src", "api.ts"));
 const LAYOUT = read("app", "_layout.tsx");
 const HOME = strip(read("app", "(tabs)", "index.tsx"));
 const PROFILE = strip(read("app", "(tabs)", "profile.tsx"));
-const CASH = strip(read("app", "cash.tsx"));
-const CARDS = strip(read("src", "components", "CashCard.tsx"));
+const CARD = strip(read("src", "components", "CashCard.tsx"));
 
-function must(ok: boolean, why: string): void {
-  if (!ok) throw new Error(why);
-}
-function screenIsRegistered(name: string): void {
-  const tag = `<Stack.Screen name="${name}"`;
-  must(LAYOUT.includes(tag), `экран ${name} не заявлен в навигации`);
-  const at = LAYOUT.indexOf(tag);
-  must(LAYOUT.slice(at, LAYOUT.indexOf("/>", at)).includes("headerShown: false"), `у экрана ${name} две шапки`);
-}
-
-describe("ручки позваны", () => {
-  it("касса — из api.ts, строками процедур", () => {
-    for (const [fn, path] of [["getMyCash", "cash.mine"], ["setCashPin", "cash.setPin"]]) {
-      must(API.includes(`export async function ${fn}(`), `нет функции ${fn}`);
-      must(API.includes(`"${path}"`), `${fn} не зовёт ${path}`);
-    }
+describe("наличные на руках", () => {
+  it("ручка — order.myCash; кассы, вана и тары в api.ts нет", () => {
+    expect(API).toContain("export async function getMyCash(");
+    expect(API).toContain('"order.myCash"');
+    expect(API).not.toMatch(/"(cash|van|tare)\./);
   });
-  it("ван-селлинга и тары в мобилке нет: ни ручек, ни экранов", () => {
-    expect(API).not.toMatch(/"(van|tare)\./);
+  it("экранов cash и van/* нет, ссылок на них нет", () => {
+    expect(existsSync(join(root, "app", "cash.tsx"))).toBe(false);
     expect(existsSync(join(root, "app", "van"))).toBe(false);
+    expect(LAYOUT).not.toContain('name="cash"');
     expect(LAYOUT).not.toContain('name="van/');
+    expect(PROFILE).not.toContain('router.push("/cash")');
     expect(HOME).not.toContain("VanCard");
   });
-});
-
-describe("экраны на месте", () => {
-  it("заявлены в навигации со своей шапкой", () => {
-    screenIsRegistered("cash");
-  });
-  it("главная агента и курьера ведёт к наличным; профиль — к наличным и PIN", () => {
+  it("карточка на главной у агента и курьера; молчит без наличных", () => {
     expect((HOME.match(/<CashCard /g) ?? []).length).toBe(2);
-    expect(CARDS).toContain('router.push("/cash")');
-    expect(PROFILE).toContain('router.push("/cash")');
-  });
-});
-
-describe("наличные", () => {
-  it("на руках, сдать до, сдачи с номерами, недостача; PIN — дважды и цифрами", () => {
-    for (const s of ['testID="cash-on-hand"', "m.deadline", "KIND[d.kind]", "m.debt > 0", 'testID="cash-pin"', 'testID="cash-pin-2"']) expect(CASH).toContain(s);
-    expect(CASH).toContain('const pinOk = /^\\d{4,6}$/.test(pin) && pin === pin2;');
-    expect(CASH).toContain('v.replace(/\\D/g, "").slice(0, 6)');
+    expect(CARD).toContain("if (!m || m.amount <= 0) return null;");
+    expect(CARD).toContain('queryFn: getMyCash');
   });
 });
