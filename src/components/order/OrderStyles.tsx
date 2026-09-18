@@ -35,7 +35,11 @@ export const STATUS_CONFIG: Record<
   new:                  { label: ORDER_STATUSES.new.label,                 gradient: OrderStatusGradients.new,                 icon: "file-text",    badgeVariant: "info",    step: 0 },
   processing:           { label: ORDER_STATUSES.processing.label,          gradient: OrderStatusGradients.processing,          icon: "loader",       badgeVariant: "warning", step: 1 },
   shipped:              { label: ORDER_STATUSES.shipped.label,             gradient: OrderStatusGradients.shipped,             icon: "truck",        badgeVariant: "info",    step: 2 },
-  pending:              { label: ORDER_STATUSES.pending.label,             gradient: OrderStatusGradients.pending,             icon: "clock",        badgeVariant: "warning", step: 2 },
+  // pending стоит ДО «Новый», а не после «В обработке»: сервер создаёт заказ
+  // в pending, когда его должен подтвердить офис (скидка выше порога). Шаг 2
+  // читался как «уже на складе, вот-вот повезут» — агент обещал магазину
+  // «завтра привезут», офис скидку отклонял.
+  pending:              { label: ORDER_STATUSES.pending.label,             gradient: OrderStatusGradients.pending,             icon: "pause-circle", badgeVariant: "warning", step: 0 },
   delivered:            { label: ORDER_STATUSES.delivered.label,           gradient: OrderStatusGradients.delivered,           icon: "check-circle", badgeVariant: "success", step: 3 },
   cancelled:            { label: ORDER_STATUSES.cancelled.label,           gradient: OrderStatusGradients.cancelled,           icon: "x-circle",     badgeVariant: "danger",  step: -1 },
   returned:             { label: ORDER_STATUSES.returned.label,            gradient: OrderStatusGradients.returned,            icon: "rotate-ccw",   badgeVariant: "danger",  step: -1 },

@@ -20,6 +20,7 @@ import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
 import { Card, Badge } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale } from "../../src/components/Animated";
+import { orderStatusLabel } from "../../src/lib/order-status";
 
 const BOTTOM_TAB_HEIGHT = 80;
 
@@ -405,8 +406,15 @@ export default function OrdersScreen() {
                     <Feather name="clipboard" size={16} color={colors.accent.primary} />
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{order.orderNumber}</Text>
-                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted, marginTop: 2 }}>{time}</Text>
+                    {/* Магазин и состояние — в строке: раньше только номер и время,
+                        и «какой из трёх заказов ждёт офиса» приходилось открывать. */}
+                    <Text style={{ fontSize: Typography.size.base, fontFamily: Typography.fontSemibold, color: colors.text.primary }} numberOfLines={1}>{order.shopName ?? order.orderNumber}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+                      <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>{order.orderNumber} · {time}</Text>
+                      <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontSemibold, color: order.status === "pending" ? colors.status.warning : order.status === "cancelled" ? colors.status.danger : order.status === "delivered" ? colors.status.success : colors.text.secondary }}>
+                        {order.status === "pending" ? t("Ждёт офиса", "Ofisni kutmoqda") : orderStatusLabel(order.status)}
+                      </Text>
+                    </View>
                   </View>
                   <Text style={{ fontSize: Typography.size.md, fontFamily: Typography.fontBold, color: colors.text.primary, fontVariant: ["tabular-nums"] }}>
                     {Number(order.total).toLocaleString("ru")}

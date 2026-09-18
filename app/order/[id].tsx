@@ -321,7 +321,7 @@ export default function OrderDetailScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isFetching} onRefresh={() => refetch()} tintColor={colors.accent.primary} />}
         >
-        <PipelineBanner status={order.status} colors={colors} />
+        <PipelineBanner status={order.status} holdReason={order.holdReason} colors={colors} />
         <OrderInfoCard order={order} colors={colors} />
         {/*
           Обещанный срок — сразу под сведениями о заказе: агент, открывший
