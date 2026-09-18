@@ -315,13 +315,18 @@ export function isRetryableError(e: unknown): boolean {
  * Кроме собственного состояния записи учитывается, кто сейчас в приложении:
  * чужую запись отправлять нельзя — сервер запишет её на текущего пользователя.
  * Она остаётся в очереди и уйдёт, когда её автор снова войдёт.
+ *
+ * «Кто сейчас» неизвестен — тоже нельзя. На холодном старте проход стартовал,
+ * пока сессия ещё читалась с диска: пользователя нет, и запись с владельцем
+ * уходила под тем токеном, который окажется первым. На общем телефоне это
+ * заказы агента А на счету агента Б. Записи без владельца (старые) не трогаем.
  */
-function shouldAutoSync(
+export function shouldAutoSync(
   entry: { synced: boolean; retryable?: boolean; ownerId?: number },
   currentUserId?: number,
 ): boolean {
   if (entry.synced || entry.retryable === false) return false;
-  if (entry.ownerId != null && currentUserId != null && entry.ownerId !== currentUserId) return false;
+  if (entry.ownerId != null && entry.ownerId !== currentUserId) return false;
   return true;
 }
 

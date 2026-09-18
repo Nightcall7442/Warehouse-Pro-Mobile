@@ -120,6 +120,9 @@ export function AgentPlansView() {
       const ok = await queueVisit.add({ planId: variables.planId, status: variables.status });
       if (ok) notify.info(t("Нет связи — отметка сохранена и уйдёт сама", "Aloqa yo'q — belgi saqlandi, o'zi yuboriladi"));
       else notify.error(errorText(e));
+      // Точка снимается сейчас, где агент стоит, и ждёт связи в буфере: иначе
+      // визит из очереди приходил без точки — карта пуста, антифрод слеп.
+      if (ok && variables.status === "visited") void sendVisitPing();
     },
   });
 
@@ -134,7 +137,18 @@ export function AgentPlansView() {
       // Точка уходит следом за отметкой и не задерживает её: см. sendVisitPing.
       void sendVisitPing();
     },
-    onError: (e: Error) => notify.error(errorText(e)),
+    /*
+      Снимок уже в хранилище, а привязка к визиту сорвалась по сети: в очередь
+      с готовой ссылкой, не с файлом. Раньше — тост об ошибке, фото в S3
+      сиротой, визит не отмечен.
+    */
+    onError: async (e: Error, variables) => {
+      if (!isRetryableError(e)) { notify.error(errorText(e)); return; }
+      const ok = await queueVisit.add({ planId: variables.planId, status: "visited", photoUrl: variables.photoUrl });
+      if (ok) notify.info(t("Нет связи — фото и отметка сохранены и уйдут сами", "Aloqa yo'q — rasm va belgi saqlandi, o'zi yuboriladi"));
+      else notify.error(errorText(e));
+      if (ok) void sendVisitPing();
+    },
   });
 
   // Route optimization
@@ -193,6 +207,7 @@ export function AgentPlansView() {
         // при первой связи вместе с отметкой.
         if (isRetryableError(e) && await queueVisit.add({ planId, status: "visited", photoUri: uri })) {
           notify.info(t("Нет связи — фото и отметка сохранены и уйдут сами", "Aloqa yo'q — rasm va belgi saqlandi, o'zi yuboriladi"));
+          void sendVisitPing();
         } else {
           notify.error(t("Ошибка загрузки фото", "Rasmni yuklab bo'lmadi"));
         }

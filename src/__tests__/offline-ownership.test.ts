@@ -8,7 +8,7 @@ jest.mock("../api", () => ({
   completeDelivery: jest.fn(),
 }));
 
-const { isRetryableError } = require("../store/offline");
+const { isRetryableError, shouldAutoSync } = require("../store/offline");
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -99,14 +99,23 @@ describe("записи очереди помечены автором", () => {
   it("чужая запись не отправляется", () => {
     // Главное условие: сервер записывает автора из сессии, поэтому отправить
     // чужую запись — значит приписать её не тому человеку.
-    expect(src).toMatch(/entry\.ownerId != null && currentUserId != null && entry\.ownerId !== currentUserId/);
+    expect(shouldAutoSync({ synced: false, ownerId: 5 }, 10)).toBe(false);
+    expect(shouldAutoSync({ synced: false, ownerId: 10 }, 10)).toBe(true);
+  });
+
+  it("вошедший ещё неизвестен (холодный старт) — запись с владельцем ждёт", () => {
+    // Проход стартовал раньше, чем сессия прочиталась с диска: пользователя
+    // нет, а запись уходила под тем токеном, который окажется первым. На общем
+    // телефоне это заказы агента А на счету агента Б.
+    expect(shouldAutoSync({ synced: false, ownerId: 5 }, undefined)).toBe(false);
   });
 
   it("записи без владельца по-прежнему уходят", () => {
     // Созданные до этой правки. Отбросить их значило бы потерять работу,
     // уже сделанную в поле.
-    const fn = src.slice(src.indexOf("function shouldAutoSync"));
-    expect(fn.slice(0, 600)).toContain("entry.ownerId != null");
+    expect(shouldAutoSync({ synced: false }, 10)).toBe(true);
+    expect(shouldAutoSync({ synced: false }, undefined)).toBe(true);
+    expect(shouldAutoSync({ synced: false, retryable: false }, 10)).toBe(false);
   });
 
   it("выход из аккаунта чистит кэши, но не очередь", () => {

@@ -106,9 +106,10 @@ describe("кнопку видно при любом содержимом", () =>
 describe("нулевой остаток", () => {
   it("кнопка говорит «Нет в наличии» и никуда не ведёт", async () => {
     await show({ available: "0" });
-    // Дважды: значок на фотографии и сама кнопка.
+    // Дважды: значок на фотографии и сама кнопка. Ждём, а не берём сразу:
+    // на полном наборе имя товара успевало отрисоваться раньше остатка.
+    await waitFor(() => expect(screen.getAllByText("Нет в наличии")).toHaveLength(2));
     const labels = screen.getAllByText("Нет в наличии");
-    expect(labels.length).toBe(2);
     expect(screen.queryByText(/В заказ/)).toBeNull();
     fireEvent.click(labels[labels.length - 1]);
     expect(mockPush).not.toHaveBeenCalled();

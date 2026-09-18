@@ -39,6 +39,10 @@ jest.mock("expo-battery", () => ({
 jest.mock("../api", () => ({
   saveLocation: (...a: unknown[]) => mockSaveLocation(...a),
 }));
+const mockBufferLocation = jest.fn();
+jest.mock("../backgroundLocation", () => ({
+  bufferLocation: (...a: unknown[]) => mockBufferLocation(...a),
+}));
 
 const position = {
   coords: { latitude: 41.31, longitude: 69.24, accuracy: 12 },
@@ -110,6 +114,24 @@ describe("точка при отметке визита", () => {
     mockSaveLocation.mockRejectedValue(new Error("Network Error"));
 
     await expect(sendVisitPing()).resolves.toBeUndefined();
+  });
+
+  it("нет связи — снятая точка ложится в буфер с временем съёмки", async () => {
+    // Визит из очереди или обрыв сразу после отметки: раньше точка терялась,
+    // хотя рядом лежал буфер фонового сбора. Уйдёт с первой связью — туда, где
+    // агент БЫЛ.
+    mockSaveLocation.mockRejectedValue(new Error("Network Error"));
+    await sendVisitPing();
+    expect(mockBufferLocation).toHaveBeenCalledTimes(1);
+    const [point] = mockBufferLocation.mock.calls[0];
+    expect(point).toMatchObject({ lat: 41.31, lng: 69.24, accuracy: 12, batteryLevel: 73 });
+    expect(typeof point.recordedAt).toBe("string");
+  });
+
+  it("сервер отверг точку по существу — в буфер не кладётся", async () => {
+    mockSaveLocation.mockRejectedValue({ response: { status: 400 } });
+    await sendVisitPing();
+    expect(mockBufferLocation).not.toHaveBeenCalled();
   });
 
   it("недоступный заряд не отменяет точку", async () => {

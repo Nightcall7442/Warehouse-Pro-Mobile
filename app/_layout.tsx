@@ -22,6 +22,14 @@ import { JetBrainsMono_400Regular } from "@expo-google-fonts/jetbrains-mono";
 import { useAuthStore } from "../src/store/auth";
 import { useOfflineStore } from "../src/store/offline";
 import { useVisitQueue } from "../src/store/visit-queue";
+/*
+  Фоновая задача GPS объявляется здесь, в точке входа, а не там, где её
+  включают. Когда система будит убитое приложение ради накопленных точек, она
+  поднимает JS-бандл и ищет задачу по имени; вкладка «GPS» при этом не
+  открывается, и объявленная только в ней задача «не найдена» — точки за всё
+  время до следующего запуска вкладки выбрасывались.
+*/
+import { flushPendingLocations } from "../src/backgroundLocation";
 import { Typography } from "../src/theme";
 import { useThemeStore } from "../src/store/theme";
 import { useBrandingStore } from "../src/store/branding";
@@ -63,6 +71,9 @@ function AutoSync() {
   // Helper to run sync if there are pending items
   const runSync = useCallback(() => {
     if (syncing.current) return;
+    // Пока не известно, кто вошёл, не отправляем ничего: записи с владельцем
+    // ушли бы под первым попавшимся токеном (см. shouldAutoSync).
+    if (!useAuthStore.getState().user) return;
     syncing.current = true;
     const { orders, deliveryActions } = useOfflineStore.getState();
     const pendingOrders = orders.filter((o) => !o.synced);
@@ -86,8 +97,10 @@ function AutoSync() {
         if (synced > 0) qc.invalidateQueries({ queryKey: ["myDeliveries"] });
       }));
     }
+    // Точки, снятые без связи (визиты, ручные), — тем же проходом: у агента
+    // без фонового сбора их иначе некому вылить.
+    tasks.push(flushPendingLocations());
 
-    if (tasks.length === 0) { syncing.current = false; return; }
     Promise.all(tasks).finally(() => { syncing.current = false; });
   }, [syncAll, syncDeliveryActions, qc]);
 
@@ -102,9 +115,12 @@ function AutoSync() {
   // flapped — long enough for them to assume the order hadn't gone through
   // and enter it a second time.
   const loaded = useOfflineStore((s) => s.loaded);
+  // И после входа: на холодном старте очередь прочитана раньше, чем сессия, и
+  // первый вызов уходит впустую — второй, по входу, отправляет накопленное.
+  const authed = useAuthStore((s) => s.isAuthenticated);
   useEffect(() => {
-    if (loaded) runSync();
-  }, [loaded, runSync]);
+    if (loaded && authed) runSync();
+  }, [loaded, authed, runSync]);
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
