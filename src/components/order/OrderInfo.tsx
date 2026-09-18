@@ -69,11 +69,28 @@ export function LoadingState({ colors }: { colors: ThemeColors }) {
 }
 
 /** Pipeline tracker — shows progress or cancelled */
-export function PipelineBanner({ status, colors }: { status: string; colors: ThemeColors }) {
+export function PipelineBanner({ status, holdReason, colors }: { status: string; holdReason?: string | null; colors: ThemeColors }) {
   const { isDark } = useThemeStore();
   const t = useT();
   // Незнакомое состояние не выдаётся за «Новый»: пропуск виден, неправда нет.
   const cfg = STATUS_CONFIG[status] ?? { ...STATUS_CONFIG.new, label: status, step: 0 };
+  // Ждёт офиса — отдельная плашка с причиной, а не диаграмма: диаграмма
+  // рисовала pending как «отгружен», и агент обещал магазину «завтра привезут».
+  if (status === "pending") {
+    return (
+      <Card style={{ flexDirection: "row", alignItems: "center", gap: 16, padding: Spacing.lg, marginTop: Spacing.base, marginBottom: Spacing.base, borderColor: colors.status.warning + "30", borderWidth: 1 }}>
+        <View style={{ width: 56, height: 56, borderRadius: Radii.lg, backgroundColor: colors.status.warningDim, alignItems: "center", justifyContent: "center" }}>
+          <Feather name="pause-circle" size={28} color={colors.status.warning} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary, marginBottom: 6 }}>{t("Ждёт подтверждения офиса", "Ofis tasdig'ini kutmoqda")}</Text>
+          <Text style={{ fontSize: Typography.size.sm, color: colors.text.muted }}>
+            {holdReason || t("Офис проверит заказ и подтвердит или отклонит. До этого срок доставки не обещайте.", "Ofis buyurtmani tekshirib tasdiqlaydi yoki rad etadi. Ungacha yetkazish muddatini va'da qilmang.")}
+          </Text>
+        </View>
+      </Card>
+    );
+  }
   if (status === "cancelled") {
     return (
       <Card style={{ flexDirection: "row", alignItems: "center", gap: 16, padding: Spacing.lg, marginTop: Spacing.base, marginBottom: Spacing.base, borderColor: colors.status.danger + "30", borderWidth: 1 }}>

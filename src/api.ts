@@ -386,6 +386,8 @@ export interface Order {
 }
 
 export interface OrderDetail extends Order {
+  /** Почему заказ ждёт офиса (status = pending): «скидка 12 % выше порога 10 %». Сервер отдаёт всегда. */
+  holdReason?: string | null;
   items: Array<{
     id: number;
     /*
