@@ -14,6 +14,7 @@ import { SecureImage } from "../../src/components/SecureImage";
 import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { MonthlyPlanCard } from "../../src/components/MonthlyPlanCard";
+import { BiometricRow } from "../../src/components/BiometricRow";
 import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT, soft } from "../../src/theme";
 import { Card, Badge } from "../../src/components/ui";
 // То же число, что и на других вкладках: высота плавающей панели. Голое 100
@@ -348,6 +349,11 @@ export default function ProfileScreen() {
               })}
             </View>
           </Card>
+        </FadeInItem>
+
+        {/* ── Отпечаток и блокировка ── */}
+        <FadeInItem delay={110}>
+          <BiometricRow colors={colors} isDark={isDark} />
         </FadeInItem>
 
         {/* ── Logout Card ── */}
