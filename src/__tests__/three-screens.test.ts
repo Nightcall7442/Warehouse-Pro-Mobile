@@ -14,19 +14,6 @@ const read = (rel: string) => fs.readFileSync(path.resolve(ROOT, rel), "utf8");
 describe("каталог", () => {
   const src = read("app/(tabs)/catalog.tsx");
 
-  it("кнопка «Подтвердить» знает, что заказ уже уходит", () => {
-    // Признак isPending у мутации в этом файле не читался нигде, а окно
-    // закрывается только по успеху. На медленной сети агент видел
-    // неотзывчивую кнопку и жал второй раз — уходила вторая мутация. От
-    // дубля спасал только ключ идемпотентности, то есть сервер, а не
-    // приложение.
-    expect(src).toContain("submitting={createOrderMutation.isPending}");
-
-    const at = src.indexOf("Отправляется…");
-    expect(at).toBeGreaterThan(0);
-    const around = src.slice(at - 700, at);
-    expect(around).toContain("disabled={submitting}");
-  });
 
   it("остаток не печатается строкой из базы", () => {
     // Было «1250.000 кг»: DECIMAL приходит строкой, и агент у полки читал

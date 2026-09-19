@@ -688,6 +688,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
 // ── Draft auto-save ──────────────────────────────────────────────────────────
 const DRAFT_KEY = "order_draft";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCartStore } from "../../src/store/cart";
 
 interface OrderDraft {
   shop: Shop | null;
@@ -731,7 +732,7 @@ export default function NewOrderScreen() {
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const t = useT();
-  const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string; productQty?: string }>();
+  const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string; productQty?: string; fromCart?: string }>();
   const { addOrder } = useOfflineStore();
 
   const [step, setStep] = useState(params.productId ? 1 : params.shopId ? 2 : 1);
@@ -739,6 +740,8 @@ export default function NewOrderScreen() {
     params.shopId ? ({ id: Number(params.shopId), name: params.shopName ?? "" } as Shop) : null
   );
   const [rawLines, setLines] = useState<OrderLine[]>(() => {
+    // Из корзины каталога: строки набраны там, здесь — магазин, оплата, отправка.
+    if (params.fromCart) return useCartStore.getState().lines.map(l => ({ ...l }));
     if (params.productId && params.productPrice) {
       // Остаток со сканера не приходит, поэтому здесь честное «не знаю», а не
       // ноль. Ноль на этом месте гасил кнопку «Продолжить» и рисовал агенту
@@ -763,7 +766,7 @@ export default function NewOrderScreen() {
    * спрашивается вовсе — значит проверка пройдена сразу, и это начальное
    * состояние, а не то, что должен выставить эффект после первого кадра.
    */
-  const skipDraft = !!(params.shopId || params.productId);
+  const skipDraft = !!(params.shopId || params.productId || params.fromCart);
   const [draftChecked, setDraftChecked] = useState(skipDraft);
   // Generated once per order attempt and reused for both the initial online
   // submission and any offline-queue retry — if the server actually created
@@ -884,6 +887,8 @@ export default function NewOrderScreen() {
     mutationFn: createOrder,
     onSuccess: (created) => {
       clearDraft();
+      // Заказ ушёл — корзина каталога выполнила своё.
+      useCartStore.getState().clear();
       // Списки заказов надо пометить устаревшими, иначе агент вернётся на
       // вкладку и не увидит только что созданного: вкладки не размонтируются,
       // пока сверху лежит этот экран, а у запроса ["myOrders"] выдержка две
@@ -935,6 +940,7 @@ export default function NewOrderScreen() {
           return;
         }
         clearDraft();
+        useCartStore.getState().clear();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         // Про цену сказано прямо: сервер посчитает итог по своим ценам на
         // момент отправки, а не по тем, что агент видел сейчас. Если за это
