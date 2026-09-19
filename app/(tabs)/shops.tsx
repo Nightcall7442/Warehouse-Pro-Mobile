@@ -304,8 +304,10 @@ export default function ShopsScreen() {
             </View>
           </PressableScale>
         </View>
-      ) : sortByDistance && location ? (
-        // Distance mode: flat list
+      ) : (sortByDistance && location) || search.trim() ? (
+        // Плоский список: по расстоянию — и всегда при поиске. Раньше поиск
+        // фильтровал магазины, а на экране оставались карточки территорий:
+        // набрал «Dokon Super» → видишь «Ташкент · 1 магазинов» → второй тап.
         <FlatList
           ref={listRef as React.RefObject<FlatList>}
           data={filtered}
