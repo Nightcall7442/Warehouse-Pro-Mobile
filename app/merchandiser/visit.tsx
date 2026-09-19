@@ -77,33 +77,56 @@ interface ChecklistRowData {
 // в поле «Цена» пересоздавал массив, и React перерисовывал все строки разом —
 // у арендатора с сотнями SKU это два нативных TextInput на строку, и ввод на
 // бюджетном Android шёл по букве в секунду.
+/*
+  Три состояния строки, а не галочка.
+
+  Одна галочка не отличала «нет на полке» от «ещё не смотрел»: оба — false,
+  и отчёт для офиса не нёс информации, а «0 %» читался как «ничего не
+  заполнил», хотя мерчандайзер честно проверил всё и товара нет. Теперь
+  «Есть · Нет»; ничего не выбрано — не проверено. Повторное нажатие снимает
+  выбор. Цена и акция спрашиваются только у того, что есть на полке.
+*/
 const ChecklistRow = memo(function ChecklistRow({
-  productId, productName, present, price, promoNote, onToggle, onPrice, onPromo,
+  productId, productName, present, price, promoNote, onMark, onPrice, onPromo,
 }: ChecklistRowData & {
-  present: boolean;
+  /** true — есть, false — нет, undefined — не проверено. */
+  present: boolean | undefined;
   price: string;
   promoNote: string;
-  onToggle: (productId: number) => void;
+  onMark: (productId: number, value: boolean) => void;
   onPrice: (productId: number, value: string) => void;
   onPromo: (productId: number, value: string) => void;
 }) {
   const colors = useThemeColors();
   const { isDark } = useThemeStore();
   const t = useT();
-  return (
-    <View style={{ backgroundColor: colors.bg.card, paddingHorizontal: Spacing.lg }}>
-      <PressableScale onPress={() => onToggle(productId)} haptic="light">
-        <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, backgroundColor: present ? colors.accent.primary + "10" : "transparent", borderRadius: Radii.md, marginBottom: 4 }}>
-          <View style={{ width: 24, height: 24, borderRadius: 12, ...(present ? soft(isDark).raisedSm : soft(isDark).inset), alignItems: "center", justifyContent: "center", marginRight: 12, backgroundColor: present ? colors.accent.primary : "transparent" }}>
-            {present && <Feather name="check" size={14} color="#fff" />}
-          </View>
-          <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: present ? colors.text.primary : colors.text.secondary }}>{productName}</Text>
-          <TextInput value={price} onChangeText={v => onPrice(productId, v)} placeholder={t("Цена", "Narx")} keyboardType="numeric"
-            style={{ width: 60, textAlign: "right", fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 6, paddingVertical: 4, marginRight: 4 }} />
-          <TextInput value={promoNote} onChangeText={v => onPromo(productId, v)} placeholder={t("Акция", "Aksiya")}
-            style={{ width: 70, fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 6, paddingVertical: 4 }} />
+  const seg = (value: boolean, label: string, tone: string) => {
+    const active = present === value;
+    return (
+      <PressableScale onPress={() => onMark(productId, value)} haptic="light" accessibilityLabel={`${label}: ${productName}`}>
+        <View style={{ minWidth: 52, minHeight: 40, paddingHorizontal: 10, borderRadius: Radii.md, alignItems: "center", justifyContent: "center", backgroundColor: active ? tone : colors.bg.elevated, ...(active ? soft(isDark).raisedSm : soft(isDark).inset) }}>
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: active ? "#fff" : colors.text.secondary }}>{label}</Text>
         </View>
       </PressableScale>
+    );
+  };
+  return (
+    <View style={{ backgroundColor: colors.bg.card, paddingHorizontal: Spacing.lg }}>
+      <View style={{ paddingVertical: 8, paddingHorizontal: 12, backgroundColor: present === undefined ? "transparent" : (present ? colors.status.successDim : colors.status.dangerDim), borderRadius: Radii.md, marginBottom: 4, gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={{ flex: 1, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: present === undefined ? colors.text.secondary : colors.text.primary }}>{productName}</Text>
+          {seg(true, t("Есть", "Bor"), colors.status.success)}
+          {seg(false, t("Нет", "Yo'q"), colors.status.danger)}
+        </View>
+        {present === true && (
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            <TextInput value={price} onChangeText={v => onPrice(productId, v)} placeholder={t("Цена", "Narx")} keyboardType="numeric"
+              style={{ flex: 1, minHeight: 40, textAlign: "right", fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 10 }} />
+            <TextInput value={promoNote} onChangeText={v => onPromo(productId, v)} placeholder={t("Акция", "Aksiya")}
+              style={{ flex: 1, minHeight: 40, fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.primary, backgroundColor: colors.bg.elevated, borderRadius: Radii.sm, paddingHorizontal: 10 }} />
+          </View>
+        )}
+      </View>
     </View>
   );
 });
@@ -133,6 +156,7 @@ export default function MerchandiserVisitScreen() {
   // при загрузке каталога, а нажатия и ввод трогают маленькие Record'ы по
   // productId, а не массив на весь чек-лист.
   const [rows, setRows] = useState<ChecklistRowData[]>([]);
+  // Ключа нет — не проверено; true — есть; false — нет на полке.
   const [present, setPresent] = useState<Record<number, boolean>>({});
   const [prices, setPrices] = useState<Record<number, string>>({});
   const [promos, setPromos] = useState<Record<number, string>>({});
@@ -146,7 +170,7 @@ export default function MerchandiserVisitScreen() {
     const fresh: ChecklistRowData[] = products.map((p: Product) => ({ productId: p.id, productName: p.name }));
     const known = new Set(fresh.map(r => r.productId));
     loadVisitDraft(planId).then(draft => {
-      if (draft && (draft.photos.length > 0 || draft.checklist.some(i => i.present) || draft.competitorNotes)) {
+      if (draft && (draft.photos.length > 0 || draft.checklist.length > 0 || draft.competitorNotes)) {
         Alert.alert(
           t("Продолжить черновик?", "Qoralamani davom ettirasizmi?"),
           t("Найден незавершённый отчёт по этому визиту — сеть, видимо, прервалась при отправке.", "Bu tashrif bo'yicha tugallanmagan hisobot topildi — yuborishda aloqa uzilgan ko'rinadi."),
@@ -166,7 +190,8 @@ export default function MerchandiserVisitScreen() {
               const nextPromos: Record<number, string> = {};
               for (const item of draft.checklist) {
                 if (!known.has(item.productId)) continue;
-                if (item.present) nextPresent[item.productId] = true;
+                // В черновике только проверенные строки — оба значения честные.
+                nextPresent[item.productId] = item.present;
                 if (item.price) nextPrices[item.productId] = item.price;
                 if (item.promoNote) nextPromos[item.productId] = item.promoNote;
               }
@@ -187,13 +212,17 @@ export default function MerchandiserVisitScreen() {
   }, [products]);
 
   /** Плоский вид чек-листа — только для отправки и для черновика. */
-  const buildChecklist = useCallback((): ChecklistItem[] => rows.map(r => ({
-    productId: r.productId,
-    productName: r.productName,
-    present: present[r.productId] ?? false,
-    price: prices[r.productId],
-    promoNote: promos[r.productId],
-  })), [rows, present, prices, promos]);
+  // На сервер — только проверенные строки: «не смотрел» и «нет на полке»
+  // раньше уходили одним и тем же false, и отчёт не нёс информации.
+  const buildChecklist = useCallback((): ChecklistItem[] => rows
+    .filter(r => r.productId in present)
+    .map(r => ({
+      productId: r.productId,
+      productName: r.productName,
+      present: present[r.productId],
+      price: prices[r.productId],
+      promoNote: promos[r.productId],
+    })), [rows, present, prices, promos]);
 
   // Auto-save so a killed app or a lost connection doesn't erase the whole
   // checklist and every already-uploaded photo — matches order/new.tsx's draft
@@ -249,13 +278,22 @@ export default function MerchandiserVisitScreen() {
 
   const removePhoto = (index: number) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setPhotos(prev => prev.filter((_, i) => i !== index)); };
   // Обработчики стабильны по ссылке, иначе memo на строке ничего не даст.
-  const toggleChecklist = useCallback((productId: number) => { Haptics.selectionAsync(); setPresent(prev => ({ ...prev, [productId]: !prev[productId] })); }, []);
+  const markChecklist = useCallback((productId: number, value: boolean) => {
+    Haptics.selectionAsync();
+    setPresent(prev => {
+      if (prev[productId] === value) { const next = { ...prev }; delete next[productId]; return next; }
+      return { ...prev, [productId]: value };
+    });
+  }, []);
   const updatePrice = useCallback((productId: number, price: string) => setPrices(prev => ({ ...prev, [productId]: price })), []);
   const updatePromo = useCallback((productId: number, promoNote: string) => setPromos(prev => ({ ...prev, [productId]: promoNote })), []);
 
-  const presentCount = useMemo(() => rows.reduce((n, r) => n + (present[r.productId] ? 1 : 0), 0), [rows, present]);
+  const presentCount = useMemo(() => rows.reduce((n, r) => n + (present[r.productId] === true ? 1 : 0), 0), [rows, present]);
+  const checkedCount = useMemo(() => rows.reduce((n, r) => n + (r.productId in present ? 1 : 0), 0), [rows, present]);
   const totalItems = rows.length;
-  const completionPct = totalItems > 0 ? Math.round((presentCount / totalItems) * 100) : 0;
+  // Прогресс — проверено из всего, а не «есть из всего»: честно проверил
+  // всё, товара нет — это 100 %, а не 0 %.
+  const completionPct = totalItems > 0 ? Math.round((checkedCount / totalItems) * 100) : 0;
 
   /*
     Подтверждение — с цифрами, а не «Отчёт будет отправлен».
@@ -265,7 +303,8 @@ export default function MerchandiserVisitScreen() {
     оплаченная нерабочая смена. Без фото — отдельный вопрос с дорогой к камере.
   */
   const confirmSubmit = () => {
-    const summary = t(`${photos.length} фото · есть ${presentCount} из ${totalItems}`, `${photos.length} ta rasm · bor ${presentCount} / ${totalItems}`);
+    const unchecked = totalItems - checkedCount;
+    const summary = t(`${photos.length} фото · есть ${presentCount} · нет ${checkedCount - presentCount} · не проверено ${unchecked}`, `${photos.length} ta rasm · bor ${presentCount} · yo'q ${checkedCount - presentCount} · tekshirilmagan ${unchecked}`);
     if (photos.length === 0) {
       Alert.alert(
         t("Без фото визит не будет подтверждён", "Rasmsiz tashrif tasdiqlanmaydi"),
@@ -334,10 +373,10 @@ export default function MerchandiserVisitScreen() {
           <ChecklistRow
             productId={item.productId}
             productName={item.productName}
-            present={present[item.productId] ?? false}
+            present={present[item.productId]}
             price={prices[item.productId] ?? ""}
             promoNote={promos[item.productId] ?? ""}
-            onToggle={toggleChecklist}
+            onMark={markChecklist}
             onPrice={updatePrice}
             onPromo={updatePromo}
           />
@@ -379,7 +418,7 @@ export default function MerchandiserVisitScreen() {
                 <IconCircle name="check-square" size={14} variant="brand" />
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>{t("Чек-лист", "Ro'yxat")}</Text>
               </View>
-              <Badge variant={completionPct === 100 ? "success" : "info"}>{presentCount}/{totalItems} ({completionPct}%)</Badge>
+              <Badge variant={completionPct === 100 ? "success" : "info"}>{t(`проверено ${checkedCount}/${totalItems}`, `tekshirildi ${checkedCount}/${totalItems}`)} · {completionPct}%</Badge>
             </View>
             {/* Progress */}
             <View style={{ height: 5, backgroundColor: colors.bg.elevated, borderRadius: 3, overflow: "hidden" }}>

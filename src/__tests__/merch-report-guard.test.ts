@@ -19,7 +19,7 @@ describe("отчёт мерчандайзера", () => {
   it("подтверждение — с цифрами; без фото — предупреждение и дорога к камере", () => {
     expect(src).toContain("Без фото визит не будет подтверждён");
     expect(src).toContain('{ text: t("Сделать фото", "Rasmga olish"), onPress: () => pickPhoto(true) }');
-    expect(src).toContain("фото · есть ${presentCount} из ${totalItems}");
+    expect(src).toContain("фото · есть ${presentCount} · нет ${checkedCount - presentCount} · не проверено ${unchecked}");
     expect(src).not.toContain('t("Отчёт будет отправлен", "Hisobot yuboriladi")');
   });
 });
