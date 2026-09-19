@@ -15,7 +15,7 @@ import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { MonthlyPlanCard } from "../../src/components/MonthlyPlanCard";
 import { BiometricRow } from "../../src/components/BiometricRow";
-import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT, type ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT, soft, type ThemeColors } from "../../src/theme";
 import { Badge, Button } from "../../src/components/ui";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
@@ -51,10 +51,14 @@ function SectionLabel({ children, colors }: { children: React.ReactNode; colors:
   );
 }
 
-/** Белая плоскость группы: без тени и рамки, только форма. */
-function Group({ children, colors, style }: { children: React.ReactNode; colors: ThemeColors; style?: object }) {
+/**
+ * Плоскость группы. В тёплой бумаге карточка того же цвета, что холст (так
+ * устроен и веб), — отделяет её только мягкая тень; без неё группа
+ * растворялась в фоне. Тень одна и небольшая: объём, а не «подушка».
+ */
+function Group({ children, colors, isDark, style }: { children: React.ReactNode; colors: ThemeColors; isDark: boolean; style?: object }) {
   return (
-    <View style={[{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, overflow: "hidden", marginBottom: Spacing.xl }, style]}>
+    <View style={[{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, marginBottom: Spacing.xl, ...soft(isDark).raisedSm }, style]}>
       {children}
     </View>
   );
@@ -76,7 +80,7 @@ function Row({ icon, tone, title, subtitle, value, right, onPress, colors, dange
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
-      style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: Spacing.md, minHeight: 56, paddingHorizontal: Spacing.base, paddingVertical: 10, backgroundColor: pressed ? colors.bg.elevated : "transparent" })}
+      style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: Spacing.md, minHeight: 56, paddingHorizontal: Spacing.base, paddingVertical: 10, borderRadius: Radii.xl, backgroundColor: pressed ? colors.bg.elevated : "transparent" })}
     >
       <View style={{ width: 36, height: 36, borderRadius: Radii.full, alignItems: "center", justifyContent: "center", backgroundColor: danger ? colors.status.dangerDim : colors.bg.elevated }}>
         <Feather name={icon} size={18} color={iconTone} />
@@ -239,7 +243,7 @@ export default function ProfileScreen() {
         {(isAgent || isCourier) && (
           <>
             <SectionLabel colors={colors}>{t("Деньги", "Pul")}</SectionLabel>
-            <Group colors={colors}>
+            <Group colors={colors} isDark={isDark}>
               <Row icon="dollar-sign" tone={colors.accent.primary} title={t("Моя зарплата", "Mening oyligim")} subtitle={t("Начислено, выдано и подтверждение получения", "Hisoblangan, berilgan va olganini tasdiqlash")} onPress={() => router.push("/salary")} colors={colors} />
               {isAgent && (
                 <>
@@ -253,7 +257,7 @@ export default function ProfileScreen() {
 
         {/* ── Аккаунт ── */}
         <SectionLabel colors={colors}>{t("Аккаунт", "Hisob")}</SectionLabel>
-        <Group colors={colors}>
+        <Group colors={colors} isDark={isDark}>
           <Row icon="user" title={t("Имя", "Ism")} value={editingName ? undefined : user?.name ?? "—"} onPress={() => setEditingName(v => !v)} colors={colors}
             right={<Feather name={editingName ? "chevron-up" : "chevron-right"} size={18} color={colors.text.tertiary} />} />
           {editingName && (
@@ -281,7 +285,7 @@ export default function ProfileScreen() {
 
         {/* ── Оформление ── */}
         <SectionLabel colors={colors}>{t("Оформление", "Ko'rinish")}</SectionLabel>
-        <Group colors={colors}>
+        <Group colors={colors} isDark={isDark}>
           <Row icon={isDark ? "moon" : "sun"} title={t("Тема", "Mavzu")} colors={colors}
             right={<Segment value={isDark ? "dark" : "light"} colors={colors} onChange={(v) => { if ((v === "dark") !== isDark) toggleTheme(); }}
               options={[{ key: "light", label: t("Светлая", "Yorug'") }, { key: "dark", label: t("Тёмная", "Qorong'i") }]} />} />
@@ -293,7 +297,7 @@ export default function ProfileScreen() {
         </Group>
 
         {/* ── Выход ── */}
-        <Group colors={colors}>
+        <Group colors={colors} isDark={isDark}>
           <Row icon="log-out" danger title={t("Выйти из аккаунта", "Hisobdan chiqish")} colors={colors}
             onPress={() => Alert.alert(t("Выход", "Chiqish"), t("Вы уверены?", "Ishonchingiz komilmi?"), [{ text: t("Отмена", "Bekor"), style: "cancel" }, { text: t("Выйти", "Chiqish"), style: "destructive", onPress: logout }])} />
         </Group>
