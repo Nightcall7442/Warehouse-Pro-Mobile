@@ -14,18 +14,16 @@ import { debtorTotals } from "../../src/lib/debtors";
 import { formatMoney } from "../../src/store/branding";
 import { Card } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
-import { Typography, Spacing, Radii, KpiColors, soft, type ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii, soft, type ThemeColors } from "../../src/theme";
 import { orderStatusLabel, orderStatusColor, deliveryStatusLabel } from "../../src/lib/order-status";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 import { CashCard } from "../../src/components/CashCard";
 import { money } from "../../src/components/order/OrderStyles";
-import { LinearGradient } from "expo-linear-gradient";
 
 type IconName = keyof typeof Feather.glyphMap;
 
-// ── CardDots — 3 colored dots (cold palette) ──────────────────────────────────
 /**
  * Колокол с числом непрочитанных.
  *
@@ -76,15 +74,6 @@ function NotificationBell() {
   );
 }
 
-function CardDots() {
-  return (
-    <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: KpiColors.coral }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: KpiColors.amber }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: KpiColors.teal }} />
-    </View>
-  );
-}
 
 // Visit and order statuses, worded as they are on the plan and orders tabs so
 // the same record doesn't get two different names in two places.
@@ -229,7 +218,6 @@ function AgentHome() {
       <FadeInItem delay={0}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <View style={{ flex: 1 }}>
-            <CardDots />
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
             <Text style={{ fontFamily: Typography.fontBold, fontSize: 26, color: colors.text.primary, marginTop: 4, letterSpacing: -0.5 }}>{t("Мой день", "Mening kunim")}</Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.secondary, marginTop: 4, textTransform: "capitalize" }}>
@@ -361,13 +349,13 @@ function AgentHome() {
         <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
           {sells && (
           <PressableScale onPress={() => router.push("/order/new")} haptic="light" style={{ flex: 1 }}>
-            <LinearGradient colors={[colors.accent.primary, colors.text.tertiary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10 }}>
+            <View
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.accent.primary }}>
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
                 <Feather name="plus-circle" size={20} color="#fff" />
               </View>
               <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>{t("НОВЫЙ ЗАКАЗ", "YANGI BUYURTMA")}</Text>
-            </LinearGradient>
+            </View>
           </PressableScale>
           )}
           <PressableScale onPress={() => router.push("/(tabs)/shops")} haptic="light" style={{ flex: 1 }}>
@@ -640,7 +628,6 @@ function SupervisorHome() {
       <FadeInItem delay={0}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: Spacing.lg }}>
           <View style={{ flex: 1 }}>
-            <CardDots />
             <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontMedium, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
             <Text style={{ fontSize: Typography.size.xxl, fontFamily: Typography.fontExtraBold, color: colors.text.primary, marginTop: 2 }}>{t("Главная", "Bosh sahifa")}</Text>
             <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBody, color: colors.text.tertiary, marginTop: 2, textTransform: "capitalize" }}>
@@ -946,7 +933,6 @@ function CourierHome() {
       <FadeInItem delay={0}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <View style={{ flex: 1 }}>
-            <CardDots />
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.accent.primary }}>{greeting}, {firstName}</Text>
             <Text style={{ fontFamily: Typography.fontBold, fontSize: 26, color: colors.text.primary, marginTop: 4, letterSpacing: -0.5 }}>{t("Доставки", "Yetkazish")}</Text>
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, color: colors.text.secondary, marginTop: 4, textTransform: "capitalize" }}>
@@ -983,7 +969,6 @@ function CourierHome() {
             <View style={{ flexDirection: "row", gap: 12 }}>
               {/* Assigned */}
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, ...soft(isDark).raised }}>
-                <CardDots />
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>{t("ОЖИДАЮТ", "KUTILMOQDA")}</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 28, color: colors.status.info, marginTop: 8 }}>{assigned}</Text>
                 <View style={{ marginTop: 8 }}>
@@ -992,7 +977,6 @@ function CourierHome() {
               </View>
               {/* In Transit */}
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, ...soft(isDark).raised }}>
-                <CardDots />
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>{t("В ПУТИ", "YO'LDA")}</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 28, color: colors.status.warning, marginTop: 8 }}>{inTransit}</Text>
                 <View style={{ marginTop: 8 }}>
@@ -1004,7 +988,6 @@ function CourierHome() {
             <View style={{ flexDirection: "row", gap: 12 }}>
               {/* Delivered */}
               <View style={{ flex: 1, backgroundColor: colors.bg.card, borderRadius: 24, padding: 16, ...soft(isDark).raised }}>
-                <CardDots />
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 9, color: colors.text.tertiary, letterSpacing: 1, textTransform: "uppercase" }}>{t("ДОСТАВЛЕНО", "YETKAZILDI")}</Text>
                 <Text style={{ fontFamily: Typography.fontBold, fontSize: 28, color: colors.status.success, marginTop: 8 }}>{delivered}</Text>
               </View>
@@ -1038,13 +1021,13 @@ function CourierHome() {
       <FadeInItem delay={160}>
         <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
           <PressableScale onPress={() => router.push("/(tabs)/deliveries")} haptic="light" style={{ flex: 1 }}>
-            <LinearGradient colors={[colors.accent.primary, colors.text.tertiary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10 }}>
+            <View
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.accent.primary }}>
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
                 <Feather name="truck" size={20} color="#fff" />
               </View>
               <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>{t("ДОСТАВКИ", "YETKAZISH")}</Text>
-            </LinearGradient>
+            </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>

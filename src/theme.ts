@@ -703,7 +703,10 @@ export function modalBottomPadding(insetsBottom: number, extra = 0): number {
  * Место здесь, а не в Layout: theme.ts — файл размеров, а не компонентов, и
  * экранам естественно брать отступ оттуда же, откуда они берут Spacing.
  */
-export const BOTTOM_TAB_HEIGHT = 80;
+/** Видимая высота панели вкладок (без системного отступа снизу). */
+export const TAB_BAR_HEIGHT = 60;
+/** Сколько содержимому отступать снизу: панель + воздух. К нему прибавляют insets.bottom. */
+export const BOTTOM_TAB_HEIGHT = TAB_BAR_HEIGHT + 12;
 
 export function safeBottomPadding(insetsBottom: number, extra = 16): number {
   if (Platform.OS === "android") {

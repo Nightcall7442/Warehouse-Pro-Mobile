@@ -131,17 +131,6 @@ const ChecklistRow = memo(function ChecklistRow({
   );
 });
 
-// ── CardDots (matches web) ───────────────────────────────────────────────────
-function CardDots() {
-  const colors = useThemeColors();
-  return (
-    <View style={{ flexDirection: "row", gap: 6, marginBottom: 8 }}>
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.danger }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.warning }} />
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.success }} />
-    </View>
-  );
-}
 
 export default function MerchandiserVisitScreen() {
   const { isDark } = useThemeStore();
@@ -347,7 +336,6 @@ export default function MerchandiserVisitScreen() {
           </View>
         </PressableScale>
         <View style={{ flex: 1, marginLeft: 8 }}>
-          <CardDots />
           <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{t("Отчёт о визите", "Tashrif hisoboti")}</Text>
           <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }}>{shopName}</Text>
         </View>

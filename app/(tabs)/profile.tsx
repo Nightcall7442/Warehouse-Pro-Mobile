@@ -1,6 +1,6 @@
-// Warehouse Pro — Profile v2 (cold palette, Card component)
+// Warehouse Pro — Профиль: группы строк на ровных плоскостях, без объёма.
 import { useState, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, TextInput, Alert, ActivityIndicator, RefreshControl, Image } from "react-native";
+import { View, Text, ScrollView, TextInput, Alert, ActivityIndicator, RefreshControl, Image, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,11 +15,8 @@ import { preparePhoto } from "../../src/lib/prepare-photo";
 import { notify } from "../../src/store/toast";
 import { MonthlyPlanCard } from "../../src/components/MonthlyPlanCard";
 import { BiometricRow } from "../../src/components/BiometricRow";
-import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT, soft } from "../../src/theme";
-import { Card, Badge } from "../../src/components/ui";
-// То же число, что и на других вкладках: высота плавающей панели. Голое 100
-// в отступе не говорило, откуда оно, и переживало правку панели лишь наполовину.
-import { PressableScale, FadeInItem } from "../../src/components/Animated";
+import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT, soft, type ThemeColors } from "../../src/theme";
+import { Badge, Button } from "../../src/components/ui";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 
@@ -34,13 +31,93 @@ const roleMetaFor = (t: (ru: string, uz: string) => string): Record<string, { la
   courier: { label: t("Курьер", "Kuryer"), icon: "truck" },
 });
 
-function Label({ children, colors }: { children: React.ReactNode; colors: ReturnType<typeof useThemeColors> }) {
+/*
+  Что здесь поменялось и почему.
+
+  Экран был набором неоморфных карточек с двойными тенями, крошечными
+  заголовками «ОСНОВНОЕ» в 10 pt, полем email, которое нельзя редактировать,
+  и коралловой кнопкой «Сохранить профиль» под формой, которую никто не
+  заполняет, — читалось как чужой, дешёвый продукт. Теперь — как системные
+  настройки: шапка с человеком, группы строк на белых плоскостях без теней,
+  разделители, ряд 56 pt, действие открывается по нажатию на строку.
+*/
+
+/** Подпись группы: 12 pt, разрядка, вторичные чернила. */
+function SectionLabel({ children, colors }: { children: React.ReactNode; colors: ThemeColors }) {
   return (
-    <Text style={{ fontSize: 10, fontFamily: Typography.fontMedium, color: colors.text.secondary, letterSpacing: 0.06, textTransform: "uppercase" as const, marginBottom: 6 }}>
+    <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: colors.text.secondary, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8, marginLeft: 4 }}>
       {children}
     </Text>
   );
 }
+
+/**
+ * Плоскость группы. В тёплой бумаге карточка того же цвета, что холст (так
+ * устроен и веб), — отделяет её только мягкая тень; без неё группа
+ * растворялась в фоне. Тень одна и небольшая: объём, а не «подушка».
+ */
+function Group({ children, colors, isDark, style }: { children: React.ReactNode; colors: ThemeColors; isDark: boolean; style?: object }) {
+  return (
+    <View style={[{ backgroundColor: colors.bg.card, borderRadius: Radii.xl, marginBottom: Spacing.xl, ...soft(isDark).raisedSm }, style]}>
+      {children}
+    </View>
+  );
+}
+
+function Line({ colors }: { colors: ThemeColors }) {
+  return <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 64 }} />;
+}
+
+/** Ряд настроек: значок в лунке, заголовок, подпись/значение, справа шеврон или свой элемент. */
+function Row({ icon, tone, title, subtitle, value, right, onPress, colors, danger }: {
+  icon: IconName; tone?: string; title: string; subtitle?: string; value?: string; right?: React.ReactNode;
+  onPress?: () => void; colors: ThemeColors; danger?: boolean;
+}) {
+  const ink = danger ? colors.status.danger : colors.text.primary;
+  const iconTone = tone ?? (danger ? colors.status.danger : colors.text.secondary);
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: Spacing.md, minHeight: 56, paddingHorizontal: Spacing.base, paddingVertical: 10, borderRadius: Radii.xl, backgroundColor: pressed ? colors.bg.elevated : "transparent" })}
+    >
+      <View style={{ width: 36, height: 36, borderRadius: Radii.full, alignItems: "center", justifyContent: "center", backgroundColor: danger ? colors.status.dangerDim : colors.bg.elevated }}>
+        <Feather name={icon} size={18} color={iconTone} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.base, color: ink }} numberOfLines={1}>{title}</Text>
+        {subtitle ? <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }} numberOfLines={2}>{subtitle}</Text> : null}
+      </View>
+      {value ? <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary }} numberOfLines={1}>{value}</Text> : null}
+      {right ?? (onPress ? <Feather name="chevron-right" size={18} color={colors.text.tertiary} /> : null)}
+    </Pressable>
+  );
+}
+
+/** Сегмент из двух-трёх значений: жёлоб, выбранное — белая плоскость. */
+function Segment<T extends string>({ value, options, onChange, colors }: {
+  value: T; options: Array<{ key: T; label: string }>; onChange: (v: T) => void; colors: ThemeColors;
+}) {
+  return (
+    <View style={{ flexDirection: "row", backgroundColor: colors.bg.input, borderRadius: Radii.md, padding: 3 }}>
+      {options.map(o => {
+        const active = o.key === value;
+        return (
+          <Pressable key={o.key} onPress={() => onChange(o.key)} accessibilityRole="button" accessibilityState={{ selected: active }}
+            style={{ paddingVertical: 7, paddingHorizontal: 14, borderRadius: Radii.sm, backgroundColor: active ? colors.bg.card : "transparent" }}>
+            <Text style={{ fontFamily: active ? Typography.fontSemibold : Typography.fontMedium, fontSize: Typography.size.sm, color: active ? colors.text.primary : colors.text.secondary }}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const inputStyle = (colors: ThemeColors) => ({
+  backgroundColor: colors.bg.input, borderRadius: Radii.md, paddingHorizontal: 14, minHeight: 46,
+  fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary,
+});
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -52,7 +129,9 @@ export default function ProfileScreen() {
   const colors = useThemeColors();
   const branding = useBrandingStore(s => s.branding);
 
+  const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState(user?.name ?? "");
+  const [changingPwd, setChangingPwd] = useState(false);
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -65,8 +144,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const isAgent = user?.role === "agent";
   const isCourier = user?.role === "courier";
-  // Monthly quotas are set against field staff. A CEO has no personal plan, so
-  // showing them a permanent "норма не назначена" card would be noise.
+  // Норма месяца ставится полевым. У директора личного плана нет — карточка
+  // «норма не назначена» была бы шумом.
   const isFieldRole = user?.role === "agent" || user?.role === "merchandiser";
   const roleMeta = roleMetaFor(t)[user?.role ?? ""] ?? { label: user?.role ?? "—", icon: "user" as IconName };
 
@@ -76,25 +155,20 @@ export default function ProfileScreen() {
 
   const updateMutation = useMutation({
     mutationFn: (data: { name: string }) => updateProfile(data),
-    onSuccess: (_, v) => { updateUser({ name: v.name }); notify.success(t("Профиль обновлён", "Profil yangilandi")); },
+    onSuccess: (_, v) => { updateUser({ name: v.name }); setEditingName(false); notify.success(t("Имя сохранено", "Ism saqlandi")); },
     onError: (e: Error) => notify.error(e.message),
   });
 
-  // The picked image has to go to S3 first. Sending assets[0].uri straight to
-  // the server — as this did — stored a local path like file:///.../ImagePicker/
-  // x.jpeg in the users table: it rendered on the agent's own phone until the
-  // cache was swept, and was a broken image for everyone else, including the
-  // office dashboard. Every other photo in the app already goes via uploadFile.
+  // Снимок сначала уходит в S3: локальный путь file:///… в users показывался
+  // только на этом телефоне и ломался у всех остальных, включая офис.
   const avatarMutation = useMutation({
     mutationFn: async (d: { uri: string }) => {
-      // Аватар тем более незачем слать в полном разрешении: он показывается
-      // кружком в сорок точек.
       const { dataUrl } = await preparePhoto(d.uri);
       const url = await uploadFile(dataUrl, "avatars");
       await updateProfile({ avatar: url });
       return url;
     },
-    onSuccess: (url) => { updateUser({ avatar: url }); notify.success(t("Аватар обновлён", "Avatar yangilandi")); },
+    onSuccess: (url) => { updateUser({ avatar: url }); notify.success(t("Фото обновлено", "Rasm yangilandi")); },
     onError: (e: Error) => notify.error(e.message),
   });
 
@@ -110,273 +184,127 @@ export default function ProfileScreen() {
 
   const pwdMutation = useMutation({
     mutationFn: (d: { currentPassword: string; newPassword: string }) => changePassword(d),
-    onSuccess: () => { setCurrentPwd(""); setNewPwd(""); setConfirmPwd(""); notify.success(t("Пароль изменён", "Parol o'zgartirildi")); },
+    onSuccess: () => { setCurrentPwd(""); setNewPwd(""); setConfirmPwd(""); setChangingPwd(false); notify.success(t("Пароль изменён", "Parol o'zgartirildi")); },
     onError: (e: Error) => notify.error(e.message),
   });
+
+  const submitPassword = () => {
+    if (!currentPwd || !newPwd) return notify.error(t("Заполните все поля", "Barcha maydonlarni to'ldiring"));
+    if (newPwd !== confirmPwd) return notify.error(t("Пароли не совпадают", "Parollar mos emas"));
+    if (newPwd.length < 8) return notify.error(t("Минимум 8 символов", "Kamida 8 ta belgi"));
+    pwdMutation.mutate({ currentPassword: currentPwd, newPassword: newPwd });
+  };
+
+  const initials = (user?.name ?? "?").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join("");
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.xl }}
+        contentContainerStyle={{ paddingHorizontal: Spacing.base, paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + BOTTOM_TAB_HEIGHT + Spacing.xl }}
         showsVerticalScrollIndicator={false}
-        // Под полями стоят кнопки «Сохранить профиль» и «Изменить пароль».
-        // По умолчанию первое касание кнопки при открытой клавиатуре только
-        // прячет клавиатуру и до кнопки не доходит: человек дописал имя, жмёт
-        // «Сохранить» — ничего, жмёт второй раз — сохранилось. Выглядит как
-        // зависшее приложение, а на смене пароля ещё и заставляет набирать
-        // три поля заново, если он решит, что промахнулся.
+        // Первое касание кнопки при открытой клавиатуре иначе только прячет
+        // клавиатуру — человек жмёт «Сохранить» дважды и думает, что зависло.
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.primary} />}
       >
-        {/* Title */}
-        <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 24, color: colors.text.primary, marginBottom: Spacing.xl }}>{t("Настройки", "Sozlamalar")}</Text>
+        {/* ── Человек ── */}
+        <View style={{ alignItems: "center", paddingVertical: Spacing.lg, marginBottom: Spacing.md }}>
+          <Pressable onPress={handleAvatarPress} accessibilityRole="button" accessibilityLabel={t("Сменить фото", "Rasmni almashtirish")} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
+            <View style={{ width: 88, height: 88, borderRadius: 44, overflow: "hidden", backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={{ width: 88, height: 88 }} />
+              ) : (
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: 30, color: colors.accent.primary }}>{initials}</Text>
+              )}
+              {avatarMutation.isPending && (
+                <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.overlayDark }}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              )}
+            </View>
+            <View style={{ position: "absolute", right: -2, bottom: -2, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.bg.card, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.bg.primary }}>
+              <Feather name="camera" size={14} color={colors.text.secondary} />
+            </View>
+          </Pressable>
+          <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: colors.text.primary, marginTop: Spacing.md }} numberOfLines={1}>{user?.name ?? "—"}</Text>
+          <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2 }} numberOfLines={1}>{user?.email ?? ""}</Text>
+          <Badge variant="info" icon={roleMeta.icon} style={{ marginTop: 10 }}>{roleMeta.label}</Badge>
+        </View>
 
-        {/* ── Monthly plan ──
-            Sits directly under the title: it's the thing an agent opens this
-            tab to check, and everything below it is settings. Roles without a
-            quota simply see nothing — the card renders its own empty state. */}
+        {/* ── Норма месяца — то, ради чего полевой открывает вкладку ── */}
         {isFieldRole && (
-          <FadeInItem delay={0}>
-            <View style={{ marginBottom: Spacing.lg }}>
-              <MonthlyPlanCard />
-            </View>
-          </FadeInItem>
+          <View style={{ marginBottom: Spacing.xl }}>
+            <MonthlyPlanCard />
+          </View>
         )}
 
-        {/* ── Profile Card ── */}
-        <FadeInItem delay={0}>
-          <Card style={{ padding: Spacing.xl }}>
-            {/* Avatar row */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.lg, marginBottom: Spacing.xl }}>
-              <PressableScale onPress={handleAvatarPress} haptic="light">
-                <View style={{ width: 64, height: 64, borderRadius: Radii.lg, overflow: "hidden", backgroundColor: colors.brand.primaryDim, ...soft(isDark).insetSm, alignItems: "center", justifyContent: "center" }}>
-                  {user?.avatar ? (
-                    <Image source={{ uri: user.avatar }} style={{ width: 64, height: 64 }} />
-                  ) : (
-                    <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, color: colors.accent.primary }}>{(user?.name ?? "?")[0]?.toUpperCase()}</Text>
-                  )}
-                </View>
-              </PressableScale>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.lg, color: colors.text.primary }}>{user?.name ?? "—"}</Text>
-                <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, marginTop: 2 }}>{user?.email ?? ""}</Text>
-                <Badge variant="info" icon={roleMeta.icon} style={{ marginTop: 6 }}>{roleMeta.label}</Badge>
-              </View>
-            </View>
-
-            {/* ОСНОВНОЕ */}
-            <Label colors={colors}>{t("ОСНОВНОЕ", "ASOSIY")}</Label>
-            <View style={{ gap: Spacing.sm, marginBottom: Spacing.lg }}>
-              <View>
-                <Label colors={colors}>{t("ИМЯ", "ISM")}</Label>
-                <TextInput value={newName} onChangeText={setNewName} placeholder={t("Введите имя", "Ismingizni kiriting")} placeholderTextColor={colors.text.tertiary}
-                  style={{ backgroundColor: colors.bg.input, borderRadius: Radii.lg, borderWidth: 0, paddingHorizontal: 18, paddingVertical: 13, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary }} />
-              </View>
-              <View>
-                <Label colors={colors}>EMAIL</Label>
-                <TextInput value={user?.email ?? ""} onChangeText={() => {}} placeholder="email" keyboardType="email-address" placeholderTextColor={colors.text.tertiary}
-                  style={{ backgroundColor: colors.bg.input, borderRadius: Radii.lg, borderWidth: 0, paddingHorizontal: 18, paddingVertical: 13, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary, opacity: 0.6 }} />
-              </View>
-            </View>
-            {/* Save button */}
-            <PressableScale onPress={() => updateMutation.mutate({ name: newName })} disabled={updateMutation.isPending || !newName.trim()} haptic="medium">
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20, opacity: updateMutation.isPending || !newName.trim() ? 0.4 : 1 }}>
-                {updateMutation.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Feather name="save" size={14} color="#fff" />}
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>{t("Сохранить профиль", "Profilni saqlash")}</Text>
-              </View>
-            </PressableScale>
-          </Card>
-        </FadeInItem>
-
-        {/* ── Password Card ── */}
-        <FadeInItem delay={40}>
-          <Card style={{ padding: Spacing.xl, marginTop: Spacing.base }}>
-            <Label colors={colors}>{t("СМЕНА ПАРОЛЯ", "PAROLNI O'ZGARTIRISH")}</Label>
-            <View style={{ gap: Spacing.sm, marginBottom: Spacing.lg }}>
-              {[
-                { label: t("ТЕКУЩИЙ ПАРОЛЬ", "JORIY PAROL"), value: currentPwd, setter: setCurrentPwd },
-                { label: t("НОВЫЙ ПАРОЛЬ", "YANGI PAROL"), value: newPwd, setter: setNewPwd },
-                // Было «ПОДТВЕРДИТЕ НОВЫЙ» — обрубок: новый что?
-                { label: t("ПОВТОРИТЕ НОВЫЙ ПАРОЛЬ", "YANGI PAROLNI TAKRORLANG"), value: confirmPwd, setter: setConfirmPwd },
-              ].map((f, i) => (
-                <View key={i}>
-                  <Label colors={colors}>{f.label}</Label>
-                  <TextInput value={f.value} onChangeText={f.setter} secureTextEntry placeholder="••••••••" placeholderTextColor={colors.text.tertiary}
-                    style={{ backgroundColor: colors.bg.input, borderRadius: Radii.lg, borderWidth: 0, paddingHorizontal: 18, paddingVertical: 13, fontSize: Typography.size.base, fontFamily: Typography.fontRegular, color: colors.text.primary }} />
-                </View>
-              ))}
-            </View>
-            {/* Change password button */}
-            <PressableScale
-              onPress={() => {
-                if (!currentPwd || !newPwd) return notify.error(t("Заполните все поля", "Barcha maydonlarni to'ldiring"));
-                if (newPwd !== confirmPwd) return notify.error(t("Пароли не совпадают", "Parollar mos emas"));
-                if (newPwd.length < 8) return notify.error(t("Минимум 8 символов", "Kamida 8 ta belgi"));
-                pwdMutation.mutate({ currentPassword: currentPwd, newPassword: newPwd });
-              }}
-              disabled={pwdMutation.isPending || !currentPwd || !newPwd}
-              haptic="medium"
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.bg.elevated, borderRadius: Radii.md, paddingVertical: 12, paddingHorizontal: 20, ...soft(isDark).raised, opacity: pwdMutation.isPending || !currentPwd || !newPwd ? 0.4 : 1 }}>
-                {pwdMutation.isPending ? <ActivityIndicator color={colors.text.primary} size="small" /> : <Feather name="lock" size={14} color={colors.text.secondary} />}
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>{t("Изменить пароль", "Parolni o'zgartirish")}</Text>
-              </View>
-            </PressableScale>
-          </Card>
-        </FadeInItem>
-
-        {/*
-          Моя зарплата.
-
-          Зарплату получают агенты и курьеры — те, у кого веба нет вовсе, — а
-          посмотреть её на телефоне было негде: число существовало только на
-          экране начальника. Здесь же и подтверждают получение выданного.
-
-          Начальству ссылки нет: у директора и супервайзера для этого есть
-          ведомость всей команды, а собственная строка в ней и так видна.
-        */}
+        {/* ── Деньги ── */}
         {(isAgent || isCourier) && (
-          <FadeInItem delay={70}>
-            <PressableScale onPress={() => router.push("/salary")} haptic="light">
-              <Card style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.lg, marginTop: Spacing.base }}>
-                <View style={{
-                  width: 38, height: 38, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center",
-                  backgroundColor: colors.accent.primary + "18",
-                }}>
-                  <Feather name="dollar-sign" size={18} color={colors.accent.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
-                    {t("Моя зарплата", "Mening oyligim")}
-                  </Text>
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }}>
-                    {t("Начислено, выдано и подтверждение получения", "Hisoblangan, berilgan va olganini tasdiqlash")}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
-              </Card>
-            </PressableScale>
-          </FadeInItem>
+          <>
+            <SectionLabel colors={colors}>{t("Деньги", "Pul")}</SectionLabel>
+            <Group colors={colors} isDark={isDark}>
+              <Row icon="dollar-sign" tone={colors.accent.primary} title={t("Моя зарплата", "Mening oyligim")} subtitle={t("Начислено, выдано и подтверждение получения", "Hisoblangan, berilgan va olganini tasdiqlash")} onPress={() => router.push("/salary")} colors={colors} />
+              {isAgent && (
+                <>
+                  <Line colors={colors} />
+                  <Row icon="alert-circle" tone={colors.status.danger} title={t("Мои долги", "Mening qarzlarim")} subtitle={t("Кому идти собирать деньги", "Kimdan pul yig'ish kerak")} onPress={() => router.push("/debts")} colors={colors} />
+                </>
+              )}
+            </Group>
+          </>
         )}
 
-        {/*
-          Долги по моим заказам.
-
-          Долг агент видел только в карточке магазина — по одному, и лишь если
-          помнил, к кому зайти. Вопрос «кому идти собирать» задают каждый день,
-          и отвечать на него перебором точек нельзя.
-
-          Только агенту: у курьера своих заказов нет, а начальник смотрит долги
-          по всей организации отдельным отчётом.
-        */}
-        {isAgent && (
-          <FadeInItem delay={75}>
-            <PressableScale onPress={() => router.push("/debts")} haptic="light">
-              <Card style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.lg, marginTop: Spacing.base }}>
-                <View style={{
-                  width: 38, height: 38, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center",
-                  backgroundColor: colors.status.danger + "18",
-                }}>
-                  <Feather name="alert-circle" size={18} color={colors.status.danger} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>
-                    {t("Мои долги", "Mening qarzlarim")}
-                  </Text>
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }}>
-                    {t("Кому идти собирать деньги", "Kimdan pul yig'ish kerak")}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={18} color={colors.text.tertiary} />
-              </Card>
-            </PressableScale>
-          </FadeInItem>
-        )}
-
-        {/* ── Appearance Card ── */}
-        <FadeInItem delay={80}>
-          <Card style={{ padding: Spacing.xl, marginTop: Spacing.base }}>
-            <Label colors={colors}>{t("ТЕМА", "MAVZU")}</Label>
-            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-              <PressableScale onPress={() => { if (isDark) toggleTheme(); }} haptic="light" style={{ flex: 1 }}>
-                <View style={{
-                  paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
-                  backgroundColor: !isDark ? colors.accent.primary : colors.bg.elevated,
-                  ...((!isDark) ? soft(isDark).raisedSm : soft(isDark).inset),
-                }}>
-                  <Feather name="sun" size={18} color={!isDark ? "#fff" : colors.text.secondary} />
-                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: !isDark ? "#fff" : colors.text.secondary }}>{t("Светлая", "Yorug'")}</Text>
-                </View>
-              </PressableScale>
-              <PressableScale onPress={() => { if (!isDark) toggleTheme(); }} haptic="light" style={{ flex: 1 }}>
-                <View style={{
-                  paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center", gap: 6,
-                  backgroundColor: isDark ? colors.accent.primary : colors.bg.elevated,
-                  ...(isDark ? soft(isDark).raisedSm : soft(isDark).inset),
-                }}>
-                  <Feather name="moon" size={18} color={isDark ? "#fff" : colors.text.secondary} />
-                  <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: isDark ? "#fff" : colors.text.secondary }}>{t("Тёмная", "Qorong'i")}</Text>
-                </View>
-              </PressableScale>
+        {/* ── Аккаунт ── */}
+        <SectionLabel colors={colors}>{t("Аккаунт", "Hisob")}</SectionLabel>
+        <Group colors={colors} isDark={isDark}>
+          <Row icon="user" title={t("Имя", "Ism")} value={editingName ? undefined : user?.name ?? "—"} onPress={() => setEditingName(v => !v)} colors={colors}
+            right={<Feather name={editingName ? "chevron-up" : "chevron-right"} size={18} color={colors.text.tertiary} />} />
+          {editingName && (
+            <View style={{ paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, gap: Spacing.sm }}>
+              <TextInput value={newName} onChangeText={setNewName} placeholder={t("Как вас зовут", "Ismingiz")} placeholderTextColor={colors.text.tertiary} autoFocus style={inputStyle(colors)} />
+              <Button variant="primary" size="md" fullWidth loading={updateMutation.isPending} disabled={!newName.trim() || newName.trim() === user?.name}
+                onPress={() => updateMutation.mutate({ name: newName.trim() })}>{t("Сохранить", "Saqlash")}</Button>
             </View>
-          </Card>
-        </FadeInItem>
-
-        {/* ── Язык ── */}
-        <FadeInItem delay={100}>
-          <Card style={{ padding: Spacing.xl, marginTop: Spacing.base }}>
-            <Label colors={colors}>{t("ЯЗЫК", "TIL")}</Label>
-            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-              {/* Каждый язык назван на самом себе: это и есть подпись переключателя. */}
-              {([["ru", "Русский"], ["uz", "O'zbekcha"]] as const).map(([code, name]) => { // i18n-ignore
-                const active = lang === code;
-                return (
-                  <PressableScale key={code} onPress={() => { void setLang(code); }} haptic="light" style={{ flex: 1 }}>
-                    <View
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      style={{
-                        paddingVertical: 14, borderRadius: Radii.lg, alignItems: "center",
-                        backgroundColor: active ? colors.accent.primary : colors.bg.elevated,
-                        ...(active ? soft(isDark).raisedSm : soft(isDark).inset),
-                      }}
-                    >
-                      <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: active ? "#fff" : colors.text.secondary }}>{name}</Text>
-                    </View>
-                  </PressableScale>
-                );
-              })}
+          )}
+          <Line colors={colors} />
+          <Row icon="mail" title="Email" value={user?.email ?? "—"} colors={colors} />
+          <Line colors={colors} />
+          <Row icon="key" title={t("Пароль", "Parol")} subtitle={changingPwd ? undefined : t("Сменить пароль входа", "Kirish parolini almashtirish")} onPress={() => setChangingPwd(v => !v)} colors={colors}
+            right={<Feather name={changingPwd ? "chevron-up" : "chevron-right"} size={18} color={colors.text.tertiary} />} />
+          {changingPwd && (
+            <View style={{ paddingHorizontal: Spacing.base, paddingBottom: Spacing.base, gap: Spacing.sm }}>
+              <TextInput value={currentPwd} onChangeText={setCurrentPwd} secureTextEntry placeholder={t("Текущий пароль", "Joriy parol")} placeholderTextColor={colors.text.tertiary} style={inputStyle(colors)} />
+              <TextInput value={newPwd} onChangeText={setNewPwd} secureTextEntry placeholder={t("Новый пароль (не короче 8)", "Yangi parol (kamida 8)")} placeholderTextColor={colors.text.tertiary} style={inputStyle(colors)} />
+              <TextInput value={confirmPwd} onChangeText={setConfirmPwd} secureTextEntry placeholder={t("Повторите новый пароль", "Yangi parolni takrorlang")} placeholderTextColor={colors.text.tertiary} style={inputStyle(colors)} />
+              <Button variant="primary" size="md" fullWidth loading={pwdMutation.isPending} disabled={!currentPwd || !newPwd} onPress={submitPassword}>{t("Изменить пароль", "Parolni o'zgartirish")}</Button>
             </View>
-          </Card>
-        </FadeInItem>
-
-        {/* ── Отпечаток и блокировка ── */}
-        <FadeInItem delay={110}>
+          )}
           <BiometricRow colors={colors} isDark={isDark} />
-        </FadeInItem>
+        </Group>
 
-        {/* ── Logout Card ── */}
-        <FadeInItem delay={120}>
-          <PressableScale
-            onPress={() => Alert.alert(t("Выход", "Chiqish"), t("Вы уверены?", "Ishonchingiz komilmi?"), [{ text: t("Отмена", "Bekor"), style: "cancel" }, { text: t("Выйти", "Chiqish"), style: "destructive", onPress: logout }])}
-            haptic="medium"
-          >
-            <Card style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: Spacing.lg, marginTop: Spacing.base, borderColor: colors.status.danger + "30", borderWidth: 1 }}>
-              <Feather name="log-out" size={16} color={colors.status.danger} />
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.status.danger }}>{t("Выйти из аккаунта", "Hisobdan chiqish")}</Text>
-            </Card>
-          </PressableScale>
-        </FadeInItem>
+        {/* ── Оформление ── */}
+        <SectionLabel colors={colors}>{t("Оформление", "Ko'rinish")}</SectionLabel>
+        <Group colors={colors} isDark={isDark}>
+          <Row icon={isDark ? "moon" : "sun"} title={t("Тема", "Mavzu")} colors={colors}
+            right={<Segment value={isDark ? "dark" : "light"} colors={colors} onChange={(v) => { if ((v === "dark") !== isDark) toggleTheme(); }}
+              options={[{ key: "light", label: t("Светлая", "Yorug'") }, { key: "dark", label: t("Тёмная", "Qorong'i") }]} />} />
+          <Line colors={colors} />
+          <Row icon="globe" title={t("Язык", "Til")} colors={colors}
+            right={<Segment value={lang} colors={colors} onChange={(v) => { void setLang(v); }}
+              // Каждый язык назван на самом себе: это и есть подпись переключателя.
+              options={[{ key: "ru", label: "Русский" }, { key: "uz", label: "O'zbekcha" }]} />} />  // i18n-ignore
+        </Group>
 
-        {/* Знак и название организации.
+        {/* ── Выход ── */}
+        <Group colors={colors} isDark={isDark}>
+          <Row icon="log-out" danger title={t("Выйти из аккаунта", "Hisobdan chiqish")} colors={colors}
+            onPress={() => Alert.alert(t("Выход", "Chiqish"), t("Вы уверены?", "Ishonchingiz komilmi?"), [{ text: t("Отмена", "Bekor"), style: "cancel" }, { text: t("Выйти", "Chiqish"), style: "destructive", onPress: logout }])} />
+        </Group>
 
-            Здесь стояло «Warehouse Pro» — имя системы. Организация, купившая
-            белую метку, платит за то, чтобы сотрудник видел своё название, а
-            не имя поставщика; версия сборки при этом остаётся, она нужна
-            поддержке. Плашка под логотипом светлая: он может быть тёмным, а
-            фон приложения в тёмной теме тоже тёмный. */}
-        <View style={{ alignItems: "center", marginTop: Spacing.xl, gap: 8 }}>
+        {/* Знак и название организации: белая метка — сотрудник видит своё
+            название, не имя поставщика; версия нужна поддержке. */}
+        <View style={{ alignItems: "center", marginTop: Spacing.sm, gap: 8 }}>
           {branding.logoUrl ? (
             <View style={{ width: 44, height: 44, borderRadius: Radii.md, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               <SecureImage uri={branding.logoUrl} style={{ width: 38, height: 38 }} resizeMode="contain" />
