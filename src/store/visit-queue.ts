@@ -58,6 +58,8 @@ interface VisitQueue {
   add: (a: Omit<VisitAction, "id" | "createdAt" | "synced">) => Promise<boolean>;
   sync: () => Promise<{ synced: number; failed: number }>;
   remove: (id: string) => Promise<void>;
+  /** Отвергнутую сервером запись — снова в очередь и сразу в проход (причину могли исправить в офисе). */
+  retry: (id: string) => Promise<void>;
 }
 
 /** Только своё и только не отправленное: телефон в поле бывает общим (правило — одно на все очереди). */
@@ -82,16 +84,17 @@ async function send(a: VisitAction): Promise<string | undefined> {
     try {
       ({ dataUrl } = await preparePhoto(a.photoUri));
     } catch {
-      await updatePlanStatus(a.planId, a.status);
+      await updatePlanStatus(a.planId, a.status, a.createdAt);
       return tt("Снимок пропал с телефона — визит отмечен без фото", "Rasm telefondan yo'qolgan — tashrif rasmsiz belgilandi");
     }
     url = await uploadFile(dataUrl, "visits");
   }
+  // Время отметки — из очереди: визит стоит в журнале тогда, когда был.
   if (url) {
-    await saveVisitPhoto(a.planId, url);
+    await saveVisitPhoto(a.planId, url, undefined, a.createdAt);
     return;
   }
-  await updatePlanStatus(a.planId, a.status);
+  await updatePlanStatus(a.planId, a.status, a.createdAt);
 }
 
 export const useVisitQueue = create<VisitQueue>((set, get) => ({
@@ -154,5 +157,12 @@ export const useVisitQueue = create<VisitQueue>((set, get) => ({
     const actions = get().actions.filter(a => a.id !== id);
     set({ actions });
     await write(actions);
+  },
+
+  retry: async (id) => {
+    const actions = get().actions.map(a => (a.id === id ? { ...a, retryable: undefined, status_: "pending" as const, error: undefined } : a));
+    set({ actions });
+    await write(actions);
+    void get().sync();
   },
 }));

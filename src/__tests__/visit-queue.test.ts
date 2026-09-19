@@ -82,7 +82,8 @@ describe("очередь визитов", () => {
     ] });
     await useVisitQueue.getState().sync();
     expect(apiMock.uploadFile).toHaveBeenCalledWith("data:file:///cam/1.jpg", "visits");
-    expect(apiMock.saveVisitPhoto).toHaveBeenCalledWith(3, "https://s3/visits/1.jpg");
+    // Время отметки — из очереди, чтобы визит стоял в журнале тогда, когда был.
+    expect(apiMock.saveVisitPhoto).toHaveBeenCalledWith(3, "https://s3/visits/1.jpg", undefined, at(1));
     expect(apiMock.updatePlanStatus).not.toHaveBeenCalled();
   });
 
@@ -144,7 +145,7 @@ describe("очередь визитов", () => {
     const r = await useVisitQueue.getState().sync();
     expect(r).toEqual({ synced: 1, failed: 0 });
     expect(apiMock.uploadFile).not.toHaveBeenCalled();
-    expect(apiMock.updatePlanStatus).toHaveBeenCalledWith(3, "visited");
+    expect(apiMock.updatePlanStatus).toHaveBeenCalledWith(3, "visited", at(1));
     expect(useVisitQueue.getState().actions).toEqual([]);
     expect(useToastStore.getState().toast?.variant).toBe("warning");
   });
@@ -169,7 +170,7 @@ describe("очередь визитов", () => {
     const r = await useVisitQueue.getState().sync();
     expect(r).toEqual({ synced: 1, failed: 0 });
     expect(apiMock.uploadFile).not.toHaveBeenCalled();
-    expect(apiMock.saveVisitPhoto).toHaveBeenCalledWith(4, "https://s3/visits/9.jpg");
+    expect(apiMock.saveVisitPhoto).toHaveBeenCalledWith(4, "https://s3/visits/9.jpg", undefined, at(1));
     expect(apiMock.updatePlanStatus).not.toHaveBeenCalled();
   });
 });

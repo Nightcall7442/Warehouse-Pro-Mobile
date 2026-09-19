@@ -187,7 +187,11 @@ async function readQueue(): Promise<OfflineOrder[]> {
  */
 async function writeQueue(orders: OfflineOrder[]): Promise<boolean> {
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    // На диск — только неотправленное. Отправленные записи (полный состав
+    // заказа каждая) копились годами: строка AsyncStorage росла до предела
+    // (~2 МБ на Android), переставала читаться как «пусто», и следующая
+    // запись затирала все ещё не ушедшие заказы.
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(orders.filter(o => !o.synced)));
     return true;
   } catch (e) {
     if (__DEV__) console.warn("[OfflineStore] Failed to write queue:", e);
@@ -208,7 +212,7 @@ async function readDeliveryActionsQueue(): Promise<OfflineDeliveryAction[]> {
 /** Как и writeQueue: возвращает, дошла ли запись до диска. */
 async function writeDeliveryActionsQueue(actions: OfflineDeliveryAction[]): Promise<boolean> {
   try {
-    await AsyncStorage.setItem(DELIVERY_ACTIONS_KEY, JSON.stringify(actions));
+    await AsyncStorage.setItem(DELIVERY_ACTIONS_KEY, JSON.stringify(actions.filter(a => !a.synced)));
     return true;
   } catch (e) {
     if (__DEV__) console.warn("[OfflineStore] Failed to write delivery actions queue:", e);
@@ -415,9 +419,11 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
         if (networkDown) { skipped.add(entry.id); continue; }
         const { action } = entry;
         try {
+          // Время отметки — из очереди (createdAt): доставка в 23:50 без связи
+          // остаётся во вчерашнем дне, а не уезжает в следующий с отправкой.
           const value = action.type === "markOutForDelivery" ? await markOutForDelivery(action.orderId)
-            : action.type === "markDelivered" ? await markDelivered(action.orderId, action.cashAmount)
-            : action.type === "completeDelivery" ? await completeDelivery(action.input)
+            : action.type === "markDelivered" ? await markDelivered(action.orderId, action.cashAmount, entry.createdAt)
+            : action.type === "completeDelivery" ? await completeDelivery({ ...action.input, recordedAt: entry.createdAt })
             : await markFailed(action.orderId, action.reason);
           results.push({ status: "fulfilled", value });
         } catch (reason) {
@@ -502,9 +508,20 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       set({ orders: mergedForWrite });
       await writeQueue(mergedForWrite);
 
-      const results = await Promise.allSettled(
-        pendingOrders.map((order) => createOrder(order.input))
-      );
+      // По одному, а не залпом: залп из очереди упирался в лимит запросов, и
+      // часть заказов краснела «Слишком много запросов» без автоповтора.
+      // После первого сетевого отказа остальные не пробуем — связи нет.
+      const results: PromiseSettledResult<Awaited<ReturnType<typeof createOrder>>>[] = [];
+      let networkDown: unknown = null;
+      for (const order of pendingOrders) {
+        if (networkDown) { results.push({ status: "rejected", reason: networkDown }); continue; }
+        try {
+          results.push({ status: "fulfilled", value: await createOrder(order.input) });
+        } catch (e) {
+          results.push({ status: "rejected", reason: e });
+          if (isRetryableError(e)) networkDown = e;
+        }
+      }
 
       // Сверка названной суммы с посчитанной сервером.
       //
@@ -652,8 +669,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       const { markOutForDelivery, markDelivered, markFailed, completeDelivery } = await import("../../src/api");
       const act = action.action;
       if (act.type === "markOutForDelivery") await markOutForDelivery(act.orderId);
-      else if (act.type === "markDelivered") await markDelivered(act.orderId, act.cashAmount);
-      else if (act.type === "completeDelivery") await completeDelivery(act.input);
+      else if (act.type === "markDelivered") await markDelivered(act.orderId, act.cashAmount, action.createdAt);
+      else if (act.type === "completeDelivery") await completeDelivery({ ...act.input, recordedAt: action.createdAt });
       else if (act.type === "markFailed") await markFailed(act.orderId, act.reason);
 
       const final = get().deliveryActions.map((a) =>

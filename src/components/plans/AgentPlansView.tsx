@@ -23,6 +23,8 @@ import { ScreenHeader, EmptyState, Card } from "../ui";
 import { ErrorState } from "../QueryState";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../Animated";
 import { PlanRow } from "./PlanRow";
+import { QueueNote } from "./QueueNote";
+import { useQueuedPlans } from "../../lib/plan-queue";
 import { preparePhoto } from "../../lib/prepare-photo";
 import { sendVisitPing } from "../../lib/visit-ping";
 import { useVisitQueue } from "../../store/visit-queue";
@@ -75,7 +77,9 @@ export function AgentPlansView() {
   // Вернулись на экран — данные помечаются устаревшими сразу, не дожидаясь
   // ближайшего тика опроса.
   useRefreshOnFocus([["agentPlans"]]);
-  const { data: plans, isLoading, isError, error, refetch } = plansQuery;
+  const { data: serverPlans, isLoading, isError, error, refetch } = plansQuery;
+  // Очередь визитов наложена на список: отмеченный без связи — отмечен.
+  const { plans, queued } = useQueuedPlans(serverPlans);
 
   // Свой признак «тянут вручную» вместо isFetching. Запрос повторяется сам раз
   // в минуту, и на isFetching кружок обновления выскакивал бы без касания.
@@ -396,6 +400,7 @@ export function AgentPlansView() {
                   (photoMutation.isPending && photoMutation.variables?.planId === plan.id)
                 }
               />
+              {queued.has(plan.id) && <QueueNote action={queued.get(plan.id)!} colors={colors} />}
             </FadeInItem>
           )}
         />

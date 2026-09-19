@@ -17,6 +17,7 @@ import { Card, Badge, Button, IconCircle } from "../../src/components/ui";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
 import { useT } from "../../src/i18n";
 import { ErrorState } from "../../src/components/QueryState";
+import { sendVisitPing } from "../../src/lib/visit-ping";
 
 interface ChecklistItem {
   productId: number;
@@ -213,6 +214,9 @@ export default function MerchandiserVisitScreen() {
     mutationFn: () => submitVisitReport({ planId: Number(planId), shopId: Number(shopId), photos, checklist: buildChecklist(), competitorNotes: competitorNotes || undefined }),
     onSuccess: async () => {
       try { await updatePlanStatus(Number(planId), "visited"); } catch { /* plan status update is best-effort */ }
+      // Точка на карте начальника — как у агента; без неё отчёт мерчандайзера
+      // был единственным визитом без координат.
+      void sendVisitPing();
       await clearVisitDraft(planId);
       qc.invalidateQueries({ queryKey: ["plans"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

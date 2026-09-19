@@ -71,6 +71,9 @@ describe("offline store", () => {
       useOfflineStore.setState({ orders: [] });
       mockCreateOrder.mockReset();
 
+      // Сетевой отказ на первом останавливает проход: связи нет, второй
+      // ждёт следующего повода (раньше заказы уходили залпом, и второй
+      // пробовался в ту же мёртвую сеть).
       mockCreateOrder.mockRejectedValueOnce(new Error("Network error"));
       mockCreateOrder.mockResolvedValueOnce({ id: 2 });
 
@@ -81,8 +84,9 @@ describe("offline store", () => {
       const { syncAll } = useOfflineStore.getState();
       const result = await syncAll();
 
-      expect(result.synced).toBe(1);
-      expect(result.failed).toBe(1);
+      expect(result.synced).toBe(0);
+      expect(result.failed).toBe(2);
+      expect(mockCreateOrder).toHaveBeenCalledTimes(1);
 
       const state = useOfflineStore.getState();
       const failedOrder = state.orders.find(o => o.id === "o1");
@@ -91,6 +95,20 @@ describe("offline store", () => {
       // лежало сырое сообщение axios, и агент читал «Network error».
       expect(failedOrder?.error).toBe("Нет связи с сервером. Проверьте интернет и попробуйте снова.");
       expect(failedOrder?.retryable).toBe(true);
+      expect(state.orders.find(o => o.id === "o2")?.retryable).toBe(true);
+    });
+
+    it("отказ по существу на первом не останавливает второй", async () => {
+      useOfflineStore.setState({ orders: [] });
+      mockCreateOrder.mockReset();
+      mockCreateOrder.mockRejectedValueOnce(new Error("Status 400: Bad request"));
+      mockCreateOrder.mockResolvedValueOnce({ id: 2 });
+      const { addOrder } = useOfflineStore.getState();
+      await addOrder(makeOrder({ id: "o1" }));
+      await addOrder(makeOrder({ id: "o2" }));
+      const result = await useOfflineStore.getState().syncAll();
+      expect(result).toEqual({ synced: 1, failed: 1 });
+      expect(mockCreateOrder).toHaveBeenCalledTimes(2);
     });
 
     it("marks non-retryable errors correctly", async () => {
