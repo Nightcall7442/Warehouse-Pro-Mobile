@@ -87,7 +87,8 @@ export function Card({ children, style, onPress, variant = "default", haptic = t
 // Blue gradient primary, neumorphic secondary/danger.
 interface ButtonProps extends TouchableOpacityProps {
   children: React.ReactNode;
-  variant?: "primary" | "secondary" | "danger" | "ghost" | "success";
+  /** cta — главное действие экрана («Новый заказ», «Оформить»): жёлтое в светлой, золотое в тёмной. */
+  variant?: "primary" | "secondary" | "danger" | "ghost" | "success" | "cta";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
   icon?: keyof typeof Feather.glyphMap;
@@ -139,7 +140,8 @@ export function Button({
   // он лежит под началом надписи.
   const successInk = readableInk(Gradients.success[0]);
   const textColor =
-    variant === "primary" ? colors.brand.ink
+    variant === "cta" ? colors.brand.ctaInk
+    : variant === "primary" ? colors.brand.ink
     : variant === "danger" ? dangerInk
     : variant === "success" ? successInk
     : variant === "ghost" ? colors.brand.primary
@@ -157,9 +159,7 @@ export function Button({
             letterSpacing: 0.2,
             color: textColor,
             fontSize: size === "sm" ? Typography.size.sm : size === "lg" ? Typography.size.md : Typography.size.base,
-            textShadowColor: "rgba(0,0,0,0.2)",
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 1,
+            // Тень у букв убрана: на плоской заливке она читалась грязью по краю.
           }}>
             {children}
           </Text>
@@ -182,7 +182,8 @@ export function Button({
   }
 
   const variantStyle: ViewStyle =
-    variant === "secondary" ? { backgroundColor: colors.bg.elevated, ...soft(isDark).raisedSm }
+    variant === "cta" ? { backgroundColor: colors.brand.cta }
+    : variant === "secondary" ? { backgroundColor: colors.bg.elevated, ...soft(isDark).raisedSm }
     : variant === "danger" ? { backgroundColor: colors.status.dangerDim, ...soft(isDark).raisedSm }
     // «Призрачная» кнопка остаётся плоской намеренно: у неё нет поверхности,
     // и объём означал бы, что нажимать надо именно её.

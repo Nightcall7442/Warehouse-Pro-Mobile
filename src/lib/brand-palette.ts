@@ -41,7 +41,8 @@ export interface BrandPalette {
 }
 
 /* Фон карточки в каждой теме — bg.card из theme.ts. Тот же модуль стоит в вебе (src/lib/brand-palette.ts); отличаются только карточки. */
-export const CARD: Record<Theme, string> = { light: "#efedea", dark: "#221f1c" };
+// Карточка, на которой лежит цвет арендатора: белая в светлой теме (v8, вариант C), тёмная — как в вебе.
+export const CARD: Record<Theme, string> = { light: "#ffffff", dark: "#221f1c" };
 
 /* ── OKLCH ─────────────────────────────────────────────────────────────── */
 type Oklch = { L: number; C: number; H: number };

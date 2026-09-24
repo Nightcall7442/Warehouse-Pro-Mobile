@@ -275,7 +275,7 @@ export default function OrderDetailScreen() {
         </Text>
         {noConnection && (
           <TouchableOpacity onPress={() => refetch()} style={[styles.errorBtn, { backgroundColor: colors.brand.primary, borderRadius: Radii.xl }]}>
-            <Feather name="refresh-cw" size={16} color="#fff" />
+            <Feather name="refresh-cw" size={16} color={colors.brand.ink} />
             <Text style={styles.errorBtnText}>{t("Повторить", "Qayta urinish")}</Text>
           </TouchableOpacity>
         )}
@@ -283,7 +283,7 @@ export default function OrderDetailScreen() {
           onPress={() => router.back()}
           style={[styles.errorBtn, { backgroundColor: noConnection ? colors.bg.elevated : colors.brand.primary, borderRadius: Radii.xl }]}
         >
-          <Feather name="arrow-left" size={16} color={noConnection ? colors.text.primary : "#fff"} />
+          <Feather name="arrow-left" size={16} color={noConnection ? colors.text.primary : colors.brand.ink} />
           <Text style={[styles.errorBtnText, noConnection && { color: colors.text.primary }]}>{t("Назад к заказам", "Buyurtmalarga qaytish")}</Text>
         </TouchableOpacity>
       </View>

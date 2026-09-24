@@ -19,7 +19,7 @@ import { Feather } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
 import { TenantChoiceRequired, TotpCodeRequired } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
-import { Typography, Gradients, Radii, Spacing, soft } from "../../src/theme";
+import { Typography, Radii, Spacing, soft } from "../../src/theme";
 import { useBrandingStore } from "../../src/store/branding";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressableScale } from "../../src/components/Animated";
@@ -60,14 +60,14 @@ export default function LoginScreen() {
   /*
     Цвета экрана входа — из темы, а не свои.
 
-    Шапка (heroBg) остаётся тёмной и в светлой теме: это единственное место,
-    где фирменный цвет показан во всю ширину, и белая надпись на нём читается.
-    Берётся коралловый градиент марки вместо прежнего сине-серого.
+    Шапка (heroBg) — плашка hero: бирюза знака в светлой теме, тёмная
+    карточка в тёмной; надписи на ней — чернила hero. Кнопка «Войти» —
+    главное действие (brand.cta), как «Новый заказ» на главной.
   */
   const C = {
     bg: colors.bg.primary,
     card: colors.bg.card,
-    heroBg: Gradients.primary,
+    heroBg: [colors.hero.bg, colors.hero.bg] as const,
     accent: colors.brand.primary,
     accentLight: colors.brand.primaryLight,
     text: colors.text.primary,
@@ -165,17 +165,17 @@ export default function LoginScreen() {
                 </View>
               ) : (
                 <View style={{ width: 40, height: 40, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="home" size={20} color="#fff" />
+                  <Feather name="home" size={20} color={colors.hero.ink} />
                 </View>
               )}
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: "#fff", letterSpacing: -0.3 }}>{branding.companyName}</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: colors.hero.ink, letterSpacing: -0.3 }}>{branding.companyName}</Text>
             </View>
 
             {/* Hero text */}
-            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 32, color: "#fff", lineHeight: 38, letterSpacing: -1 }}>
+            <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 32, color: colors.hero.ink, lineHeight: 38, letterSpacing: -1 }}>
               {t("Управляйте\nбизнесом\nиз кармана", "Biznesni\ncho'ntakdan\nboshqaring")}
             </Text>
-            <Text style={{ fontFamily: Typography.fontRegular, fontSize: 14, color: "rgba(255,255,255,0.88)", marginTop: Spacing.lg, lineHeight: 22 }}>
+            <Text style={{ fontFamily: Typography.fontRegular, fontSize: 14, color: colors.hero.inkSoft, marginTop: Spacing.lg, lineHeight: 22 }}>
               {t("Заказы, склад, агенты и аналитика — всё в одном приложении", "Buyurtmalar, ombor, agentlar va tahlil — hammasi bitta ilovada")}
             </Text>
           </LinearGradient>
@@ -283,12 +283,10 @@ export default function LoginScreen() {
                 </View>
               ) : null}
 
-              {/* Главная кнопка.
-                  Коралловый градиент и приподнятость — так же выглядит FAB на
-                  главной и активная вкладка. Единственный акцент в приложении. */}
+              {/* Главная кнопка — главное действие (brand.cta), как «Новый заказ». */}
               <PressableScale onPress={() => handleLogin()} disabled={loading} haptic="medium">
                 <LinearGradient
-                  colors={[C.accentLight, C.accent]}
+                  colors={[colors.brand.cta, colors.brand.cta]}
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                   style={{
                     borderRadius: Radii.lg, paddingVertical: Spacing.base,
@@ -299,8 +297,8 @@ export default function LoginScreen() {
                   {/* Крутящийся кружок системы, а не значок «loader».
                       Значок неподвижен: во время входа он просто стоял на
                       кнопке, и это читалось как «зависло», а не «идёт». */}
-                  {loading && <ActivityIndicator size="small" color="#fff" />}
-                  <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>
+                  {loading && <ActivityIndicator size="small" color={colors.brand.ctaInk} />}
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.brand.ctaInk }}>
                     {loading ? t("Вход...", "Kirilmoqda...") : t("Войти", "Kirish")}
                   </Text>
                 </LinearGradient>

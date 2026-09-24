@@ -82,7 +82,7 @@ function ShopCard({
           {/* Order button */}
           <PressableScale onPress={() => onOrder()} haptic="medium" scaleTo={0.95}>
             <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
-              <Feather name="shopping-cart" size={18} color="#fff" />
+              <Feather name="shopping-cart" size={18} color={colors.brand.ink} />
             </View>
           </PressableScale>
         </View>
@@ -275,13 +275,13 @@ export default function ShopsScreen() {
             {location && (
               <PressableScale onPress={() => { setSortByDistance(!sortByDistance); }} haptic="none">
                 <View style={{ backgroundColor: sortByDistance ? colors.accent.primary : colors.bg.elevated, borderRadius: Radii.full, borderWidth: sortByDistance ? 0 : 1, borderColor: colors.border.default, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
-                  <Feather name={sortByDistance ? "check" : "navigation"} size={18} color={sortByDistance ? "#fff" : colors.text.primary} />
+                  <Feather name={sortByDistance ? "check" : "navigation"} size={18} color={sortByDistance ? colors.brand.ink : colors.text.primary} />
                 </View>
               </PressableScale>
             )}
             <PressableScale onPress={() => router.push("/shop/new")} haptic="light">
               <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus" size={20} color="#fff" />
+                <Feather name="plus" size={20} color={colors.brand.ink} />
               </View>
             </PressableScale>
           </View>
@@ -300,7 +300,7 @@ export default function ShopsScreen() {
           <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.lg, color: colors.text.primary, textAlign: "center" }}>{t("Не удалось загрузить", "Yuklab bo'lmadi")}</Text>
           <PressableScale onPress={() => refetch()} haptic="light">
             <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingVertical: 10, paddingHorizontal: 20 }}>
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>{t("Повторить", "Qayta urinish")}</Text>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.brand.ink }}>{t("Повторить", "Qayta urinish")}</Text>
             </View>
           </PressableScale>
         </View>

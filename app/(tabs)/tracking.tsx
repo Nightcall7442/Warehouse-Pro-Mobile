@@ -187,7 +187,7 @@ export default function TrackingScreen() {
               <Text style={{ fontFamily: Typography.fontMedium, color: colors.text.secondary }}>{t("Ошибка загрузки", "Yuklab bo'lmadi")}</Text>
               <PressableScale onPress={() => refetch()} haptic="light">
                 <View style={{ marginTop: 8, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.accent.primary, borderRadius: Radii.md }}>
-                  <Text style={{ color: "#fff", fontFamily: Typography.fontMedium }}>{t("Повторить", "Qayta urinish")}</Text>
+                  <Text style={{ color: colors.brand.ink, fontFamily: Typography.fontMedium }}>{t("Повторить", "Qayta urinish")}</Text>
                 </View>
               </PressableScale>
             </View>

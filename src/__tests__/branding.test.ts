@@ -82,8 +82,8 @@ describe("цвет арендатора в палитре", () => {
 
   it("мусор вместо цвета не попадает в палитру", () => {
     useThemeStore.getState().applyBranding("dark", "не цвет");
-    // Запасной цвет — тот же, что в палитре тёмной темы: коралл.
-    expect(useThemeStore.getState().colors.brand.primary).toBe("#f26d6d");
+    // Запасной цвет — тот же, что в палитре тёмной темы: золото (v8).
+    expect(useThemeStore.getState().colors.brand.primary).toBe("#c9a227");
   });
 
   it("второй край градиента — шаг светлоты того же тона, а не второй цвет", () => {

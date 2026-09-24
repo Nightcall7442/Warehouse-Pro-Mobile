@@ -350,11 +350,11 @@ function AgentHome() {
           {sells && (
           <PressableScale onPress={() => router.push("/order/new")} haptic="light" style={{ flex: 1 }}>
             <View
-              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.accent.primary }}>
-              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus-circle" size={20} color="#fff" />
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.brand.cta }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.08)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="plus" size={22} color={colors.brand.ctaInk} />
               </View>
-              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>{t("НОВЫЙ ЗАКАЗ", "YANGI BUYURTMA")}</Text>
+              <Text style={{ fontSize: 15, fontFamily: Typography.fontBold, color: colors.brand.ctaInk }}>{t("Новый заказ", "Yangi buyurtma")}</Text>
             </View>
           </PressableScale>
           )}
@@ -363,7 +363,7 @@ function AgentHome() {
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="shopping-bag" size={20} color={colors.accent.primary} />
               </View>
-              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>{t("МАГАЗИНЫ", "DO'KONLAR")}</Text>
+              <Text style={{ fontSize: 13, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Магазины", "Do'konlar")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -373,7 +373,7 @@ function AgentHome() {
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.status.successDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="navigation" size={16} color={colors.status.success} />
               </View>
-              <Text style={{ fontSize: 10, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>GPS</Text>
+              <Text style={{ fontSize: 13, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>GPS</Text>
             </View>
           </PressableScale>
           {sells && (
@@ -382,7 +382,7 @@ function AgentHome() {
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="maximize" size={16} color={colors.accent.primary} />
               </View>
-              <Text style={{ fontSize: 10, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("БАРКОД", "SHTRIX-KOD")}</Text>
+              <Text style={{ fontSize: 13, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Штрих-код", "Shtrix-kod")}</Text>
             </View>
           </PressableScale>
           )}
@@ -391,7 +391,7 @@ function AgentHome() {
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="user" size={16} color={colors.status.info} />
               </View>
-              <Text style={{ fontSize: 10, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("ПРОФИЛЬ", "PROFIL")}</Text>
+              <Text style={{ fontSize: 13, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Профиль", "Profil")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -447,23 +447,24 @@ function AgentHome() {
             «связь пропала». */}
         {sells && (
           <View style={{
-            backgroundColor: colors.bg.card,
-            borderRadius: 20, padding: 16, marginBottom: 12,
-            ...soft(isDark).raised,
+            // Плашка главной цифры (вариант C): бирюзовая в светлой, карточка в тёмной.
+            backgroundColor: colors.hero.bg,
+            borderRadius: 24, padding: 20, marginBottom: 12,
+            ...soft(isDark).raisedLg,
             flexDirection: "row", alignItems: "center", justifyContent: "space-between",
           }}>
             <View style={{ flex: 1 }}>
-              {/* Подпись 12-м, а не восьмым: восьмой на солнце не читается, и
+              {/* Подпись 13-м, а не восьмым: восьмой на солнце не читается, и
                   от показателя остаётся голое число без имени. */}
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 12, letterSpacing: 0.6, color: colors.accent.primary }}>
-                {t("ВЫРУЧКА ЗА СЕГОДНЯ", "BUGUNGI TUSHUM")}
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 13, color: colors.hero.inkSoft }}>
+                {t("Выручка за сегодня", "Bugungi tushum")}
               </Text>
               {ordersFailed ? (
                 <>
-                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, marginTop: 4, color: colors.accent.primary }}>
+                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 22, marginTop: 4, color: colors.hero.ink }}>
                     —
                   </Text>
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: colors.accent.primary }}>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: colors.hero.inkSoft }}>
                     {t("Нет связи — потяните вниз, чтобы обновить", "Aloqa yo'q — yangilash uchun pastga torting")}
                   </Text>
                 </>
@@ -471,10 +472,10 @@ function AgentHome() {
                 <ShimmerSkeleton width={160} height={26} radius={8} style={{ marginTop: 6 }} />
               ) : (
                 <>
-                  <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 24, marginTop: 4, color: colors.text.primary }}>
+                  <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 32, marginTop: 4, letterSpacing: -0.5, color: colors.hero.ink }}>
                     {money(todayTotals.sum)}
                   </Text>
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: colors.accent.primary }}>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: 13, marginTop: 2, color: colors.hero.inkSoft }}>
                     {todayTotals.count === 0
                       ? t("заказов ещё нет", "hali buyurtma yo'q")
                       : t(`${todayTotals.count} ${plural(todayTotals.count, "заказ", "заказа", "заказов")}`, `${todayTotals.count} ta buyurtma`)}
@@ -484,9 +485,9 @@ function AgentHome() {
             </View>
             <View style={{
               width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center",
-              backgroundColor: colors.status.successDim,
+              backgroundColor: "rgba(255,255,255,0.12)",
             }}>
-              <Feather name="trending-up" size={20} color={colors.status.success} />
+              <Feather name="trending-up" size={20} color={colors.hero.ink} />
             </View>
           </View>
         )}
@@ -746,7 +747,7 @@ function SupervisorHome() {
               {(["7d", "30d", "month"] as const).map(r => (
                 <PressableScale key={r} onPress={() => setRange(r)} haptic="light" scaleTo={0.95}>
                   <View style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radii.full, backgroundColor: range === r ? colors.brand.primary : "transparent" }}>
-                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: range === r ? "#fff" : colors.text.tertiary }}>{r === "7d" ? t("7д", "7 k") : r === "30d" ? t("30д", "30 k") : t("Месяц", "Oy")}</Text>
+                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: range === r ? colors.brand.ink : colors.text.tertiary }}>{r === "7d" ? t("7д", "7 k") : r === "30d" ? t("30д", "30 k") : t("Месяц", "Oy")}</Text>
                   </View>
                 </PressableScale>
               ))}
@@ -798,11 +799,11 @@ function SupervisorHome() {
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
           <PressableScale onPress={() => router.push("/(tabs)/tracking")} haptic="light" style={{ flex: 1 }}>
             <View
-              style={{ backgroundColor: colors.brand.primary, alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
-              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="map-pin" size={18} color="#fff" />
+              style={{ backgroundColor: colors.brand.cta, alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
+              <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: "rgba(0,0,0,0.08)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="map-pin" size={18} color={colors.brand.ctaInk} />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>{t("ТРЕКИНГ", "KUZATUV")}</Text>
+              <Text style={{ fontSize: 14, fontFamily: Typography.fontBold, color: colors.brand.ctaInk }}>{t("Трекинг", "Kuzatuv")}</Text>
             </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/plans")} haptic="light" style={{ flex: 1 }}>
@@ -820,7 +821,7 @@ function SupervisorHome() {
               <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="shopping-bag" size={16} color={colors.accent.primary} />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("МАГАЗИНЫ", "DO'KONLAR")}</Text>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("Магазины", "Do'konlar")}</Text>
             </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
@@ -828,7 +829,7 @@ function SupervisorHome() {
               <View style={{ width: 32, height: 32, borderRadius: Radii.sm, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="user" size={16} color={colors.status.info} />
               </View>
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("ПРОФИЛЬ", "PROFIL")}</Text>
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 0.5 }}>{t("Профиль", "Profil")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -1022,11 +1023,11 @@ function CourierHome() {
         <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
           <PressableScale onPress={() => router.push("/(tabs)/deliveries")} haptic="light" style={{ flex: 1 }}>
             <View
-              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.accent.primary }}>
-              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="truck" size={20} color="#fff" />
+              style={{ alignItems: "center", justifyContent: "center", paddingVertical: 20, borderRadius: 20, gap: 10, backgroundColor: colors.brand.cta }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.08)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="truck" size={20} color={colors.brand.ctaInk} />
               </View>
-              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: "#fff", letterSpacing: 1 }}>{t("ДОСТАВКИ", "YETKAZISH")}</Text>
+              <Text style={{ fontSize: 15, fontFamily: Typography.fontBold, color: colors.brand.ctaInk }}>{t("Доставки", "Yetkazish")}</Text>
             </View>
           </PressableScale>
           <PressableScale onPress={() => router.push("/(tabs)/profile")} haptic="light" style={{ flex: 1 }}>
@@ -1034,7 +1035,7 @@ function CourierHome() {
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.status.infoDim, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="user" size={20} color={colors.status.info} />
               </View>
-              <Text style={{ fontSize: 11, fontFamily: Typography.fontBold, color: colors.text.primary, letterSpacing: 1 }}>{t("ПРОФИЛЬ", "PROFIL")}</Text>
+              <Text style={{ fontSize: 13, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Профиль", "Profil")}</Text>
             </View>
           </PressableScale>
         </View>

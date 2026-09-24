@@ -68,17 +68,17 @@ function ProductCard({
           {inStock && (inCart > 0 ? (
             <View style={{ position: "absolute", bottom: Spacing.sm, right: Spacing.sm, flexDirection: "row", alignItems: "center", backgroundColor: colors.accent.primary, borderRadius: 20, height: 36 }}>
               <TouchableOpacity accessibilityLabel={t("Меньше", "Kamroq")} onPress={(e) => { e.stopPropagation(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onRemove(); }} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="minus" size={16} color="#fff" />
+                <Feather name="minus" size={16} color={colors.brand.ink} />
               </TouchableOpacity>
-              <Text style={{ minWidth: 18, textAlign: "center", color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.sm }}>{inCart}</Text>
+              <Text style={{ minWidth: 18, textAlign: "center", color: colors.brand.ink, fontFamily: Typography.fontBold, fontSize: Typography.size.sm }}>{inCart}</Text>
               <TouchableOpacity accessibilityLabel={t("Больше", "Ko'proq")} onPress={(e) => { e.stopPropagation(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAdd(); }} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus" size={16} color="#fff" />
+                <Feather name="plus" size={16} color={colors.brand.ink} />
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity accessibilityLabel={t("В корзину", "Savatga")} onPress={(e) => { e.stopPropagation(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onAdd(); }}
               style={{ position: "absolute", bottom: Spacing.sm, right: Spacing.sm, width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-              <Feather name="shopping-cart" size={16} color="#fff" />
+              <Feather name="shopping-cart" size={16} color={colors.brand.ink} />
             </TouchableOpacity>
           ))}
         </View>

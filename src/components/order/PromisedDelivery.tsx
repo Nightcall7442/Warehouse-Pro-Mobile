@@ -71,7 +71,7 @@ export function PromisedDelivery({
   const chipText = (active: boolean) => ({
     fontFamily: active ? Typography.fontSemibold : Typography.fontRegular,
     fontSize: Typography.size.sm,
-    color: active ? "#fff" : colors.text.secondary,
+    color: active ? colors.brand.ink : colors.text.secondary,
   });
 
   return (

@@ -221,13 +221,13 @@ export default function DebtorsScreen() {
                 <Text style={{
                   fontFamily: active ? Typography.fontSemibold : Typography.fontRegular,
                   fontSize: Typography.size.xs,
-                  color: active ? "#fff" : colors.text.secondary,
+                  color: active ? colors.brand.ink : colors.text.secondary,
                 }}>
                   {label}
                 </Text>
                 <Text style={{
                   fontFamily: Typography.fontMedium, fontSize: Typography.size.xs,
-                  color: active ? "#fff" : colors.text.primary,
+                  color: active ? colors.brand.ink : colors.text.primary,
                 }}>
                   {formatMoney(sum)}
                 </Text>

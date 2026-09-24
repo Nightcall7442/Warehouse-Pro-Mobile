@@ -123,7 +123,7 @@ export function PipelineBanner({ status, holdReason, colors }: { status: string;
                   alignItems: "center", justifyContent: "center",
                   ...(active ? soft(isDark).raisedSm : soft(isDark).inset),
                 }}>
-                  {done && !active && <Feather name="check" size={9} color="#fff" />}
+                  {done && !active && <Feather name="check" size={9} color={colors.brand.ink} />}
                   {active && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent.primary + "40" }} />}
                 </View>
                 <Text style={{ fontSize: Typography.size.xs, color: done ? colors.text.primary : colors.text.muted, marginHorizontal: 4, fontFamily: Typography.fontMedium }}>{step}</Text>

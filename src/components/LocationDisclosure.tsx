@@ -124,7 +124,7 @@ export function LocationDisclosure({ visible, onAccept, onDecline }: Props) {
                 paddingVertical: Spacing.md,
               }}
             >
-              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: "#fff" }}>
+              <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.brand.ink }}>
                 {t("Разрешаю", "Ruxsat beraman")}
               </Text>
             </Pressable>

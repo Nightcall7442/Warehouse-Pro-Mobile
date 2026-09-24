@@ -146,7 +146,7 @@ export default function SalaryScreen() {
               >
                 <Text style={{
                   fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm,
-                  color: active ? "#fff" : colors.text.secondary,
+                  color: active ? colors.brand.ink : colors.text.secondary,
                 }}>
                   {p.label}
                 </Text>
@@ -402,8 +402,8 @@ function PayoutRow({ payout, colors, busy, onConfirm }: {
             backgroundColor: colors.brand.primary, opacity: busy ? 0.5 : 1,
           }}
         >
-          {busy ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="check" size={14} color="#fff" />}
-          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>
+          {busy ? <ActivityIndicator size="small" color={colors.brand.ink} /> : <Feather name="check" size={14} color={colors.brand.ink} />}
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.brand.ink }}>
             {t("Получил", "Oldim")}
           </Text>
         </Pressable>

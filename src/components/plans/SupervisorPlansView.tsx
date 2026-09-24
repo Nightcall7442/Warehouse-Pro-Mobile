@@ -112,7 +112,7 @@ export function SupervisorPlansView() {
             </PressableScale>
             <PressableScale onPress={() => setShowCreate(true)} haptic="light">
               <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.full, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="plus" size={20} color="#fff" />
+                <Feather name="plus" size={20} color={colors.brand.ink} />
               </View>
             </PressableScale>
           </View>
@@ -276,7 +276,7 @@ function CreateTargetModal({ visible, agents, onClose, onCreated }: {
             </View>
             <PressableScale onPress={() => { if (!agentId) { notify.error(t("Выберите агента", "Agent tanlang")); return; } if (!targetAmount) { notify.error(t("Введите норму", "Normani kiriting")); return; } mutation.mutate(); }} disabled={mutation.isPending} haptic="medium">
               <LinearGradient colors={Gradients.primary} style={{ borderRadius: 12, paddingVertical: 16, alignItems: "center", opacity: mutation.isPending ? 0.7 : 1 }}>
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: "#fff" }}>{mutation.isPending ? t("Создание...", "Yaratilmoqda...") : t("Создать норму", "Norma yaratish")}</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.brand.ink }}>{mutation.isPending ? t("Создание...", "Yaratilmoqda...") : t("Создать норму", "Norma yaratish")}</Text>
               </LinearGradient>
             </PressableScale>
           </ScrollView>

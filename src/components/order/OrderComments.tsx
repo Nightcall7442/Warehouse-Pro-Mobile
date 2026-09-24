@@ -147,8 +147,8 @@ export function OrderComments({ orderId }: { orderId: number }) {
           }}
         >
           {add.isPending
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Feather name="send" size={16} color="#fff" />}
+            ? <ActivityIndicator size="small" color={colors.brand.ink} />
+            : <Feather name="send" size={16} color={colors.brand.ink} />}
         </Pressable>
       </View>
     </Card>

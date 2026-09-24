@@ -133,7 +133,7 @@ export default function NearbyShopsScreen() {
           {radiusOptions.map(r => (
             <PressableScale key={r} onPress={() => { Haptics.selectionAsync(); setRadiusKm(r); }} haptic="light">
               <View style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8, borderWidth: 1, backgroundColor: radiusKm === r ? colors.accent.primary : colors.bg.secondary, borderColor: radiusKm === r ? colors.accent.primary : colors.border.default }}>
-                <Text style={{ fontSize: 13, fontFamily: Typography.fontMedium, color: radiusKm === r ? "#fff" : colors.text.primary }}>{r} {t("км", "km")}</Text>
+                <Text style={{ fontSize: 13, fontFamily: Typography.fontMedium, color: radiusKm === r ? colors.brand.ink : colors.text.primary }}>{r} {t("км", "km")}</Text>
               </View>
             </PressableScale>
           ))}
@@ -158,8 +158,8 @@ export default function NearbyShopsScreen() {
           style={{ marginHorizontal: 16, marginBottom: 12 }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: Radii.lg, backgroundColor: colors.accent.primary }}>
-            <Feather name="navigation" size={16} color="#fff" />
-            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 14, color: "#fff" }}>{t(`Построить маршрут (${filteredShops.filter(s => s.gpsLat && s.gpsLng).length} точек)`, `Marshrut qurish (${filteredShops.filter(s => s.gpsLat && s.gpsLng).length} ta nuqta)`)}</Text>
+            <Feather name="navigation" size={16} color={colors.brand.ink} />
+            <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 14, color: colors.brand.ink }}>{t(`Построить маршрут (${filteredShops.filter(s => s.gpsLat && s.gpsLng).length} точек)`, `Marshrut qurish (${filteredShops.filter(s => s.gpsLat && s.gpsLng).length} ta nuqta)`)}</Text>
           </View>
         </PressableScale>
       )}

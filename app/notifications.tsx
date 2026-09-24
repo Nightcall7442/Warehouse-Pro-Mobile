@@ -186,7 +186,7 @@ export default function NotificationsScreen() {
             >
               <Text style={{
                 fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm,
-                color: active ? "#fff" : colors.text.secondary,
+                color: active ? colors.brand.ink : colors.text.secondary,
               }}>
                 {tab.label}
               </Text>

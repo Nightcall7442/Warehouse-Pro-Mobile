@@ -281,7 +281,7 @@ export function OrderEditModal({
             >
               <Text style={{
                 fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold,
-                color: activeTab === "items" ? "#fff" : colors.text.tertiary,
+                color: activeTab === "items" ? colors.brand.ink : colors.text.tertiary,
               }}>{t("Товары", "Mahsulotlar")}</Text>
             </TouchableOpacity>
             {canEditDetails && (
@@ -295,7 +295,7 @@ export function OrderEditModal({
             >
               <Text style={{
                 fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold,
-                color: activeTab === "details" ? "#fff" : colors.text.tertiary,
+                color: activeTab === "details" ? colors.brand.ink : colors.text.tertiary,
               }}>{t("Детали", "Tafsilotlar")}</Text>
             </TouchableOpacity>
             )}
@@ -476,11 +476,11 @@ export function OrderEditModal({
                   <TouchableOpacity onPress={handleSaveItems} disabled={saving}
                     style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
                     {saving
-                      ? <ActivityIndicator size="small" color="#fff" />
+                      ? <ActivityIndicator size="small" color={colors.brand.ink} />
                       /* Было «Сохранить количество» — теперь меняется и состав:
                          подпись, называющая треть действия, вводит в
                          заблуждение ровно там, где двигается склад. */
-                      : <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>{t("Сохранить состав", "Tarkibni saqlash")}</Text>
+                      : <Text style={{ color: colors.brand.ink, fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>{t("Сохранить состав", "Tarkibni saqlash")}</Text>
                     }
                   </TouchableOpacity>
                 )}
@@ -502,8 +502,8 @@ export function OrderEditModal({
                 <TouchableOpacity onPress={onSave} disabled={saving}
                   style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 15, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
                   {saving
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={{ color: "#fff", fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>{t("Сохранить детали", "Tafsilotlarni saqlash")}</Text>
+                    ? <ActivityIndicator size="small" color={colors.brand.ink} />
+                    : <Text style={{ color: colors.brand.ink, fontSize: Typography.size.base, fontFamily: Typography.fontBold }}>{t("Сохранить детали", "Tafsilotlarni saqlash")}</Text>
                   }
                 </TouchableOpacity>
               </View>

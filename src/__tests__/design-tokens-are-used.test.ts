@@ -95,27 +95,29 @@ describe("оформление берётся из темы", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("тени задаются набором, а не по одной", () => {
+  it("объём задаётся набором: светлая — мягкая вертикальная тень, тёмная — тонкая линия", () => {
     /*
-      Мягкий неоморфизм держится на ПАРЕ теней: светлая сверху-слева, серая
-      снизу-справа. Одна тень даёт не объём, а подложку — именно так экран и
-      выглядел, пока react-native не умел большего.
-
-      Здесь проверяется, что набор soft() вообще отдаёт две тени и что среди них
-      есть вдавленный вариант: без inset нечем показать нажатие и жёлоб.
+      v8 (варианты C/D): неоморфная пара «блик сверху-слева + тень снизу-справа»
+      ушла вместе с кораллом. Светлая карточка — белая на холсте, отделена
+      мягкой ВЕРТИКАЛЬНОЙ тенью (два слоя). Тёмная — тень на угольном холсте не
+      видна, поверхность отделяет линия цвета рамки веба. Утопленное (поле,
+      жёлоб) — линия без тени в обеих.
     */
     const { soft } = require("../theme") as typeof import("../theme");
-    for (const isDark of [false, true]) {
-      const set = soft(isDark);
-      expect(set.raised.boxShadow).toHaveLength(2);
-      expect(set.raisedSm.boxShadow).toHaveLength(2);
-      expect(set.raisedLg.boxShadow).toHaveLength(2);
-      expect(set.inset.boxShadow.every(sh => sh.inset)).toBe(true);
-      // Светлая грань идёт вверх-влево, тёмная вниз-вправо — иначе свет падает
-      // с двух сторон сразу и объём читается наоборот.
-      const [dark, light] = set.raised.boxShadow;
-      expect(dark.offsetX).toBeGreaterThan(0);
-      expect(light.offsetX).toBeLessThan(0);
+    const light = soft(false), dark = soft(true);
+    for (const key of ["raised", "raisedSm", "raisedLg"] as const) {
+      expect(light[key].boxShadow).toHaveLength(2);
+      for (const sh of light[key].boxShadow) {
+        expect(sh.offsetX).toBe(0);
+        expect(sh.offsetY).toBeGreaterThan(0);
+        expect(sh.inset).toBeFalsy();
+      }
+      expect(dark[key].boxShadow).toHaveLength(0);
+      expect(dark[key].borderWidth).toBe(1);
+    }
+    for (const set of [light, dark]) {
+      expect(set.inset.boxShadow).toHaveLength(0);
+      expect(set.inset.borderWidth).toBe(1);
     }
   });
 });
