@@ -589,7 +589,7 @@ export default function DeliveryScreen() {
             opacity: submitting ? 0.6 : 1,
           }}
         >
-          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>
+          <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.brand.ink }}>
             {submitting ? t("Отправка...", "Yuborilmoqda...") : t("ЗАВЕРШИТЬ ДОСТАВКУ", "YETKAZISHNI YAKUNLASH")}
           </Text>
         </TouchableOpacity>

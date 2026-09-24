@@ -30,14 +30,25 @@ describe("Theme Contrast", () => {
     expect(ratio).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("dark mode primary button text has sufficient contrast", () => {
-    const ratio = contrastRatio("#ffffff", DarkColors.accent.primary);
-    expect(ratio).toBeGreaterThanOrEqual(3.0); // Large text minimum
+  /*
+    Надпись на заливке бренда — brand.ink, а не белый: на золоте тёмной темы
+    белый даёт ~2:1, поэтому чернила там тёмные. Главное действие (cta) и
+    плашка цифры (hero) — со своими чернилами. Всё — не ниже 4.5:1.
+  */
+  it("надписи на заливках бренда, главного действия и плашки цифры читаются в обеих темах", () => {
+    for (const p of [DarkColors, LightColors]) {
+      expect(contrastRatio(p.brand.ink, p.brand.primary)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(p.brand.ctaInk, p.brand.cta)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(p.hero.ink, p.hero.bg)).toBeGreaterThanOrEqual(4.5);
+      // Акцент надписью — на холсте и на карточке.
+      expect(contrastRatio(p.accent.primary, p.bg.primary)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(p.accent.primary, p.bg.card)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
-  it("light mode primary button text has sufficient contrast", () => {
-    const ratio = contrastRatio("#ffffff", LightColors.accent.primary);
-    expect(ratio).toBeGreaterThanOrEqual(3.0);
+  it("белый по золоту не читается — потому чернила тёмной темы тёмные", () => {
+    expect(contrastRatio("#ffffff", DarkColors.brand.primary)).toBeLessThan(3);
+    expect(DarkColors.brand.ink).not.toBe("#ffffff");
   });
 
   it("dark mode secondary text is readable", () => {

@@ -1,25 +1,28 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// Warehouse Pro — язык оформления v7
+// Warehouse Pro — язык оформления v8 (выбор владельца 24.09.2026: «C и D»)
 //
-// Мягкий неоморфизм: элемент цвета холста, объём даёт тень — светлый блик
-// сверху-слева и серая тень снизу-справа. Коралл — единственный акцент:
-// активная вкладка, следующая точка маршрута, кнопки действия, кольцо
-// прогресса. Шрифт Manrope.
+// Светлая тема — «Финтех» (вариант C): белые карточки на прохладном
+// серо-зелёном холсте, фирменная бирюза знака приложения, главная кнопка —
+// жёлтая, как точка в знаке. Тень мягкая и вертикальная, без неоморфных
+// бликов.
 //
-// ── Что поменялось в v7 ───────────────────────────────────────────────────────
+// Тёмная тема — «Полевой» (вариант D): та же, что тёмная в вебе
+// (src/index.css), золото вместо коралла, карточки отделены тонкой линией, а
+// не тенью. Надписи на золоте — тёмные: белым по золоту контраст ~2:1.
 //
-// Только ЗНАЧЕНИЯ токенов. Ни одно имя не убрано и не добавлено: экраны,
-// разметка и поведение остались как были — им незачем знать, что палитра
-// другая. Холст из тёплого бежевого стал прохладным серо-голубым, акцент из
-// сине-серого — коралловым.
+// ── Почему не коралл ─────────────────────────────────────────────────────────
 //
-// ── Про два коралла ───────────────────────────────────────────────────────────
+// v7 держала неоновый коралл, фиолетовые градиенты, «свечение» у зелёного и
+// кислотный #00e68a. Рядом со спокойным вебом телефон читался дешёвым и чужим
+// (владелец: «мобил как то не серьёзный и дешёвый»). Макеты вариантов —
+// артефакт «Мобилка: новые варианты».
 //
-// Их именно два, и это не небрежность. Яркий #f26d6d хорош заливкой и никуда
-// не годится надписью: на холсте #efedea у него контраст низкий. Для надписей
-// и мелких знаков стоит затемнённый #d64a45 — 3.6:1, то есть годен для
-// крупного текста и элементов управления. Заливка живёт в brand и gradient,
-// надпись — в accent.
+// ── Два новых токена ─────────────────────────────────────────────────────────
+//
+// brand.cta / brand.ctaInk — заливка и чернила ГЛАВНОГО действия экрана
+// («Новый заказ», «Оформить»): жёлтая в светлой, золотая в тёмной. hero —
+// плашка главной цифры экрана (выручка дня): бирюзовая в светлой, карточка в
+// тёмной. У арендатора с цветом бренда оба берут его цвет.
 // ──────────────────────────────────────────────────────────────────────────────
 
 import { isHexColor } from "./lib/contrast";
@@ -38,15 +41,16 @@ type Gradient = readonly [string, string, ...string[]];
 const g = (from: string, to: string): Gradient => [from, to];
 
 export const DarkColors = {
+  // Холст и поверхности — ровно тёмная тема веба (src/index.css).
   bg: {
     primary: "#1c1a17",
     secondary: "#221f1c",
     card: "#221f1c",
-    elevated: "#262320",
-    input: "#221f1c",
+    elevated: "#2a2622",
+    input: "#1c1a17",
     overlay: "rgba(28,26,23,0.85)",
-    glass: "rgba(34,31,28,0.75)",
-    glassCard: "rgba(38,35,32,0.7)",
+    glass: "rgba(34,31,28,0.94)",
+    glassCard: "rgba(38,35,32,0.94)",
     overlayDark: "rgba(0,0,0,0.5)",
     glassButton: "rgba(255,255,255,0.08)",
   },
@@ -54,190 +58,168 @@ export const DarkColors = {
     default: "#322e28",
     subtle: "#2a2622",
     strong: "#423d35",
-    focus: "#f26d6d",
+    focus: "#c9a227",
     glass: "rgba(255,255,255,0.08)",
   },
   text: {
     primary: "#ede9e3",
     secondary: "#a39d92",
-    tertiary: "#8a8478", // WCAG AA: 4.5:1 on #1c1a17
-    muted: "#8a8478",
+    tertiary: "#948e81", // как в вебе: 4.8:1 на #221f1c
+    muted: "#948e81",
     inverse: "#1c1a17",
     onGlass: "rgba(237,233,227,0.92)",
   },
   /*
-    Акцент тёмной темы — тот же коралл, только светлее.
-
-    Марка не должна меняться от переключателя темы: голубой в тёмной и
-    коралловый в светлой — это два разных приложения на одном телефоне.
-
-    Взят глубокий #e0554f, а не светлый #ff8b87: этот токен служит и заливкой
-    кнопки, поверх которой идёт БЕЛАЯ надпись. На светлом коралле она даёт
-    2.3:1 — то есть пропадает; на этом 3.8:1. Надписью на тёмном холсте он
-    тоже читается — 4.3:1.
+    Золото — одно на обе роли. Надписью на тёмном холсте оно читается
+    (6.7:1), заливкой несёт ТЁМНЫЕ чернила (brand.ink): белым по золоту
+    контраст ~2:1, и так было бы в каждой кнопке.
   */
   accent: {
-    primary: "#e0554f",
-    secondary: "#a78bfa",
-    success: "#00e68a",
-    danger: "#ff6b6b",
-    warning: "#ffb020",
-    info: "#00b4ff",
+    primary: "#dcb748",
+    secondary: "#b39a5a",
+    success: "#3ddc97",
+    danger: "#ff7a7a",
+    warning: "#f0b545",
+    info: "#7cb8e6",
   },
   brand: {
-    primary: "#f26d6d",
-    primaryLight: "#ff8b87",
-    secondary: "#a78bfa",
-    primaryDim: "rgba(242,109,109,0.16)",
-    glow: "rgba(242,109,109,0.35)",
-    glowSoft: "rgba(242,109,109,0.14)",
-    // Чернила поверх заливки brand.primary. Для нашего цвета это белый —
-    // как и было прописано по экранам. Цвет арендатора считает своё
-    // значение по яркости (withBrandColor), потому что белым по светлому
-    // фону надпись пропадает.
-    ink: "#ffffff",
+    primary: "#c9a227",
+    primaryLight: "#dbb43f",
+    secondary: "#b39a5a",
+    primaryDim: "rgba(201,162,39,0.14)",
+    glow: "rgba(201,162,39,0.22)",
+    glowSoft: "rgba(201,162,39,0.10)",
+    ink: "#1c1a17",
+    // Главное действие экрана: то же золото.
+    cta: "#c9a227",
+    ctaInk: "#1c1a17",
+  },
+  // Плашка главной цифры: в тёмной — обычная карточка, цифра чернилами.
+  hero: {
+    bg: "#221f1c",
+    ink: "#ede9e3",
+    inkSoft: "#a39d92",
   },
   status: {
-    success: "#00e68a",
-    successDim: "rgba(0,230,138,0.18)",
-    successGlow: "rgba(0,230,138,0.25)",
-    warning: "#ffb020",
-    warningDim: "rgba(255,176,32,0.18)",
-    danger: "#ff4d6a",
-    dangerDim: "rgba(255,77,106,0.18)",
-    info: "#00b4ff",
-    infoDim: "rgba(0,180,255,0.18)",
+    success: "#3ddc97",
+    successDim: "rgba(61,220,151,0.14)",
+    successGlow: "rgba(61,220,151,0.18)",
+    warning: "#f0b545",
+    warningDim: "rgba(240,181,69,0.14)",
+    danger: "#ff7a7a",
+    dangerDim: "rgba(255,122,122,0.14)",
+    info: "#7cb8e6",
+    infoDim: "rgba(124,184,230,0.14)",
   },
-  // Вкладка активна тем же кораллом, что и всё остальное: голубая вкладка
-  // рядом с коралловой кнопкой читалась бы как два разных приложения.
   tab: {
-    active: "#ff8b87",
-    inactive: "#756f64",
-    bg: "rgba(34,31,28,0.92)",
-    border: "rgba(255,255,255,0.06)",
+    active: "#dcb748",
+    inactive: "#8a8478",
+    bg: "#221f1c",
+    border: "#322e28",
   },
+  // Градиенты — ровные: две точки одного цвета. Переливы коралла в фиолетовый
+  // и было тем самым «дёшево»; имена остались, чтобы экраны не трогать.
   gradient: {
-    primary: g("#ff8b87", "#e0554f"),
-    primarySoft: g("rgba(242,109,109,0.16)", "rgba(167,139,250,0.06)"),
-    success: g("#00e68a", "#3cd0b0"),
-    warm: g("#ffb020", "#f09858"),
-    danger: g("#ff4d6a", "#e878a8"),
-    ocean: g("#5cb6ea", "#4aa8e0"),
-    sunset: g("#f09858", "#e878a8"),
-    profileHeader: g("#ff8b87", "#e0554f"),
+    primary: g("#c9a227", "#c9a227"),
+    primarySoft: g("rgba(201,162,39,0.12)", "rgba(201,162,39,0.06)"),
+    success: g("#3ddc97", "#3ddc97"),
+    warm: g("#f0b545", "#f0b545"),
+    danger: g("#ff7a7a", "#ff7a7a"),
+    ocean: g("#7cb8e6", "#7cb8e6"),
+    sunset: g("#f0b545", "#f0b545"),
+    profileHeader: g("#2a2622", "#2a2622"),
   },
 };
 
 export const LightColors = {
   /*
-    Холст и грани.
-
-    В неоморфизме карточка НЕ светлее фона — она того же цвета, а объём даёт
-    тень. Поэтому card равен primary. Приподнятые поверхности (kpi, активная
-    вкладка) собираются градиентом elevated → sunken, это те самые «блик
-    сверху-слева, тень снизу-справа» из референса.
-  */
-  /*
-    Тёплая бумага — та же, что в веб-приложении (src/index.css: --color-surface
-    #efedea, raised #f2f0ec, light #f6f4f0). Раньше здесь стоял холодный
-    серо-голубой холст из референса, и телефон рядом с вебом читался чужим
-    продуктом (владелец, 17.09.2026: «не сочетается с вебом»).
+    Холст и поверхности — вариант C. Холст прохладный серо-зелёный, карточка
+    БЕЛАЯ и светлее холста: отделяется мягкой тенью, а не выдавленностью.
   */
   bg: {
-    primary: "#efedea",
-    secondary: "#f2f0ec",
-    card: "#efedea",
-    elevated: "#f6f4f0",
-    input: "#efedea",
-    overlay: "rgba(239,237,234,0.9)",
-    glass: "rgba(242,240,236,0.8)",
-    glassCard: "rgba(242,240,236,0.85)",
+    primary: "#f1f4f3",
+    secondary: "#e9eeec",
+    card: "#ffffff",
+    elevated: "#ffffff",
+    input: "#ffffff",
+    overlay: "rgba(241,244,243,0.92)",
+    glass: "rgba(255,255,255,0.94)",
+    glassCard: "rgba(255,255,255,0.94)",
     overlayDark: "rgba(0,0,0,0.4)",
-    glassButton: "rgba(255,255,255,0.55)",
+    glassButton: "rgba(255,255,255,0.8)",
   },
   border: {
-    default: "#d8d5cd",
-    subtle: "#e0ddd7",
-    strong: "#c4c0b8",
-    focus: "#f26d6d",
+    default: "#dfe6e4",
+    subtle: "#e8eeec",
+    strong: "#c6d1ce",
+    focus: "#0e4f49",
     glass: "rgba(0,0,0,0.05)",
   },
-  /*
-    Чернила.
-
-    primary — прямо из референса. А вот secondary и tertiary там заданы
-    светлее, чем читается: #6b7280 даёт на этом холсте 4.0:1, #9aa1ad — 2.2:1,
-    то есть подписи под числами на телефоне в руках, на солнце, разобрать было
-    бы нельзя. Тон сохранён — тот же прохладный серо-голубой, — но затемнён до
-    5.0:1 и 4.6:1.
-  */
   text: {
-    primary: "#2b2a28",
-    secondary: "#5e5b54",
-    tertiary: "#6b6760", // 4.81:1 на #efedea — как в вебе
-    muted: "#6b6760",
+    primary: "#13201e",
+    secondary: "#4b5a57",
+    tertiary: "#5f6d6a", // 5.1:1 на #f1f4f3
+    muted: "#5f6d6a",
     inverse: "#ffffff",
-    onGlass: "rgba(43,42,40,0.92)",
+    onGlass: "rgba(19,32,30,0.92)",
   },
-  /*
-    Коралл здесь — для надписей и мелких знаков: 3.6:1, то есть крупный текст
-    и элементы управления. Заливка живёт в brand ниже.
-
-    А вот состояния остаются ЗАЛИВКАМИ и яркими, как были. Затемнить их
-    заманчиво, но на них ложатся надписи через readableInk, и стоит белому
-    начать читаться на зелёной кнопке — помощник перестаёт быть нужен и его
-    однажды тихо выкинут. Проверка в theme-contrast сторожит ровно это.
-  */
+  // Бирюза знака: надписью 9.6:1 на холсте, заливкой — под белые чернила.
   accent: {
-    primary: "#d64a45",
-    secondary: "#8e7cf0",
-    success: "#37c98b",
-    danger: "#f26d6d",
-    warning: "#f0a53a",
-    info: "#4aa8e0",
+    primary: "#0e4f49",
+    secondary: "#2f7d73",
+    success: "#2bb673",
+    danger: "#e5484d",
+    warning: "#e0a01a",
+    info: "#3b82c4",
   },
-  // Коралл для заливки: кнопки, градиенты, кольца.
   brand: {
-    primary: "#f26d6d",
-    primaryLight: "#ff8b87",
-    secondary: "#8e7cf0",
-    primaryDim: "rgba(242,109,109,0.14)",
-    glow: "rgba(242,109,109,0.30)",
-    glowSoft: "rgba(242,109,109,0.10)",
+    primary: "#0e4f49",
+    primaryLight: "#16665e",
+    secondary: "#2f7d73",
+    primaryDim: "rgba(14,79,73,0.09)",
+    glow: "rgba(14,79,73,0.18)",
+    glowSoft: "rgba(14,79,73,0.07)",
     ink: "#ffffff",
+    // Главное действие экрана — жёлтое, как точка в знаке; чернила тёмные.
+    cta: "#f5c518",
+    ctaInk: "#13201e",
+  },
+  // Плашка главной цифры — бирюзовая, цифра белая.
+  hero: {
+    bg: "#0e4f49",
+    ink: "#ffffff",
+    inkSoft: "rgba(255,255,255,0.78)",
   },
   /*
-    Состояния: заливка яркая, надпись затемнённая.
-
-    Тот же приём, что у коралла, и по той же причине: #37c98b хорош кружком и
-    не читается словом.
+    Состояния: заливка яркая, надпись — через readableInk (как было). Тоны
+    спокойнее прежних кислотных, но всё ещё заливки, а не чернила.
   */
   status: {
-    success: "#37c98b",
-    successDim: "rgba(55,201,139,0.16)",
-    successGlow: "rgba(55,201,139,0.24)",
-    warning: "#f0a53a",
-    warningDim: "rgba(240,165,58,0.16)",
-    danger: "#f26d6d",
-    dangerDim: "rgba(242,109,109,0.14)",
-    info: "#4aa8e0",
-    infoDim: "rgba(74,168,224,0.15)",
+    success: "#2bb673",
+    successDim: "rgba(43,182,115,0.13)",
+    successGlow: "rgba(43,182,115,0.18)",
+    warning: "#e0a01a",
+    warningDim: "rgba(224,160,26,0.15)",
+    danger: "#e5484d",
+    dangerDim: "rgba(229,72,77,0.11)",
+    info: "#3b82c4",
+    infoDim: "rgba(59,130,196,0.12)",
   },
   tab: {
-    active: "#d64a45",
-    inactive: "#626976",
-    bg: "rgba(231,234,240,0.95)",
-    border: "rgba(0,0,0,0.05)",
+    active: "#0e4f49",
+    inactive: "#5f6d6a",
+    bg: "#ffffff",
+    border: "#e2e8e6",
   },
   gradient: {
-    primary: g("#ff8b87", "#e0554f"),
-    success: g("#43d896", "#37c98b"),
-    warm: g("#f5b95c", "#f0a53a"),
-    danger: g("#ff8b87", "#e0554f"),
-    ocean: g("#5cb6ea", "#4aa8e0"),
-    sunset: g("#f0a53a", "#f26d6d"),
-    primarySoft: g("rgba(242,109,109,0.14)", "rgba(142,124,240,0.06)"),
-    profileHeader: g("#ff8b87", "#e0554f"),
+    primary: g("#0e4f49", "#0e4f49"),
+    success: g("#2bb673", "#2bb673"),
+    warm: g("#e0a01a", "#e0a01a"),
+    danger: g("#e5484d", "#e5484d"),
+    ocean: g("#3b82c4", "#3b82c4"),
+    sunset: g("#e0a01a", "#e0a01a"),
+    primarySoft: g("rgba(14,79,73,0.08)", "rgba(14,79,73,0.04)"),
+    profileHeader: g("#0e4f49", "#0e4f49"),
   },
 };
 
@@ -278,7 +260,12 @@ function withBrandColor(base: ThemeColors, brand: string, isDark: boolean): Them
       glow: primary + "59",
       glowSoft: primary + "24",
       ink: p.onPrimary,
+      // Главное действие — цвет арендатора: белая метка, а не наш жёлтый.
+      cta: primary,
+      ctaInk: p.onPrimary,
     },
+    // Плашка цифры в светлой — цвет арендатора; в тёмной остаётся карточкой.
+    hero: isDark ? base.hero : { bg: primary, ink: p.onPrimary, inkSoft: p.onPrimary },
     tab: { ...base.tab, active: primary },
     gradient: {
       ...base.gradient,
@@ -407,90 +394,19 @@ export const Radii = {
 // цветом фона, иначе объём читается как пятно.
 // Тёмная: чистый чёрный.
 export const Shadows = {
-  xs: {
-    shadowColor: "#c9c3b8",
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.22,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  sm: {
-    shadowColor: "#c9c3b8",
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  md: {
-    shadowColor: "#c9c3b8",
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 0.32,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  lg: {
-    shadowColor: "#c9c3b8",
-    shadowOffset: { width: 8, height: 8 },
-    shadowOpacity: 0.38,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  xl: {
-    shadowColor: "#c9c3b8",
-    shadowOffset: { width: 10, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 32,
-    elevation: 12,
-  },
-  card: {
-    shadowColor: "#c9c3b8",
-    shadowOffset: { width: 7, height: 7 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 4,
-  },
-  panel: {
-    shadowColor: "#c9c3b8",
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  panelRaised: {
-    shadowColor: "#c9c3b8",
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 0.32,
-    shadowRadius: 16,
-    elevation: 5,
-  },
-  glow: {
-    shadowColor: "#5b6d8a",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  glowSuccess: {
-    shadowColor: "#34c473",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  glowDanger: {
-    shadowColor: "#d45050",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  inner: {
-    shadowColor: "#c9c3b8",
-    shadowOffset: { width: -3, height: -3 },
-    shadowOpacity: 0.28,
-    shadowRadius: 6,
-    elevation: -1,
-  },
+  xs:          { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3,  elevation: 1 },
+  sm:          { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6,  elevation: 2 },
+  md:          { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 14, elevation: 3 },
+  lg:          { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.09, shadowRadius: 22, elevation: 6 },
+  xl:          { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.10, shadowRadius: 30, elevation: 10 },
+  card:        { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 3 },
+  panel:       { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6,  elevation: 2 },
+  panelRaised: { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 14, elevation: 4 },
+  // «Свечение» больше не светится: это была та самая неоновая дешевизна.
+  glow:        { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.10, shadowRadius: 10, elevation: 3 },
+  glowSuccess: { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.10, shadowRadius: 10, elevation: 3 },
+  glowDanger:  { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.10, shadowRadius: 10, elevation: 3 },
+  inner:       { shadowColor: "#0e4f49", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2,  elevation: 0 },
 };
 
 // Dark-mode shadow color override — used by ui.tsx where shadowColor needs to
@@ -498,68 +414,48 @@ export const Shadows = {
 // a light-toned shadow reads muddy on a charcoal canvas.
 export const DarkShadowColor = "#000000";
 
-// ── Мягкий объём ──────────────────────────────────────────────────────────────
+// ── Объём поверхностей ────────────────────────────────────────────────────────
 //
-// Пара теней на элемент: светлая сверху-слева, тёмная снизу-справа. Элемент при
-// этом цвета холста — объём даёт только тень. Это и есть язык референса.
+// v8: без неоморфизма. Светлая тема — белая карточка на холсте, мягкая
+// вертикальная тень в тон бирюзы (два слоя: широкий мягкий и узкий у края).
+// Тёмная — тень на угольном холсте не видна, поверхность отделяет тонкая
+// линия цвета рамки веба. Утопленное (поле ввода, жёлоб сегмента) — линия без
+// тени в обеих: «утоплено» теперь значит «обведено», а не «вдавлено».
 //
-// «Вдавленное» (inset) — не украшение, а состояние: нажатая карточка, жёлоб
-// сегмент-контрола, лунка под значком. Палец видит, что нажатие принято, без
-// смены цвета.
-//
-// Значения — из референса: 4/9 у мелкого, 6/13 у карточки, 7/16 у крупного,
-// 2/5 и 3/7 у вдавленного.
-
-/** Светлая тема: тень цвета холста, но темнее; блик — чистый белый. */
-const LIGHT_DARK_FACE = "#c9c3b8";
-const LIGHT_LIGHT_FACE = "#ffffff";
-
-/*
-  Тёмная тема: белым бликом здесь пользоваться нельзя — на угольном холсте он
-  читается как засветка, а не как грань. Берётся едва заметный, и тень при этом
-  глубже: на тёмном фоне тень работает сильнее блика, а не наравне.
-*/
-const DARK_DARK_FACE = "rgba(0,0,0,0.55)";
-const DARK_LIGHT_FACE = "rgba(255,255,255,0.05)";
+// Имена наборов прежние (raisedSm, raised, raisedLg, insetSm, inset): экраны
+// их только раскладывают в стиль.
 
 type Shadow = { offsetX: number; offsetY: number; blurRadius: number; color: string; inset?: boolean };
+type Surface = { boxShadow: Shadow[]; borderWidth?: number; borderColor?: string };
 
-function pair(d: number, blur: number, dark: string, light: string): { boxShadow: Shadow[] } {
-  return {
-    boxShadow: [
-      { offsetX: d,  offsetY: d,  blurRadius: blur, color: dark },
-      { offsetX: -d, offsetY: -d, blurRadius: blur, color: light },
-    ],
-  };
-}
-
-function sunken(d: number, blur: number, dark: string, light: string): { boxShadow: Shadow[] } {
-  return {
-    boxShadow: [
-      { offsetX: d,  offsetY: d,  blurRadius: blur, color: dark,  inset: true },
-      { offsetX: -d, offsetY: -d, blurRadius: blur, color: light, inset: true },
-    ],
-  };
-}
-
-function softSet(dark: string, light: string) {
-  return {
-    /** Мелкое: значок, чип, кнопка-иконка. */
-    raisedSm: pair(4, 9, dark, light),
-    /** Карточка списка, строка маршрута, плашка. */
-    raised:   pair(6, 13, dark, light),
-    /** Крупное: KPI, шапка профиля, панель вкладок. */
-    raisedLg: pair(7, 16, dark, light),
-    /** Лунка под значком, номер точки. */
-    insetSm:  sunken(2, 5, dark, light),
-    /** Жёлоб сегмент-контрола, нажатая карточка. */
-    inset:    sunken(3, 7, dark, light),
-  };
-}
+const drop = (y: number, blur: number, a: number): Surface => ({
+  boxShadow: [
+    { offsetX: 0, offsetY: y, blurRadius: blur, color: `rgba(14,79,73,${a})` },
+    { offsetX: 0, offsetY: 1, blurRadius: 2, color: "rgba(14,79,73,0.05)" },
+  ],
+});
+const line = (color: string): Surface => ({ boxShadow: [], borderWidth: 1, borderColor: color });
 
 const SOFT = {
-  light: softSet(LIGHT_DARK_FACE, LIGHT_LIGHT_FACE),
-  dark:  softSet(DARK_DARK_FACE, DARK_LIGHT_FACE),
+  light: {
+    /** Мелкое: значок, чип, кнопка-иконка. */
+    raisedSm: drop(2, 6, 0.07),
+    /** Карточка списка, строка маршрута, плашка. */
+    raised:   drop(6, 18, 0.08),
+    /** Крупное: плашка цифры, шапка профиля. */
+    raisedLg: drop(10, 26, 0.09),
+    /** Лунка под значком, номер точки. */
+    insetSm:  line("#dfe6e4"),
+    /** Поле ввода, жёлоб сегмент-контрола. */
+    inset:    line("#dfe6e4"),
+  },
+  dark: {
+    raisedSm: line("#322e28"),
+    raised:   line("#322e28"),
+    raisedLg: line("#322e28"),
+    insetSm:  line("#2a2622"),
+    inset:    line("#322e28"),
+  },
 };
 
 /**
@@ -579,47 +475,47 @@ export const soft = (isDark: boolean) => (isDark ? SOFT.dark : SOFT.light);
  * KPI-карточка выглядит наклейкой.
  */
 export const raisedFaces = (isDark: boolean): readonly [string, string] =>
-  isDark ? ["#262320", "#1a1815"] : ["#f4f6f9", "#dde0e7"];
+  isDark ? ["#221f1c", "#221f1c"] : ["#ffffff", "#ffffff"];
 
 // ── Order Status Gradients ──────────────────────────────────────────────────
 // Categorical palette for order-pipeline statuses (needs more distinct hues than
 // the accent/status scale provides — e.g. purple for "shipped"). Theme-agnostic
 // (same in light/dark) to match the web app's order status badges.
 export const OrderStatusGradients: Record<string, readonly [string, string]> = {
-  new: ["#4a9de8", "#4b6cf6"],
-  processing: ["#e8a830", "#f09050"],
-  shipped: ["#9b59b6", "#8e44ad"],
-  pending: ["#f09050", "#e8a830"],
-  delivered: ["#34c473", "#2ec4b0"],
-  cancelled: ["#e85050", "#f06895"],
-  returned: ["#e85050", "#c0392b"],
+  new: ["#3b82c4", "#3b82c4"],
+  processing: ["#e0a01a", "#e0a01a"],
+  shipped: ["#5b6d8a", "#5b6d8a"],
+  pending: ["#c9713a", "#c9713a"],
+  delivered: ["#2bb673", "#2bb673"],
+  cancelled: ["#e5484d", "#e5484d"],
+  returned: ["#b3261e", "#b3261e"],
 };
 
 // ── KPI Colors ────────────────────────────────────────────────────────────────
 export const KpiColors = {
-  indigo: "#5b6d8a",
-  blue: "#5a8fad",
-  teal: "#3a9a8a",
-  green: "#34c473",
-  amber: "#d4973a",
-  orange: "#c07040",
-  red: "#d45050",
-  pink: "#c06080",
-  purple: "#7a6db5",
-  coral: "#f06895",
+  indigo: "#3d5a80",
+  blue: "#3b82c4",
+  teal: "#0e4f49",
+  green: "#2bb673",
+  amber: "#e0a01a",
+  orange: "#c9713a",
+  red: "#e5484d",
+  pink: "#a8506f",
+  purple: "#5b6d8a",
+  coral: "#c9713a",
 };
 
 export const KpiColorsDark = {
-  indigo: "#7b94f8",
-  blue: "#58a8f0",
-  teal: "#3cd0b0",
-  green: "#5ad88e",
-  amber: "#f0c040",
-  orange: "#f09858",
-  red: "#f06060",
-  pink: "#e878a8",
-  purple: "#a088f0",
-  coral: "#e878a8",
+  indigo: "#8fa7d6",
+  blue: "#7cb8e6",
+  teal: "#5cc2b3",
+  green: "#3ddc97",
+  amber: "#f0b545",
+  orange: "#e39a64",
+  red: "#ff7a7a",
+  pink: "#d98aa6",
+  purple: "#a3b1c9",
+  coral: "#e39a64",
 };
 
 // ── Animation Timing ──────────────────────────────────────────────────────────
@@ -644,7 +540,8 @@ export const Timing = {
 const StaticGradients = {
   dark: g("#221f1c", "#1c1a17"),
   card: g("#262320", "#221f1c"),
-  sheen: g("rgba(255,255,255,0.06)", "rgba(255,255,255,0)"),
+  // Глянцевый блик убран: в v8 поверхности матовые.
+  sheen: g("rgba(255,255,255,0)", "rgba(255,255,255,0)"),
 };
 
 // Берёт готовую палитру, а не флаг темы: иначе цвет арендатора остался бы

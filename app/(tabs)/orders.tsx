@@ -154,8 +154,8 @@ export default function OrdersScreen() {
           <PressableScale onPress={() => router.push("/order/new")} haptic="light">
             <View
               style={{ backgroundColor: colors.brand.primary, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radii.md }}>
-              <Feather name="plus" size={14} color="#fff" />
-              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: "#fff" }}>{t("Новый", "Yangi")}</Text>
+              <Feather name="plus" size={14} color={colors.brand.ink} />
+              <Text style={{ fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.brand.ink }}>{t("Новый", "Yangi")}</Text>
             </View>
           </PressableScale>
         </View>
@@ -436,7 +436,7 @@ export default function OrdersScreen() {
           width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent.primary,
           alignItems: "center", justifyContent: "center",
         }}>
-        <Feather name="plus" size={26} color="#fff" />
+        <Feather name="plus" size={26} color={colors.brand.ink} />
       </TouchableOpacity>
     </View>
   );

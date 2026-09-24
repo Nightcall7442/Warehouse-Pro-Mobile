@@ -4,47 +4,42 @@ import { LightColors, DarkColors } from "../theme";
 import { CARD } from "../lib/brand-palette";
 
 /**
- * Телефон и веб — один продукт (владелец, 17.09.2026: «не сочетается с
- * вебом»). Светлая тема мобилки стояла на холодном серо-голубом холсте, веб —
- * на тёплой бумаге. Теперь палитра берётся из веб-приложения (src/index.css):
+ * Палитра v8 (владелец, 24.09.2026, «C и D»).
  *
- *   · холст, поверхности, чернила, рамки светлой темы — те же hex, что в вебе;
- *   · тёмная — как была: она и так совпадала;
- *   · карточка бренд-палитры (CARD) — та же, что в веб-модуле brand-palette;
- *   · кнопки — ровным цветом бренда, без градиентов (в вебе neo-btn-primary
- *     ровный); шапка «Показателей» — ровная, как ScreenHeader.
+ *   · тёмная тема — ровно тёмная тема веба (src/index.css): холст, поверхности,
+ *     чернила, рамки, золото;
+ *   · светлая — вариант C: прохладный холст, БЕЛАЯ карточка, бирюза знака,
+ *     жёлтое главное действие; с вебом её роднит шрифт и сдержанность, а не hex;
+ *   · карточка бренд-палитры (CARD) — та, на которой лежит цвет арендатора;
+ *   · кнопки — ровным цветом, без градиентов.
  */
 const root = join(__dirname, "..", "..");
-const WEB = { surface: "#efedea", raised: "#f2f0ec", light: "#f6f4f0", border: "#d8d5cd", borderSubtle: "#e0ddd7", borderStrong: "#c4c0b8", ink: "#2b2a28", inkSoft: "#5e5b54", inkFaint: "#6b6760", darkSurface: "#221f1c", darkRaised: "#262320", darkInk: "#ede9e3", darkInkSoft: "#a39d92" };
+const WEB_DARK = { canvas: "#1c1a17", surface: "#221f1c", raised: "#2a2622", border: "#322e28", ink: "#ede9e3", inkSoft: "#a39d92", inkFaint: "#948e81", gold: "#c9a227" };
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap(f => { const p = join(dir, f); return statSync(p).isDirectory() ? walk(p) : p.endsWith(".tsx") ? [p] : []; });
 }
 
-describe("палитра — из веба", () => {
-  it("светлая: бумага, поверхности, чернила и рамки как в src/index.css веба", () => {
-    expect(LightColors.bg.primary).toBe(WEB.surface);
-    expect(LightColors.bg.secondary).toBe(WEB.raised);
-    expect(LightColors.bg.elevated).toBe(WEB.light);
-    expect(LightColors.text.primary).toBe(WEB.ink);
-    expect(LightColors.text.secondary).toBe(WEB.inkSoft);
-    expect(LightColors.text.tertiary).toBe(WEB.inkFaint);
-    expect(LightColors.border.default).toBe(WEB.border);
-    expect(LightColors.border.subtle).toBe(WEB.borderSubtle);
-    expect(LightColors.border.strong).toBe(WEB.borderStrong);
-    expect(CARD.light).toBe(WEB.surface);
+describe("палитра v8", () => {
+  it("тёмная — та же, что в вебе, золото вместо коралла", () => {
+    expect(DarkColors.bg.primary).toBe(WEB_DARK.canvas);
+    expect(DarkColors.bg.card).toBe(WEB_DARK.surface);
+    expect(DarkColors.bg.elevated).toBe(WEB_DARK.raised);
+    expect(DarkColors.border.default).toBe(WEB_DARK.border);
+    expect(DarkColors.text.primary).toBe(WEB_DARK.ink);
+    expect(DarkColors.text.secondary).toBe(WEB_DARK.inkSoft);
+    expect(DarkColors.text.tertiary).toBe(WEB_DARK.inkFaint);
+    expect(DarkColors.brand.primary).toBe(WEB_DARK.gold);
+    expect(CARD.dark).toBe(WEB_DARK.surface);
   });
-  it("тёмная — та же, что в вебе", () => {
-    expect(DarkColors.bg.secondary).toBe(WEB.darkSurface);
-    expect(DarkColors.bg.elevated).toBe(WEB.darkRaised);
-    expect(DarkColors.text.primary).toBe(WEB.darkInk);
-    expect(DarkColors.text.secondary).toBe(WEB.darkInkSoft);
-    expect(CARD.dark).toBe(WEB.darkSurface);
-  });
-  it("тени светлой темы — тёплые, цвета холста, а не холодные", () => {
-    const theme = readFileSync(join(root, "src", "theme.ts"), "utf8");
-    expect(theme).not.toContain("#c3c8d2");
-    expect(theme).not.toContain("#e7eaf0");
+
+  it("светлая — вариант C: белая карточка светлее холста, бирюза знака, жёлтое главное действие", () => {
+    expect(LightColors.bg.primary).toBe("#f1f4f3");
+    expect(LightColors.bg.card).toBe("#ffffff");
+    expect(LightColors.brand.primary).toBe("#0e4f49");
+    expect(LightColors.brand.cta).toBe("#f5c518");
+    expect(LightColors.hero.bg).toBe(LightColors.brand.primary);
+    expect(CARD.light).toBe(LightColors.bg.card);
   });
 });
 

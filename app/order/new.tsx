@@ -89,7 +89,7 @@ function StepIndicator({ step, total, colors }: { step: number; total: number; c
       {/* Step info */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontBold, color: "#fff" }}>{step}</Text>
+          <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontBold, color: colors.brand.ink }}>{step}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontBold, letterSpacing: 1 }}>{t(`ШАГ ${step} ИЗ ${total}`, `QADAM ${step} / ${total}`)}</Text>
@@ -185,7 +185,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
           </View>
           {selected ? (
             <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-              <Feather name="check" size={14} color="#fff" />
+              <Feather name="check" size={14} color={colors.brand.ink} />
             </View>
           ) : (
             <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.bg.input, ...soft(isDark).insetSm }} />
@@ -208,11 +208,11 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
       {cities.length > 1 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, ...(!cityFilter ? soft(isDark).raisedSm : soft(isDark).inset) }}>
-            <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? "#fff" : colors.text.secondary }}>{t("Все города", "Barcha shaharlar")}</Text>
+            <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? colors.brand.ink : colors.text.secondary }}>{t("Все города", "Barcha shaharlar")}</Text>
           </TouchableOpacity>
           {cities.map(c => (
             <TouchableOpacity key={c} onPress={() => setCityFilter(cityFilter === c ? "" : c)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: cityFilter === c ? colors.accent.primary : colors.bg.elevated, ...((cityFilter === c) ? soft(isDark).raisedSm : soft(isDark).inset),}}>
-              <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: cityFilter === c ? "#fff" : colors.text.secondary }}>{c}</Text>
+              <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: cityFilter === c ? colors.brand.ink : colors.text.secondary }}>{c}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -331,7 +331,7 @@ function ProductStep({ lines, onChange, colors, shopId }: { lines: OrderLine[]; 
                   <TouchableOpacity testID={`line-plus-${line.productId}`} hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
                     onPress={() => { const q = Math.floor(Number(line.quantity || 0)) + 1; const next = [...lines]; next[idx] = { ...next[idx], quantity: String(q) }; onChange(next); }}
                     style={{ width: 36, height: 40, borderRadius: Radii.md, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center" }}>
-                    <Feather name="plus" size={14} color="#fff" />
+                    <Feather name="plus" size={14} color={colors.brand.ink} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -491,7 +491,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
           {/* Stock filter */}
           <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
             <View style={{ width: 20, height: 20, borderRadius: 4, ...(onlyInStock ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
-              {onlyInStock && <Feather name="check" size={12} color="#fff" />}
+              {onlyInStock && <Feather name="check" size={12} color={colors.brand.ink} />}
             </View>
             <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, fontFamily: Typography.fontMedium }}>{t("Только в наличии", "Faqat bor bo'lganlar")}</Text>
             <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>({filtered.length})</Text>
@@ -544,12 +544,12 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
                           <Text style={{ minWidth: 22, textAlign: "center", fontSize: Typography.size.sm, fontFamily: Typography.fontBold, color: colors.text.primary }}>{qty}</Text>
                           <TouchableOpacity testID={`stepper-plus-${p.id}`} disabled={atLimit} onPress={() => onChange(bumpLine(lines, p, 1))} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
                             style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center", opacity: atLimit ? 0.35 : 1 }}>
-                            <Feather name="plus" size={14} color="#fff" />
+                            <Feather name="plus" size={14} color={colors.brand.ink} />
                           </TouchableOpacity>
                         </View>
                       ) : (
                         <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent.primary, alignItems: "center", justifyContent: "center", opacity: atLimit ? 0.35 : 1 }}>
-                          <Feather name="plus" size={14} color="#fff" />
+                          <Feather name="plus" size={14} color={colors.brand.ink} />
                         </View>
                       )}
                     </Card>
@@ -568,7 +568,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
             </View>
             <PressableScale onPress={onClose} haptic="medium">
               <View testID="picker-done" style={{ paddingHorizontal: 22, paddingVertical: 12, borderRadius: Radii.lg, backgroundColor: colors.accent.primary }}>
-                <Text style={{ color: "#fff", fontFamily: Typography.fontBold, fontSize: Typography.size.base }}>{t("Готово", "Tayyor")}</Text>
+                <Text style={{ color: colors.brand.ink, fontFamily: Typography.fontBold, fontSize: Typography.size.base }}>{t("Готово", "Tayyor")}</Text>
               </View>
             </PressableScale>
           </View>
@@ -1040,7 +1040,7 @@ export default function NewOrderScreen() {
           )}
           <PressableScale onPress={() => { setStep(s => s + 1); }} disabled={!canNext} haptic="medium">
             <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: canNext ? 1 : 0.45 }}>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>{t("Продолжить →", "Davom etish →")}</Text>
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.brand.ink }}>{t("Продолжить →", "Davom etish →")}</Text>
             </View>
           </PressableScale>
           </>
@@ -1048,9 +1048,9 @@ export default function NewOrderScreen() {
           <PressableScale onPress={handleSubmit} disabled={createMutation.isPending} haptic="medium">
             <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, padding: 16, alignItems: "center", opacity: createMutation.isPending ? 0.6 : 1 }}>
               {createMutation.isPending ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color={colors.brand.ink} size="small" />
               ) : (
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: "#fff" }}>{t("Подтвердить заказ", "Buyurtmani tasdiqlash")}</Text>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.brand.ink }}>{t("Подтвердить заказ", "Buyurtmani tasdiqlash")}</Text>
               )}
             </View>
           </PressableScale>

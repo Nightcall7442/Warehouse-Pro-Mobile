@@ -6,10 +6,10 @@ describe('Theme', () => {
   });
 
   it('LightColors should have primary background', () => {
-    // Холст светлой темы — та же тёплая бумага, что в веб-приложении
-    // (src/index.css --color-surface): телефон и веб — один продукт.
-    expect(LightColors.bg.primary).toBe('#efedea');
-    expect(LightColors.text.primary).toBe('#2b2a28');
+    // v8, вариант C (владелец, 24.09.2026): прохладный холст, белая карточка.
+    expect(LightColors.bg.primary).toBe('#f1f4f3');
+    expect(LightColors.bg.card).toBe('#ffffff');
+    expect(LightColors.text.primary).toBe('#13201e');
   });
 
   it('Typography should define font sizes', () => {

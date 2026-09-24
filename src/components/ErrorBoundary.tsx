@@ -72,7 +72,7 @@ function ErrorFallback({ onRetry }: { onRetry: () => void }) {
           marginTop: 8,
         }}
       >
-        <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>
+        <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.brand.ink }}>
           {t("Повторить", "Qayta urinish")}
         </Text>
       </TouchableOpacity>

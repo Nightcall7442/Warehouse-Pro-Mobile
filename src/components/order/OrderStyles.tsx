@@ -156,6 +156,6 @@ export function makeStyles(colors: ThemeColors, topInset: number = 56, bottomIns
       paddingHorizontal: 20, paddingVertical: 12,
       borderRadius: Radii.xl, marginTop: 8,
     },
-    errorBtnText: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: "#fff" },
+    errorBtnText: { fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.brand.ink },
   };
 }

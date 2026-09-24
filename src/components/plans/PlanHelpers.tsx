@@ -175,7 +175,7 @@ export function SelectRow({
             justifyContent: "center",
           }}
         >
-          <Feather name={icon} size={17} color={selected ? "#fff" : colors.accent.primary} />
+          <Feather name={icon} size={17} color={selected ? colors.brand.ink : colors.accent.primary} />
         </View>
         <View style={{ flex: 1 }}>
           <Text

@@ -179,8 +179,8 @@ export default function ProductScreen() {
         </View>
         <PressableScale onPress={goOrder} disabled={!canAdd} haptic="medium" style={{ flex: 1, borderRadius: Radii.xl, overflow: "hidden" }}>
           <View style={{ backgroundColor: colors.brand.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, paddingHorizontal: 14, borderRadius: Radii.xl }}>
-            <Feather name={outOfStock ? "slash" : "shopping-cart"} size={18} color="#fff" />
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: "#fff" }} numberOfLines={1}>
+            <Feather name={outOfStock ? "slash" : "shopping-cart"} size={18} color={colors.brand.ink} />
+            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.brand.ink }} numberOfLines={1}>
               {outOfStock ? t("Нет в наличии", "Omborda yo'q") : t(`В заказ · ${formatMoney(price * qty)}`, `Buyurtmaga · ${formatMoney(price * qty)}`)}
             </Text>
           </View>

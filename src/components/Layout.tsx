@@ -215,7 +215,7 @@ export function IconAction({ icon, onPress, badge, variant = "default", size = 3
     variant === "ghost" ? "transparent" :
     colors.bg.elevated;
   const iconColor =
-    variant === "primary" ? "#fff" : colors.text.primary;
+    variant === "primary" ? colors.brand.ink : colors.text.primary;
   /*
     Кнопка-иконка приподнята, а не обведена. В прототипе это «выдавленный»
     квадратик со скруглением — колокольчик, поиск, шестерёнка; линия вокруг

@@ -163,7 +163,7 @@ export default function ShopDetailScreen() {
       </Text>
       <PressableScale onPress={() => refetch()} haptic="light">
         <View style={{ backgroundColor: colors.accent.primary, borderRadius: Radii.md, paddingVertical: 10, paddingHorizontal: 20 }}>
-          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: "#fff" }}>{t("Повторить", "Qayta urinish")}</Text>
+          <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.brand.ink }}>{t("Повторить", "Qayta urinish")}</Text>
         </View>
       </PressableScale>
     </View>
@@ -320,8 +320,8 @@ export default function ShopDetailScreen() {
               style={{ borderRadius: Radii.xl, overflow: "hidden", marginTop: 4 }}
             >
               <View style={{ backgroundColor: colors.brand.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, paddingHorizontal: 20, borderRadius: Radii.xl }}>
-                <Feather name="shopping-cart" size={20} color="#fff" />
-                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: "#fff" }}>{t("Новый заказ", "Yangi buyurtma")}</Text>
+                <Feather name="shopping-cart" size={20} color={colors.brand.ink} />
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.brand.ink }}>{t("Новый заказ", "Yangi buyurtma")}</Text>
               </View>
             </PressableScale>
           </FadeInItem>
