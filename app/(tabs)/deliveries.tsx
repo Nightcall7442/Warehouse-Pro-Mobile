@@ -13,7 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "../../src/store/theme";
-import { Typography, Spacing, Radii, ThemeColors } from "../../src/theme";
+import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding } from "../../src/theme";
 import { Card, Button, Badge, SectionHeader, EmptyState } from "../../src/components/ui";
 import { mapUrl, FAIL_REASONS, FAIL_REASON_MAX, failReason, failReasonLabel } from "../../src/lib/courier-route";
 import { listMyDeliveries, type Delivery } from "../../src/api";
@@ -798,6 +798,7 @@ function FailReasonSheet({ order, colors, onCancel, onConfirm }: {
   onCancel: () => void;
   onConfirm: (order: Delivery, reason: string) => void;
 }) {
+  const insets = useSafeAreaInsets();
   const t = useT();
   const [choice, setChoice] = useState<string | null>(null);
   const [other, setOther] = useState("");
@@ -824,7 +825,7 @@ function FailReasonSheet({ order, colors, onCancel, onConfirm }: {
   return (
     <Modal visible={order != null} transparent animationType="fade" onRequestClose={close}>
       <Pressable style={{ flex: 1, backgroundColor: colors.bg.overlay, justifyContent: "flex-end" }} onPress={close}>
-        <Pressable onPress={e => e.stopPropagation()} style={{ backgroundColor: colors.bg.card, borderTopLeftRadius: Radii.xl, borderTopRightRadius: Radii.xl, padding: Spacing.lg, paddingBottom: Spacing.xxl }}>
+        <Pressable onPress={e => e.stopPropagation()} style={{ backgroundColor: colors.bg.card, borderTopLeftRadius: Radii.xl, borderTopRightRadius: Radii.xl, padding: Spacing.lg, paddingBottom: safeBottomPadding(insets.bottom, Spacing.lg) }}>
           <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.md, color: colors.text.primary }}>{t("Почему не доставлено?", "Nega yetkazilmadi?")}</Text>
           {order && (
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.text.muted, marginTop: 2 }}>

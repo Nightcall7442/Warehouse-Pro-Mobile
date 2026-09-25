@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useState, useEffect, useRef } from "react";
 import { clampDiscountText } from "../../lib/discount";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable, ScrollView, Alert } from "react-native";
@@ -12,6 +13,7 @@ import {
   Sizes,
   ThemeColors,
   soft,
+  safeBottomPadding,
 } from "../../theme";
 
 interface OrderItem {
@@ -74,6 +76,7 @@ export function OrderEditModal({
   onNotesChange, onDiscountChange, onSaveItems, onSave, onClose, colors,
   canEditDetails = true,
 }: OrderEditModalProps) {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const t = useT();
   const lang = useLang();
@@ -250,6 +253,7 @@ export function OrderEditModal({
         <Pressable style={{
           position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "80%",
           backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
+          paddingBottom: safeBottomPadding(insets.bottom, Spacing.xl),
         }} onPress={e => e.stopPropagation()}>
           <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
             <View style={{ width: 40, height: 4, borderRadius: Radii.full, backgroundColor: colors.border.default }} />
