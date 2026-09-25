@@ -18,7 +18,8 @@ import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/component
 import { PlanRow } from "../../src/components/plans/PlanRow";
 import { DateNav } from "../../src/components/plans/DateNav";
 import { fmtDate } from "../../src/components/plans/PlanHelpers";
-import { formatMoney } from "../../src/store/branding";
+import { formatMoney, useBrandingStore } from "../../src/store/branding";
+import { money } from "../../src/lib/monthly-plan";
 import { useT, useLang } from "../../src/i18n";
 
 type Section = "targets" | "visits";
@@ -92,6 +93,15 @@ export default function TargetsScreen() {
   const totalTarget = (summary ?? []).reduce((s, a) => s + Number(a.targetAmount), 0);
   const totalActual = (summary ?? []).reduce((s, a) => s + Number(a.actualAmount), 0);
   const avgCompletion = summary && summary.length > 0 ? Math.round(summary.reduce((s, a) => s + a.revenueCompletion, 0) / summary.length) : 0;
+  /*
+    Итоги в карточку на треть ширины — сжатым числом («41,4 млн сум»), как в
+    MonthlyPlanCard. Полные «41 400 000 сум» туда не влезали: на телефоне
+    шрифт ужимался до мелкого, в вебе строка обрезалась «41 400 00…».
+    Чтобы и «41,4 млн сум» влезло целиком, у карточек боковые поля 8, шрифт 14:
+    знак валюты подписью под число уносить нельзя (см. ниже, про доллар).
+  */
+  const { currencySymbol, symbolPosition } = useBrandingStore(s => s.branding);
+  const withCurrency = (v: string) => (symbolPosition === "before" ? `${currencySymbol} ${v}` : `${v} ${currencySymbol}`);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
@@ -148,15 +158,15 @@ export default function TargetsScreen() {
                   арендатора с долларом он должен стоять слева от суммы, а не
                   под ней. formatMoney знает и разряды, и сторону знака. */}
               <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md }}>
-                <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
+                <Card style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 8, alignItems: "center" }}>
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("План", "Reja")}</Text>
-                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: Typography.fontBold, fontSize: 15, color: colors.text.primary, marginTop: 4 }}>{formatMoney(totalTarget)}</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: Typography.fontBold, fontSize: 14, color: colors.text.primary, marginTop: 4 }}>{withCurrency(money(totalTarget))}</Text>
                 </Card>
-                <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
+                <Card style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 8, alignItems: "center" }}>
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("Факт", "Fakt")}</Text>
-                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: Typography.fontBold, fontSize: 15, color: colors.status.success, marginTop: 4 }}>{formatMoney(totalActual)}</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: Typography.fontBold, fontSize: 14, color: colors.status.success, marginTop: 4 }}>{withCurrency(money(totalActual))}</Text>
                 </Card>
-                <Card style={{ flex: 1, padding: 14, alignItems: "center" }}>
+                <Card style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 8, alignItems: "center" }}>
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: 10, color: colors.text.tertiary, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("Среднее", "O'rtacha")}</Text>
                   <Text style={{ fontFamily: Typography.fontBold, fontSize: 18, color: avgCompletion >= 80 ? colors.status.success : avgCompletion >= 50 ? colors.status.warning : colors.status.danger, marginTop: 4 }}>{avgCompletion}%</Text>
                   <Text style={{ fontFamily: Typography.fontRegular, fontSize: 11, color: colors.text.muted }}>{t("выполнение", "bajarilish")}</Text>

@@ -242,6 +242,14 @@ describe("backgroundLocation: буфер точек и 429", () => {
 
 // ── 5. Карта трекинга ───────────────────────────────────────────────────────
 describe("YandexMapView: обновление меток без перезагрузки страницы", () => {
+  // Здесь react-native — это react-native-web, и Platform.OS === "web". Эти
+  // тесты — про WebView телефона, поэтому на время блока платформа нативная;
+  // веб-путь (iframe) проверяется отдельным блоком ниже.
+  const { Platform } = require("react-native");
+  let realOS: string;
+  beforeAll(() => { realOS = Platform.OS; Platform.OS = "ios"; });
+  afterAll(() => { Platform.OS = realOS; });
+
   beforeEach(() => {
     mockWebViewProps.length = 0;
     mockInjectJavaScript.mockClear();
@@ -309,6 +317,55 @@ describe("YandexMapView: обновление меток без перезагр
     // Метка не вшита в разметку страницы — иначе её изменение снова означало бы
     // новый html и перезагрузку.
     expect(html).not.toContain("Агент 3");
+  });
+});
+
+/*
+  Веб-сборка мобилки (из неё снимаются кадры лендинга и руководства):
+  у react-native-webview нет веба, и вместо карты стояло «React Native WebView
+  does not support this platform» (25.09.2026). Та же страница — в iframe
+  srcDoc, мост тот же. Нарочная поломка: убери ветку Platform.OS === "web" в
+  YandexMapView — падает «на вебе карта в iframe»; убери проверку ev.source —
+  «чужое окно не нажимает на метки».
+*/
+describe("YandexMapView в веб-сборке: iframe с тем же мостом", () => {
+  const marker = (id: number) => ({ id, lat: 41.55, lng: 60.63, label: `Агент ${id}`, color: "#0e4f49", online: true, batteryLevel: 55 });
+  const frameOf = (container: HTMLElement) => container.querySelector("iframe") as HTMLIFrameElement;
+
+  it("на вебе карта в iframe: мост и страница с updateMarkers", () => {
+    const YandexMapView = require("../components/YandexMapView").default;
+    const { container } = render(React.createElement(YandexMapView, { markers: [marker(3)], zoom: 11 }));
+    const iframe = frameOf(container);
+    expect(iframe).toBeTruthy();
+    const doc = iframe.getAttribute("srcdoc") ?? "";
+    expect(doc).toContain("window.ReactNativeWebView={postMessage:function(m){parent.postMessage(m,'*')}}");
+    expect(doc).toContain("function updateMarkers(");
+  });
+
+  it("нажатие на метку из iframe доходит до экрана, чужое окно — нет", () => {
+    const YandexMapView = require("../components/YandexMapView").default;
+    const onMarkerPress = jest.fn();
+    const { container } = render(React.createElement(YandexMapView, { markers: [marker(3)], zoom: 11, onMarkerPress }));
+    const iframe = frameOf(container);
+    const data = JSON.stringify({ type: "markerClick", id: 3 });
+    act(() => { window.dispatchEvent(new MessageEvent("message", { data, source: iframe.contentWindow })); });
+    expect(onMarkerPress).toHaveBeenCalledWith(3);
+    // Сообщение не от карты (другая вкладка, расширение) меток не нажимает.
+    onMarkerPress.mockClear();
+    act(() => { window.dispatchEvent(new MessageEvent("message", { data, source: window })); });
+    expect(onMarkerPress).not.toHaveBeenCalled();
+  });
+
+  it("метки после загрузки и «к агенту» выполняются в окне iframe", () => {
+    const mod = require("../components/YandexMapView");
+    const ref = React.createRef();
+    const { container } = render(React.createElement(mod.default, { ref, markers: [marker(5)], zoom: 11 }));
+    const win = frameOf(container).contentWindow as unknown as { eval: jest.Mock };
+    win.eval = jest.fn();
+    act(() => { frameOf(container).dispatchEvent(new Event("load")); });
+    expect(win.eval.mock.calls[0][0]).toContain("updateMarkers(");
+    mod.centerOnAgent(ref, 41.55, 60.63);
+    expect(win.eval).toHaveBeenLastCalledWith("centerOn(41.55, 60.63, 15);");
   });
 });
 
