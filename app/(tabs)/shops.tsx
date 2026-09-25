@@ -12,7 +12,7 @@ import { getMyShops, getAvailableShops, getAllShopsForSupervisor, getMyWorkZones
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { useLocation, getDistanceKm, getEstimatedTime } from "../../src/hooks/useLocation";
-import { Typography, Spacing, Radii, ThemeColors, soft } from "../../src/theme";
+import { Typography, Spacing, Radii, ThemeColors, soft, safeBottomPadding } from "../../src/theme";
 import { ScreenHeader, SearchInput, Card } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
@@ -372,6 +372,7 @@ export default function ShopsScreen() {
           <Pressable style={{
             position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "60%",
             backgroundColor: colors.bg.secondary, borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl, padding: Spacing.xl,
+            paddingBottom: safeBottomPadding(insets.bottom, Spacing.xl),
           }} onPress={e => e.stopPropagation()}>
             <View style={{ alignItems: "center", paddingBottom: Spacing.md }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border.default }} />

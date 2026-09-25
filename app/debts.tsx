@@ -159,7 +159,8 @@ function DebtRow({ debt, now, lang, colors, onOpen }: {
           </Text>
           <Text style={{ fontFamily: Typography.fontMono, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
             {debt.orderNumber} · {day}
-            {days > 0 ? t(` · ${days} дн.`, ` · ${days} kun`) : ""}
+            {/* Неразрывные пробелы: возраст переносится целиком, а не «179 / дн.» (кадр лендинга 25.09.2026). */}
+            {days > 0 ? t(` ·\u00a0${days}\u00a0дн.`, ` ·\u00a0${days}\u00a0kun`) : ""}
           </Text>
           {debt.shopAddress ? (
             <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }} numberOfLines={1}>

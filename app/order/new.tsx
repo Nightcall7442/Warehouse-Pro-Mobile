@@ -381,6 +381,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
   /** Магазин заказа: цены — его прайс-листа, как посчитает сервер. */
   shopId?: number;
 }) {
+  const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
   const t = useT();
   const lang = useLang();
@@ -560,7 +561,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
             />
           )}
           {/* Итог корзины и «Готово» — чтобы набрать весь заказ, не закрывая окно. */}
-          <View testID="picker-summary" style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: Spacing.base, paddingVertical: Spacing.md, borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
+          <View testID="picker-summary" style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: Spacing.base, paddingVertical: Spacing.md, paddingBottom: safeBottomPadding(insets.bottom, Spacing.md), borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>
                 {summary.count === 0 ? t("Корзина пуста", "Savat bo'sh") : t(`${summary.count} ${summary.count === 1 ? "товар" : summary.count < 5 ? "товара" : "товаров"}`, `${summary.count} ta mahsulot`)}

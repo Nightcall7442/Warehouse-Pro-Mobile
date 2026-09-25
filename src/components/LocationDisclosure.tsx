@@ -1,7 +1,8 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { View, Text, Modal, Pressable, ScrollView } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useThemeColors } from "../store/theme";
-import { Typography, Spacing, Radii, Sizes } from "../theme";
+import { Typography, Spacing, Radii, Sizes, safeBottomPadding } from "../theme";
 import { useT } from "../i18n";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -43,6 +44,7 @@ interface Props {
 }
 
 export function LocationDisclosure({ visible, onAccept, onDecline }: Props) {
+  const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const t = useT();
 
@@ -64,7 +66,7 @@ export function LocationDisclosure({ visible, onAccept, onDecline }: Props) {
         <View style={{
           backgroundColor: colors.bg.primary,
           borderTopLeftRadius: Radii.xxl, borderTopRightRadius: Radii.xxl,
-          paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: Spacing.xl,
+          paddingHorizontal: Spacing.base, paddingTop: Spacing.lg, paddingBottom: safeBottomPadding(insets.bottom, Spacing.xl),
           maxHeight: "88%",
         }}>
           <ScrollView showsVerticalScrollIndicator={false}>

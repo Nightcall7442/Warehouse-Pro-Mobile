@@ -7,11 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0f5e57"
-    },
     "ios": {
       "bundleIdentifier": "com.warehousepro.agent",
       "supportsTablet": false,
@@ -61,7 +56,15 @@
       "expo-image-picker",
       "expo-notifications",
       "expo-font",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0f5e57"
+        }
+      ],
       "expo-status-bar"
     ],
     "extra": {
@@ -70,6 +73,6 @@
       },
       "router": {}
     },
-    "primaryColor": "#0d9488"
+    "primaryColor": "#0e4f49"
   }
 }

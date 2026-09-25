@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
+import { LightColors } from "../theme";
 
 /**
  * Каждый плагин в app.json — установленный пакет.
@@ -35,6 +36,34 @@ describe("геолокация в фоне", () => {
   категория. Без явного «false» каждая сборка в App Store Connect висит с
   «Missing Compliance», и в TestFlight её не раздать, пока не ответишь руками.
 */
+/*
+  Заставка при запуске. SDK 57 верхнее поле splash больше не читает (схема
+  его отвергает), а плагин expo-splash-screen без параметров не делает
+  ничего — и сборка 25.09.2026 клала шаблонную заглушку Expo (серая сетка с
+  кругами) на белый фон вместо знака на бирюзе. Нашёл expo-doctor и prebuild.
+  Там же нативный primaryColor — им Android красит системные диалоги и
+  курсор полей; держится цвета знака из темы, а не прежней бирюзы.
+
+  Нарочная поломка: верни "splash" наверх и плагин строкой — падает первый;
+  поставь primaryColor "#0d9488" — второй.
+*/
+describe("заставка и нативный цвет", () => {
+  const raw = JSON.parse(readFileSync(join(root, "app.json"), "utf8")) as { expo: Record<string, unknown> & { plugins: Array<string | [string, Record<string, unknown>]> } };
+
+  it("заставка задана в плагине: знак на бирюзе, мёртвого splash нет", () => {
+    expect(raw.expo.splash).toBeUndefined();
+    const sp = raw.expo.plugins.find(p => Array.isArray(p) && p[0] === "expo-splash-screen") as [string, Record<string, unknown>] | undefined;
+    expect(sp).toBeTruthy();
+    expect(sp![1].image).toBe("./assets/splash.png");
+    expect(sp![1].backgroundColor).toBe("#0f5e57");
+    expect(Number(sp![1].imageWidth)).toBeGreaterThanOrEqual(150);
+  });
+
+  it("primaryColor — цвет знака из темы", () => {
+    expect(String(raw.expo.primaryColor).toLowerCase()).toBe(LightColors.brand.primary.toLowerCase());
+  });
+});
+
 describe("экспортный контроль", () => {
   it("ITSAppUsesNonExemptEncryption = false объявлен в infoPlist", () => {
     const app = JSON.parse(readFileSync(join(__dirname, "../../app.json"), "utf8"));
