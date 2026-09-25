@@ -129,7 +129,7 @@ export default function NearbyShopsScreen() {
       {/* Search and filters */}
       <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
         <SearchInput value={search} onChangeText={setSearch} placeholder={t("Поиск магазинов...", "Do'kon qidirish...")} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }}>
           {radiusOptions.map(r => (
             <PressableScale key={r} onPress={() => { Haptics.selectionAsync(); setRadiusKm(r); }} haptic="light">
               <View style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8, borderWidth: 1, backgroundColor: radiusKm === r ? colors.accent.primary : colors.bg.secondary, borderColor: radiusKm === r ? colors.accent.primary : colors.border.default }}>

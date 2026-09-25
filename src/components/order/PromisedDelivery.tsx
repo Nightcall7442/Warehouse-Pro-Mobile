@@ -112,7 +112,7 @@ export function PromisedDelivery({
 
       {editable && (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 2 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 2 }}>
             {days.map(d => {
               const active = picked?.date === d.date;
               return (
@@ -132,7 +132,7 @@ export function PromisedDelivery({
             })}
           </ScrollView>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 2 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 2 }}>
             {TIME_CHOICES.map(tm => {
               const active = picked?.time === tm;
               return (
