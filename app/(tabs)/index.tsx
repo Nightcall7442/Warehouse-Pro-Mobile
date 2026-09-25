@@ -649,7 +649,7 @@ function SupervisorHome() {
       {/* ── Smart Alerts ────────────────────────────────────────────────── */}
       {alerts && alerts.length > 0 && (
         <FadeInItem delay={60}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.base }} contentContainerStyle={{ gap: Spacing.sm }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0, marginBottom: Spacing.base }} contentContainerStyle={{ gap: Spacing.sm }}>
             {alerts.slice(0, 4).map((alert, i) => {
               const alertColors: Record<string, { bg: string; border: string }> = {
                 info: { bg: colors.status.infoDim, border: colors.status.info },

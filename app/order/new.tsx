@@ -206,7 +206,8 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
       <SearchInput value={search} onChangeText={setSearch} placeholder={t("Поиск по имени, адресу, району…", "Nomi, manzili, tumani bo'yicha qidirish…")} autoFocus />
       {/* City quick filter */}
       {cities.length > 1 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+        // flexGrow/flexShrink: 0 — иначе в колонке flex: 1 со списком ниже лента сжимается в полоску (как чипы каталога).
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ gap: 6 }}>
           <TouchableOpacity onPress={() => setCityFilter("")} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: !cityFilter ? colors.accent.primary : colors.bg.elevated, ...(!cityFilter ? soft(isDark).raisedSm : soft(isDark).inset) }}>
             <Text style={{ fontSize: 12, fontFamily: Typography.fontSemibold, color: !cityFilter ? colors.brand.ink : colors.text.secondary }}>{t("Все города", "Barcha shaharlar")}</Text>
           </TouchableOpacity>

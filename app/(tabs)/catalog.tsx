@@ -60,9 +60,13 @@ function ProductCard({
               <Feather name="package" size={40} color={colors.text.muted} />
             </View>
           )}
-          {/* Stock badge */}
-          <View style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, backgroundColor: inStock ? colors.status.successDim : colors.status.dangerDim, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 4, ...(inStock ? soft(isDark).raisedSm : soft(isDark).inset),}}>
-            <Text style={{ color: inStock ? colors.status.success : colors.status.danger, fontSize: 11, fontFamily: Typography.fontSemibold }}>{inStock ? t("В наличии", "Bor") : t("Нет", "Yo'q")}</Text>
+          {/* Stock badge. Непрозрачная плашка карточки, а не successDim:
+              тот прозрачен на 87 %, и зелёные буквы на фото арбуза или мяса
+              не читались. Цвет состояния несёт точка (status.* — заливки, не
+              чернила, см. theme.ts), надпись — основными чернилами. */}
+          <View style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.bg.card, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 4, ...soft(isDark).raisedSm }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: inStock ? colors.status.success : colors.status.danger }} />
+            <Text style={{ color: colors.text.primary, fontSize: 11, fontFamily: Typography.fontSemibold }}>{inStock ? t("В наличии", "Bor") : t("Нет", "Yo'q")}</Text>
           </View>
           {/* В корзину: одно нажатие — одна единица; в корзине — степпер. */}
           {inStock && (inCart > 0 ? (
@@ -198,10 +202,14 @@ export default function CatalogScreen() {
         <SearchInput value={search} onChangeText={setSearch} placeholder={t("Поиск товаров…", "Mahsulot qidirish…")} />
       </View>
 
-      {/* Category chips */}
+      {/* Category chips.
+          flexGrow/flexShrink: 0 обязательны: у ScrollView по умолчанию
+          flex-сжатие, и в колонке рядом с сеткой flex: 1 лента сжималась в
+          полоску — чипы уходили под фото (кадр лендинга 25.09.2026). */}
       {categories.length > 1 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: Spacing.base, gap: Spacing.sm, marginBottom: Spacing.base }}>
+          style={{ flexGrow: 0, flexShrink: 0, marginBottom: Spacing.base }}
+          contentContainerStyle={{ paddingHorizontal: Spacing.base, gap: Spacing.sm }}>
           {categories.map(cat => {
             const active = selectedCat === cat.key;
             return (
