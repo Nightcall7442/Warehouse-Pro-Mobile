@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useImperativeHandle } from "react";
-import { View, Text } from "react-native";
+import { View, Text, Platform } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import Constants from "expo-constants";
 import { useT } from "../i18n";
@@ -185,6 +185,46 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number): string {
 </html>`;
 }
 
+/*
+  Веб. У react-native-webview нет реализации для браузера: веб-сборка
+  мобилки (Expo web — из неё снимаются кадры лендинга и руководства)
+  показывала вместо карты «React Native WebView does not support this
+  platform». Там та же страница — в iframe srcDoc, с тем же мостом:
+  ReactNativeWebView.postMessage уходит родителю через parent.postMessage,
+  а injectJavaScript выполняется в окне iframe. Экран трекинга, кнопка «Все»
+  и нажатие на метку работают без правок. srcDoc без sandbox — того же
+  источника, что и страница, поэтому окно iframe доступно.
+*/
+type Injectable = Pick<WebView, "injectJavaScript">;
+const WEB_BRIDGE = "<script>window.ReactNativeWebView={postMessage:function(m){parent.postMessage(m,'*')}};</script>";
+
+const WebFrame = React.forwardRef<Injectable, { html: string; onMessage: (e: WebViewMessageEvent) => void; onLoadEnd: () => void }>(
+  function WebFrame({ html, onMessage, onLoadEnd }, ref) {
+    const frame = useRef<HTMLIFrameElement | null>(null);
+    useImperativeHandle(ref, () => ({
+      injectJavaScript: (js: string) => {
+        const win = frame.current?.contentWindow as (Window & { eval: (code: string) => unknown }) | null | undefined;
+        try { win?.eval(js); } catch { /* страница карты ещё не готова — метки уйдут в onLoadEnd */ }
+      },
+    }), []);
+    useEffect(() => {
+      const listen = (ev: MessageEvent) => {
+        if (ev.source !== frame.current?.contentWindow) return;
+        onMessage({ nativeEvent: { data: String(ev.data) } } as WebViewMessageEvent);
+      };
+      window.addEventListener("message", listen);
+      return () => window.removeEventListener("message", listen);
+    }, [onMessage]);
+    return React.createElement("iframe", {
+      ref: frame,
+      title: "map",
+      srcDoc: html.replace("<head>", "<head>" + WEB_BRIDGE),
+      onLoad: onLoadEnd,
+      style: { border: 0, width: "100%", height: "100%", display: "block" },
+    });
+  },
+);
+
 const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function YandexMapView(
   { markers, center, zoom = 11, onMarkerPress, style },
   ref
@@ -273,6 +313,14 @@ const YandexMapView = React.forwardRef<WebView, YandexMapViewProps>(function Yan
             ? t("Карта не открылась: нет связи с Яндекс.Картами. Проверьте интернет и потяните экран вниз.", "Xarita ochilmadi: Yandex.Xarita bilan aloqa yo'q. Internetni tekshiring va ekranni pastga torting.")
             : t("Карта не открылась: ключ Яндекс.Карт отклонён. Задайте свой ключ переменной EXPO_PUBLIC_YANDEX_MAPS_API_KEY при сборке.", "Xarita ochilmadi: Yandex.Xarita kaliti rad etildi. Yig'ishda EXPO_PUBLIC_YANDEX_MAPS_API_KEY o'zgaruvchisi bilan o'z kalitingizni bering.")}
         </Text>
+      </View>
+    );
+  }
+
+  if (Platform.OS === "web") {
+    return (
+      <View style={[{ flex: 1 }, style]}>
+        <WebFrame ref={webRef as unknown as React.Ref<Injectable>} html={source.html} onMessage={handleMessage} onLoadEnd={handleLoadEnd} />
       </View>
     );
   }
