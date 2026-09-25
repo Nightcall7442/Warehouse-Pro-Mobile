@@ -236,7 +236,12 @@ export default function RootLayout() {
             >
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="order/new" options={{ title: t("Новый заказ", "Yangi buyurtma"), presentation: "modal" }} />
+              {/* Новый заказ — страница, не модалка (владелец: «другая страница, где
+                  агент добавляет товары»), и без системной шапки: у экрана своя —
+                  «← Новый заказ», магазин, шаги. С обеими «Новый заказ» стоял
+                  дважды подряд (кадр лендинга 25.09.2026). title остаётся для
+                  истории навигации и чтения экрана. */}
+              <Stack.Screen name="order/new" options={{ title: t("Новый заказ", "Yangi buyurtma"), headerShown: false }} />
               <Stack.Screen name="shop/new" options={{ headerShown: false, presentation: "modal" }} />
               <Stack.Screen name="shop/[id]" options={{ headerShown: false }} />
               <Stack.Screen name="product/[id]" options={{ headerShown: false }} />
