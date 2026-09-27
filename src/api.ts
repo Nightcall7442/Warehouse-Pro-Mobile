@@ -1,7 +1,6 @@
 import axios from "axios";
 import Constants from "expo-constants";
 import { SecureStore } from "./storage";
-import type { PriceTier } from "./lib/price-tiers";
 
 export const API_BASE = (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim())
   ? process.env.EXPO_PUBLIC_API_URL
@@ -349,7 +348,9 @@ export interface Product {
    * shopId и у товара есть ступень выше одной штуки, иначе null. Необязательное:
    * сервер до ступеней поля не присылает, и тогда цена строки — unitPrice.
    */
-  tiers?: PriceTier[] | null;
+  // Тип вписан здесь, а не импортом PriceTier: сверка с сервером
+  // (server/scripts/mobile-contract.mjs) читает этот файл текстом, без импортов.
+  tiers?: Array<{ minQuantity: string | number; price: string; priority: number }> | null;
   available: string | null;
   unit?: string;
   photoUrl?: string | null;
