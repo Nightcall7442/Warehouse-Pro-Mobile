@@ -27,8 +27,16 @@
  * клавиатуре есть.
  */
 
+import { priceAt, type PriceTier } from "./price-tiers";
+
 export interface MoneyLine {
+  /** Цена из каталога при количестве 1 — не обязательно цена строки, см. linePrice. */
   unitPrice: number;
+  /**
+   * Ступени прайс-листа («от 10 — 8500»), как их отдал каталог магазина.
+   * Нет — у товара нет ступеней, или сервер старый и их не присылает.
+   */
+  tiers?: readonly PriceTier[] | null;
   /** Поле ввода, поэтому строка: «2.5», «», «.», «-3». */
   quantity: string | number;
   /** Проценты, 0–100. */
@@ -71,14 +79,26 @@ export function clampDiscount(value: string | number | null | undefined): number
   return Math.min(100, parseAmount(value));
 }
 
+/**
+ * Цена единицы в строке — при ЕЁ количестве.
+ *
+ * Сервер считает заказ по ступеням прайс-листа, а экран брал цену при одной
+ * штуке: агент называл магазину 10 × 9 000, заказ создавался на 10 × 8 500, и
+ * накладная расходилась с тем, что сказано вслух. Теперь цена выбирается тем
+ * же правилом, что и на сервере, и меняется вместе с количеством.
+ */
+export function linePrice(line: MoneyLine): number {
+  return Number(priceAt(String(line.unitPrice), line.tiers, parseAmount(line.quantity)));
+}
+
 /** Сумма строки со скидкой. */
 export function lineTotal(line: MoneyLine): number {
-  return line.unitPrice * parseAmount(line.quantity) * (1 - clampDiscount(line.discount) / 100);
+  return lineTotalBeforeDiscount(line) * (1 - clampDiscount(line.discount) / 100);
 }
 
 /** Сумма строки до скидки — та самая зачёркнутая цена. */
 export function lineTotalBeforeDiscount(line: MoneyLine): number {
-  return line.unitPrice * parseAmount(line.quantity);
+  return linePrice(line) * parseAmount(line.quantity);
 }
 
 /** Итог заказа: сумма и количество единиц. */

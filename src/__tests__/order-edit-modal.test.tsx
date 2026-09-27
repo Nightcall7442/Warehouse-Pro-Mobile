@@ -177,8 +177,10 @@ describe('количество в правке заказа', () => {
     fireEvent.click(screen.getByText('Добавить товар'));
     fireEvent.click(screen.getByText('Сметана'));
     fireEvent.click(screen.getByText('Сохранить состав'));
+    // Без unitPrice: цену новой строке назначает сервер — по магазину и
+    // прайс-листу заказа, с отметкой, из какого списка она взята.
     expect(onSaveItems).toHaveBeenCalledWith([
-      { productId: 99, quantity: 1, unitPrice: '15000' },
+      { productId: 99, quantity: 1 },
     ]);
   });
 

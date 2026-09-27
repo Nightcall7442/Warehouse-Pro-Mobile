@@ -5,6 +5,7 @@ import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pres
 import { Feather } from "@expo/vector-icons";
 import { useThemeStore } from "../../store/theme";
 import { unitShort } from "../../lib/units";
+import { priceAt, type PriceTier } from "../../lib/price-tiers";
 import { useT, useLang } from "../../i18n";
 import {
   Typography,
@@ -34,6 +35,8 @@ interface EditableItem extends OrderItem {
   productId: number;
   /** Строка добавлена здесь и на сервере ещё не существует. */
   isNew?: boolean;
+  /** Ступени прайс-листа у добавленной строки — из каталога магазина. */
+  tiers?: readonly PriceTier[] | null;
   newQuantity: number;
   /**
    * Набранное в поле, как есть.
@@ -43,6 +46,23 @@ interface EditableItem extends OrderItem {
    * набрали. Дробное количество ввести было невозможно в принципе.
    */
   qtyText: string;
+}
+
+/** Товар каталога для добавления: цена при одной штуке и ступени магазина. */
+type CatalogProduct = { id: number; name: string; code?: string; unit?: string; unitPrice?: number | string; tiers?: readonly PriceTier[] | null };
+
+/**
+ * Цена единицы в строке правки — так же, как её назначит сервер.
+ * Только показ: на сервер цена не уходит (см. onSaveItems).
+ *
+ * Существующая позиция держит свою цену при любом количестве: сервер правку
+ * количества не переоценивает (order-items.ts: updateItems). Новая строка
+ * получает цену магазина ПРИ СВОЁМ количестве — ступень «от 10» включается,
+ * как только набрано десять. Раньше окно показывало цену одной штуки, а
+ * сервер ставил ступень: «Сумма» в окне и в заказе расходились.
+ */
+function priceOf(it: EditableItem): number {
+  return it.isNew ? Number(priceAt(String(it.unitPrice), it.tiers, it.newQuantity)) : it.unitPrice;
 }
 
 interface OrderEditModalProps {
@@ -57,11 +77,15 @@ interface OrderEditModalProps {
     Три действия одним списком, как их понимает сервер:
       • изменить количество — { itemId, quantity };
       • убрать позицию      — { itemId, quantity: 0 };
-      • добавить товар      — { productId, quantity, unitPrice }.
+      • добавить товар      — { productId, quantity }.
+    Цену не шлём ни для какой строки: поля цены в окне нет. Существующая
+    держит свою, новой сервер назначает цену сам — по магазину и прайс-листу
+    заказа — и записывает, из какого списка она взята. Присланную цену офис
+    записал бы как ручную, без списка, а у агента сервер её просто выбросит.
   */
-  onSaveItems: (items: Array<{ itemId?: number; productId?: number; quantity: number; unitPrice?: string }>) => void;
+  onSaveItems: (items: Array<{ itemId?: number; productId?: number; quantity: number }>) => void;
   /** Каталог для добавления товара. Пусто — кнопка «Добавить» просто ждёт. */
-  catalog?: Array<{ id: number; name: string; code?: string; unit?: string; unitPrice?: number | string }>;
+  catalog?: CatalogProduct[];
   /** Экран узнаёт, что каталог понадобился, и грузит его. */
   onNeedCatalog?: () => void;
   onSave: () => void;
@@ -169,7 +193,7 @@ export function OrderEditModal({
   }
 
   /** Добавить товар из каталога отдельной строкой. */
-  function addProduct(p: { id: number; name: string; code?: string; unit?: string; unitPrice?: number | string }) {
+  function addProduct(p: CatalogProduct) {
     /*
       Тот же товар второй строкой сервер отвергает: резерв по заказу собирается
       одним UPDATE с `CASE WHEN product_id = ...`, и MySQL берёт первый
@@ -192,6 +216,7 @@ export function OrderEditModal({
       productCode: p.code,
       unit: p.unit,
       unitPrice: Number(p.unitPrice ?? 0),
+      tiers: p.tiers,
       quantity: 0,
       isNew: true,
       newQuantity: 1,
@@ -215,7 +240,7 @@ export function OrderEditModal({
     const changed = editItems
       .filter(it => it.isNew ? it.newQuantity > 0 : it.newQuantity !== it.quantity)
       .map(it => it.isNew
-        ? { productId: it.productId, quantity: it.newQuantity, unitPrice: String(it.unitPrice) }
+        ? { productId: it.productId, quantity: it.newQuantity }
         : { itemId: it.id, quantity: it.newQuantity });
     onSaveItems(changed);
   }
@@ -332,7 +357,7 @@ export function OrderEditModal({
                             </Text>
                           )}
                           <Text style={{ color: colors.text.tertiary, fontSize: Typography.size.xs, marginTop: 4 }}>
-                            {item.quantity} {unitLabel} × {item.unitPrice.toLocaleString("ru")} {t("сум", "so'm")}
+                            {item.quantity} {unitLabel} × {priceOf(item).toLocaleString("ru")} {t("сум", "so'm")}
                           </Text>
                         </View>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -408,7 +433,7 @@ export function OrderEditModal({
                             {t("Было", "Avval")}: {item.quantity} {unitLabel}
                           </Text>
                           <Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>
-                            {t("Сумма", "Summa")}: {(item.unitPrice * item.newQuantity).toLocaleString("ru")} {t("сум", "so'm")}
+                            {t("Сумма", "Summa")}: {(priceOf(item) * item.newQuantity).toLocaleString("ru")} {t("сум", "so'm")}
                           </Text>
                         </View>
                       )}
@@ -438,7 +463,7 @@ export function OrderEditModal({
                       found.slice(0, 30).map(p => (
                         <TouchableOpacity
                           key={p.id}
-                          onPress={() => addProduct(p as { id: number; name: string; code?: string; unit?: string; unitPrice?: number | string })}
+                          onPress={() => addProduct(p)}
                           style={{
                             backgroundColor: colors.bg.card, borderRadius: Radii.md,
                             padding: 12, minHeight: Sizes.touchTarget, justifyContent: "center",
