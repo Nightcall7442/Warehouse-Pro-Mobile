@@ -135,9 +135,10 @@ export default function OrderDetailScreen() {
   */
   const [needCatalog, setNeedCatalog] = useState(false);
   const { data: catalog } = useQuery({
-    queryKey: ["catalog", "orderEdit", order?.shop?.id ?? 0],
-    // Цены — магазина заказа: те же, что подставит сервер новой строке.
-    queryFn: () => getProducts(undefined, order?.shop?.id).catch(() => []),
+    queryKey: ["catalog", "orderEdit", order?.shop?.id ?? 0, order?.priceListId ?? 0],
+    // Цены — магазина и прайс-листа заказа: те же, что подставит сервер новой
+    // строке. Есть у заказа свой список — сервер берёт цену только из него.
+    queryFn: () => getProducts(undefined, order?.shop?.id, order?.priceListId).catch(() => []),
     enabled: needCatalog,
     retry: false,
   });
@@ -146,9 +147,9 @@ export default function OrderDetailScreen() {
     /*
       Три действия одним списком: изменить количество ({itemId, quantity}),
       убрать позицию ({itemId, quantity: 0}) и добавить товар
-      ({productId, quantity, unitPrice}). Так их и понимает сервер.
+      ({productId, quantity}). Так их и понимает сервер; цену он назначает сам.
     */
-    mutationFn: (items: Array<{ itemId?: number; productId?: number; quantity: number; unitPrice?: string }>) =>
+    mutationFn: (items: Array<{ itemId?: number; productId?: number; quantity: number }>) =>
       updateOrderItems(Number(id), items),
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

@@ -64,3 +64,22 @@ describe("версия сборки в каждом запросе", () => {
     expect(src).toContain('"x-client-version": CLIENT_VERSION');
   });
 });
+
+describe("каталог по прайс-листу заказа", () => {
+  it("getProducts шлёт priceListId вместе с магазином; без списка — один магазин", async () => {
+    // Новую строку в заказе сервер оценивает по {магазин, прайс-лист заказа}.
+    // Каталог окна правки должен спросить ровно ту же область.
+    const axios = require("axios");
+    const { getProducts } = require("../api") as typeof import("../api");
+    const http = axios.create.mock.results[0].value;
+    http.get.mockResolvedValue({ status: 200, data: { result: { data: { json: [] } } } });
+    await getProducts(undefined, 5, 3);
+    await getProducts(undefined, 5, null);
+    await getProducts(undefined, undefined, 3);
+    const inputs = http.get.mock.calls.map(([url]: [string]) => {
+      const q = url.split("?input=")[1];
+      return q ? JSON.parse(decodeURIComponent(q)).json : undefined;
+    });
+    expect(inputs).toEqual([{ shopId: 5, priceListId: 3 }, { shopId: 5 }, undefined]);
+  });
+});

@@ -1,6 +1,7 @@
 import axios from "axios";
 import Constants from "expo-constants";
 import { SecureStore } from "./storage";
+import type { PriceTier } from "./lib/price-tiers";
 
 export const API_BASE = (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim())
   ? process.env.EXPO_PUBLIC_API_URL
@@ -341,7 +342,14 @@ export interface Product {
   /** Штрих-код поставщика — по нему сканер в корзине находит товар без сети. */
   barcode?: string | null;
   category?: string;
+  /** Цена при количестве 1. С shopId — цена магазина; цена строки заказа — linePrice. */
   unitPrice: string;
+  /**
+   * Ступени прайс-листа магазина («от 10 — 8500») — только когда запрошен
+   * shopId и у товара есть ступень выше одной штуки, иначе null. Необязательное:
+   * сервер до ступеней поля не присылает, и тогда цена строки — unitPrice.
+   */
+  tiers?: PriceTier[] | null;
   available: string | null;
   unit?: string;
   photoUrl?: string | null;
@@ -411,6 +419,8 @@ export interface OrderDetail extends Order {
   discount?: string;
   subtotal: string;
   shop?: { id: number; name: string; address?: string; city?: string; phone?: string; debt?: string; ownerName?: string } | null;
+  /** Прайс-лист заказа; есть — новую строку сервер оценивает только по нему. */
+  priceListId?: number | null;
   agent?: { id: number; name: string } | null;
   deliveryResult?: string | null;
   deliveryNotes?: string | null;
@@ -855,9 +865,11 @@ export async function addOrderComment(orderId: number, content: string, parentId
 /**
  * Каталог. С shopId — цены магазина (его прайс-лист, иначе карточка): те же,
  * по которым сервер посчитает заказ. Без shopId — карточка, как в справочнике.
+ * priceListId (вместе с shopId) — прайс-лист существующего заказа: сервер
+ * цену новой строки берёт ТОЛЬКО из него, и каталог должен показать ту же.
  */
-export async function getProducts(search?: string, shopId?: number): Promise<Product[]> {
-  const input = search || shopId ? { ...(search ? { search } : {}), ...(shopId ? { shopId } : {}) } : undefined;
+export async function getProducts(search?: string, shopId?: number, priceListId?: number | null): Promise<Product[]> {
+  const input = search || shopId ? { ...(search ? { search } : {}), ...(shopId ? { shopId, ...(priceListId ? { priceListId } : {}) } : {}) } : undefined;
   const res = await trpcQuery<Product[] | { data: Product[] }>("product.listAll", input);
   return Array.isArray(res) ? res : (res as { data?: Product[] })?.data ?? [];
 }

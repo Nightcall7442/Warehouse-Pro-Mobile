@@ -19,6 +19,8 @@ import { Card, SearchInput, Skeleton } from "../../src/components/ui";
 import { PressableScale } from "../../src/components/Animated";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { bumpLine, findScanned, cartSummary } from "../../src/lib/cart";
+import { linePrice, lineTotal, lineTotalBeforeDiscount, orderTotals } from "../../src/lib/order-money";
+import { priceAt, type PriceTier } from "../../src/lib/price-tiers";
 import { qty as qtyText } from "../../src/lib/format";
 import { unitShort } from "../../src/lib/units";
 import { useT, useLang } from "../../src/i18n";
@@ -26,7 +28,10 @@ import { useT, useLang } from "../../src/i18n";
 interface OrderLine {
   productId: number;
   name: string;
+  /** Цена при одной штуке. Цена строки — linePrice: по ступеням и количеству. */
   unitPrice: number;
+  /** Ступени прайс-листа магазина; нет — цена строки равна unitPrice. */
+  tiers?: readonly PriceTier[] | null;
   quantity: string;
   discount: string;
   /**
@@ -261,8 +266,6 @@ function ProductStep({ lines, onChange, colors, shopId }: { lines: OrderLine[]; 
   */
   const [showPicker, setShowPicker] = useState(lines.length === 0);
 
-  const lineTotal = (l: OrderLine) => l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100);
-
   return (
     <View style={{ padding: Spacing.base, gap: Spacing.sm }}>
       {/* Add product button */}
@@ -307,7 +310,7 @@ function ProductStep({ lines, onChange, colors, shopId }: { lines: OrderLine[]; 
             </View>
             {/* Price info */}
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>{line.unitPrice.toLocaleString("ru")} {t("сум", "so'm")} / {unitShort(line.unit, lang)}</Text>
+              <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>{linePrice(line).toLocaleString("ru")} {t("сум", "so'm")} / {unitShort(line.unit, lang)}</Text>
               <Text style={{ fontSize: Typography.size.xs, color: overStock ? colors.status.danger : colors.text.tertiary }}>
                 {line.available == null ? t("Остаток уточняется", "Qoldiq aniqlanmoqda") : t(`Остаток: ${line.available}${overStock ? " (превышено!)" : ""}`, `Qoldiq: ${line.available}${overStock ? " (oshib ketdi!)" : ""}`)}
               </Text>
@@ -348,7 +351,7 @@ function ProductStep({ lines, onChange, colors, shopId }: { lines: OrderLine[]; 
                 <View style={{ backgroundColor: colors.accent.primary + "12", borderRadius: Radii.md, paddingVertical: 10, paddingHorizontal: 8, alignItems: "center" }}>
                   {Number(line.discount) > 0 && (
                     <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, textDecorationLine: "line-through" }}>
-                      {(line.unitPrice * Number(line.quantity || 0)).toLocaleString("ru")}
+                      {lineTotalBeforeDiscount(line).toLocaleString("ru")}
                     </Text>
                   )}
                   <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{total.toLocaleString("ru")}</Text>
@@ -531,7 +534,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
                         <Text style={{ color: added ? colors.text.secondary : colors.text.primary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }} numberOfLines={1}>{p.name}</Text>
                         <View style={{ flexDirection: "row", gap: 6, marginTop: 2 }}>
                           {p.code && <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, backgroundColor: colors.bg.elevated, paddingHorizontal: 4, borderRadius: 4 }}>{p.code}</Text>}
-                          <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontMedium }}>{Number(p.unitPrice).toLocaleString("ru")} {t("сум", "so'm")}</Text>
+                          <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontMedium }}>{Number(priceAt(p.unitPrice, p.tiers, qty)).toLocaleString("ru")} {t("сум", "so'm")}</Text>
                           <Text testID={`picker-stock-${p.id}`} style={{ fontSize: Typography.size.xs, color: atLimit ? colors.status.danger : colors.text.tertiary }}>
                             {stock == null ? t("· остаток уточняется", "· qoldiq aniqlanmoqda") : stock <= 0 ? t("· нет на складе", "· omborda yo'q") : t(`· остаток ${qtyText(stock)}`, `· qoldiq ${qtyText(stock)}`)}
                           </Text>
@@ -590,11 +593,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
 }) {
   const { isDark } = useThemeStore();
   const t = useT();
-  const { subtotal, totalQty } = useMemo(() => {
-    let sub = 0, qty = 0;
-    for (const l of lines) { sub += l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100); qty += Number(l.quantity || 0); }
-    return { subtotal: sub, totalQty: qty };
-  }, [lines]);
+  const { subtotal, totalQty } = useMemo(() => orderTotals(lines), [lines]);
 
   const PAYMENT_OPTIONS = [
     { key: "cash", label: t("Наличные", "Naqd"), icon: "dollar-sign" as const },
@@ -647,7 +646,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
           <Text style={{ flex: 2, fontSize: Typography.size.xs, fontFamily: Typography.fontBold, color: colors.text.tertiary, textAlign: "right" }}>{t("СУММА", "SUMMA")}</Text>
         </View>
         {lines.map(l => {
-          const total = l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100);
+          const total = lineTotal(l);
           return (
             <View key={l.productId} style={{ flexDirection: "row", paddingHorizontal: Spacing.base, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border.subtle }}>
               <View style={{ flex: 3, gap: 2 }}>
@@ -788,40 +787,52 @@ export default function NewOrderScreen() {
    *
    * Заодно обновляется цена: сканер передал ту, что была на экране сканера, а
    * каталог отвечает текущей.
+   *
+   * Каталог — МАГАЗИНА заказа, и цену он переставляет у ВСЕХ строк, не только
+   * у отсканированных. Строки приходят с чужой ценой не только со сканера:
+   * корзина каталога набрана по карточке, без магазина, а магазин можно
+   * сменить, вернувшись на первый шаг. Ступени («от 10 — 8500») у каждого
+   * магазина свои, и строка, набранная для одного, с ценами другого не
+   * должна уехать ни в «Итог», ни в офлайн-очередь.
+   *
+   * До выбора магазина каталог нужен только строке со сканера (ей не хватает
+   * остатка). Строкам из корзины он ничего не даст — это та же карточка, по
+   * которой их набрали, — а весь каталог организации тянулся бы впустую.
    */
+  const shopId = selectedShop?.id;
   const seededProductId = params.productId ? Number(params.productId) : null;
   const { data: catalog } = useQuery({
-    queryKey: ["products"],
-    queryFn: () => getProducts(),
-    enabled: seededProductId != null && Number.isFinite(seededProductId),
+    queryKey: ["products", shopId ?? 0],
+    queryFn: () => getProducts(undefined, shopId),
+    enabled: rawLines.length > 0 && (shopId != null || seededProductId != null),
   });
 
   /**
-   * Строки заказа с подставленным остатком.
+   * Строки заказа с ценой магазина и подставленным остатком.
    *
    * Подстановка сделана вычислением при отрисовке, а не записью в состояние из
    * эффекта: состояние принадлежит агенту (он правит количество и скидку), и
    * дописывать в него ответ сети — лишний круг перерисовок и лишний источник
-   * правды. Дополняются только строки, у которых остаток неизвестен, то есть
-   * пришедшие со сканера; выбранные вручную уже несут остаток из каталога.
+   * правды. Остаток дополняется только у строк, где он неизвестен, то есть
+   * пришедших со сканера; выбранные вручную уже несут остаток из каталога.
+   * Цену руками на этом экране не набирают, поэтому переставлять её можно
+   * всегда. Без связи каталога нет — строки держат цену и ступени, с которыми
+   * их набрали.
    */
   const lines = useMemo(() => {
-    if (!catalog || rawLines.length === 0) return rawLines;
-    let enriched = false;
-    const next = rawLines.map(l => {
-      if (l.available != null) return l;
+    if (!catalog) return rawLines;
+    return rawLines.map(l => {
       const product = catalog.find(p => p.id === l.productId);
       if (!product) return l;
-      enriched = true;
       return {
         ...l,
         name: l.name || product.name,
         unitPrice: Number(product.unitPrice) || l.unitPrice,
-        available: parseStock(product.available),
+        tiers: product.tiers ?? null,
+        available: l.available ?? parseStock(product.available),
         unit: l.unit ?? product.unit,
       };
     });
-    return enriched ? next : rawLines;
   }, [rawLines, catalog]);
 
   // Check for saved draft on mount
@@ -866,22 +877,22 @@ export default function NewOrderScreen() {
   // matches the discounted total the agent showed the shop owner. Shared by
   // both the online submit and the offline-queue fallback below.
   const overallDiscountPercent = useMemo(() => {
-    const rawSubtotal = lines.reduce((s, l) => s + l.unitPrice * Number(l.quantity || 0), 0);
-    const discountedSubtotal = lines.reduce((s, l) => s + l.unitPrice * Number(l.quantity || 0) * (1 - Math.max(0, Number(l.discount || 0)) / 100), 0);
+    const rawSubtotal = lines.reduce((s, l) => s + lineTotalBeforeDiscount(l), 0);
+    const discountedSubtotal = lines.reduce((s, l) => s + lineTotal(l), 0);
     return rawSubtotal > 0 ? ((rawSubtotal - discountedSubtotal) / rawSubtotal) * 100 : 0;
   }, [lines]);
 
   /**
    * Сумма, которую агент видит на экране и называет владельцу магазина.
    *
-   * Считается так же, как в ReviewStep: цена × количество со скидкой по
-   * строке. Отдельно здесь потому, что ReviewStep — другой компонент, и его
-   * значение сюда не доходит.
+   * Считается так же, как в ReviewStep: цена по ступеням × количество со
+   * скидкой по строке. Отдельно здесь потому, что ReviewStep — другой
+   * компонент, и его значение сюда не доходит. Она же уходит в офлайн-очередь
+   * как названная сумма: по цене одной штуки она расходилась бы с тем, что
+   * сервер насчитает при отправке, и агент получал бы «цена изменилась» на
+   * ровном месте.
    */
-  const quotedTotal = useMemo(
-    () => lines.reduce((sum, l) => sum + l.unitPrice * Number(l.quantity || 0) * (1 - Number(l.discount || 0) / 100), 0),
-    [lines],
-  );
+  const quotedTotal = useMemo(() => orderTotals(lines).subtotal, [lines]);
 
   const queryClient = useQueryClient();
 
@@ -920,7 +931,7 @@ export default function NewOrderScreen() {
       // Ровно эта ошибка описана и исправлена в самой очереди
       // (src/store/offline.ts), но точка входа сохраняла старую копию.
       if (isRetryableError(e) && selectedShop) {
-        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, promisedDeliveryAt: promisedAt ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
+        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, promisedDeliveryAt: promisedAt ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: linePrice(l), discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
         const queued = await addOrder(offlineOrder);
         if (!queued) {
           // Запись очереди на диск не удалась — на рабочих телефонах кончается
@@ -989,7 +1000,7 @@ export default function NewOrderScreen() {
       idempotencyKey: idempotencyKeyRef.current,
       promisedDeliveryAt: promisedAt ?? undefined,
       discount: overallDiscountPercent,
-      items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: l.unitPrice, discount: Math.max(0, Number(l.discount || 0)) })),
+      items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: linePrice(l), discount: Math.max(0, Number(l.discount || 0)) })),
     };
     createMutation.mutate(input);
   };
