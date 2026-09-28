@@ -173,6 +173,8 @@ describe("backgroundLocation: буфер точек и 429", () => {
 
   beforeEach(() => {
     for (const k of Object.keys(mockStore)) delete mockStore[k];
+    // Вошедший агент: точки буфера помечены хозяином и уходят только под ним.
+    sessionStorage.setItem("cached_user", JSON.stringify({ id: 7 }));
     api.saveLocation.mockReset();
     api.saveLocation.mockResolvedValue(undefined);
     // Паузы между отправками в тесте не ждём: проверяем, что и сколько ушло,

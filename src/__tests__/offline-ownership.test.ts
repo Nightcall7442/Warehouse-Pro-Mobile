@@ -121,7 +121,9 @@ describe("записи очереди помечены автором", () => {
   it("выход из аккаунта чистит кэши, но не очередь", () => {
     const auth = read("src/store/auth.ts");
     expect(auth).toContain("clearUserScopedCaches");
-    for (const key of ["cached_products", "recent_shops", "order_draft", "visit_draft_"]) {
+    // Черновики не стираются, а разделены по человеку (lib/user-draft); при
+    // конце сессии уходят только старые ключи без человека — sweepDrafts.
+    for (const key of ["cached_products", "recent_shops", "sweepDrafts"]) {
       expect(auth).toContain(key);
     }
     // Очереди отправки трогать нельзя: это несделанная работа.

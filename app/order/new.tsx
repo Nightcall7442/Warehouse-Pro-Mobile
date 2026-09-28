@@ -12,6 +12,8 @@ import { PromisedDelivery } from "../../src/components/order/PromisedDelivery";
 import { useOfflineStore, uuidv4, isRetryableError, isLocalShopId, resolveShopId } from "../../src/store/offline";
 import { usePendingShops } from "../../src/store/shop-queue";
 import { useOfflineCopy } from "../../src/hooks/useOfflineCopy";
+import { useAuthStore } from "../../src/store/auth";
+import { orderDraftSlot, loadUserDraft, saveUserDraft, clearUserDraft } from "../../src/lib/user-draft";
 import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
@@ -400,13 +402,16 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
   const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const debouncedSearch = useDebounce(search, 300);
   const [onlyInStock, setOnlyInStock] = useState(true);
-  // Тот же запасной путь, что у магазинов: см. ShopPicker.
+  // Тот же запасной путь, что у магазинов: см. ShopPicker. Копия — ЭТОГО
+  // магазина: у каждого свои цены и ступени (lib/offline-copy).
   const { data: liveProducts, isLoading: liveLoading } = useQuery({ queryKey: ["products", shopId ?? 0], queryFn: () => getProducts(undefined, shopId) });
-  const { data: products, fromCopy, savedAt } = useOfflineCopy<typeof liveProducts>("products", liveProducts);
+  const { data: products, fromCopy, savedAt, cardPrices } = useOfflineCopy<typeof liveProducts>("products", liveProducts, `shop${shopId ?? 0}`);
   const isLoading = liveLoading && !products;
-  const copyNotice = fromCopy && savedAt
-    ? t(`Каталог сохранён ${new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru")} — связи нет, остатки и цены могли измениться`, `Katalog ${new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru")} da saqlangan — aloqa yo'q, qoldiq va narxlar o'zgargan bo'lishi mumkin`)
-    : null;
+  const savedOn = savedAt ? new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru") : "";
+  const copyNotice = !fromCopy || !savedAt ? null
+    // Этот магазин со связью не открывали — его цен на телефоне нет.
+    : cardPrices ? t(`Цен этого магазина на телефоне нет — показаны базовые цены без ступеней, сумму пересчитают при отправке. Каталог от ${savedOn}`, `Bu do'kon narxlari telefonda yo'q — pog'onasiz asosiy narxlar ko'rsatilgan, summa yuborishda qayta hisoblanadi. Katalog ${savedOn}`)
+    : t(`Каталог сохранён ${savedOn} — связи нет, остатки и цены могли измениться`, `Katalog ${savedOn} da saqlangan — aloqa yo'q, qoldiq va narxlar o'zgargan bo'lishi mumkin`);
 
   const filtered = useMemo(() => {
     let list = (products ?? []).filter(p => !debouncedSearch || p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || (p.code ?? "").toLowerCase().includes(debouncedSearch.toLowerCase()));
@@ -693,8 +698,8 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
 }
 
 // ── Draft auto-save ──────────────────────────────────────────────────────────
-const DRAFT_KEY = "order_draft";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+// Черновик — под номером агента (lib/user-draft): переживает 401 и повторный
+// вход, а сменщику на том же телефоне не показывается.
 import { useCartStore } from "../../src/store/cart";
 
 interface OrderDraft {
@@ -708,30 +713,6 @@ interface OrderDraft {
   savedAt: number;
 }
 
-async function saveDraft(draft: Omit<OrderDraft, "savedAt">) {
-  try {
-    await AsyncStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, savedAt: Date.now() }));
-  } catch { /* ignore */ }
-}
-
-async function loadDraft(): Promise<OrderDraft | null> {
-  try {
-    const raw = await AsyncStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    const draft = JSON.parse(raw) as OrderDraft;
-    // Expire after 24 hours
-    if (Date.now() - draft.savedAt > 24 * 60 * 60 * 1000) {
-      await AsyncStorage.removeItem(DRAFT_KEY);
-      return null;
-    }
-    return draft;
-  } catch { return null; }
-}
-
-async function clearDraft() {
-  try { await AsyncStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
-}
-
 // ── Main Screen ──────────────────────────────────────────────────────────────
 export default function NewOrderScreen() {
   const router = useRouter();
@@ -741,6 +722,9 @@ export default function NewOrderScreen() {
   const t = useT();
   const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string; productQty?: string; fromCart?: string }>();
   const { addOrder } = useOfflineStore();
+  const { user } = useAuthStore();
+  const userId = user?.id;
+  const clearDraft = () => clearUserDraft(orderDraftSlot(userId));
 
   const [step, setStep] = useState(params.productId ? 1 : params.shopId ? 2 : 1);
   const [selectedShop, setSelectedShop] = useState<Shop | null>(
@@ -808,11 +792,17 @@ export default function NewOrderScreen() {
   const sid = selectedShop ? resolveShopId(selectedShop.id) : undefined;
   const shopId = sid != null && !isLocalShopId(sid) ? sid : undefined;
   const seededProductId = params.productId ? Number(params.productId) : null;
-  const { data: catalog } = useQuery({
+  const { data: liveCatalog } = useQuery({
     queryKey: ["products", shopId ?? 0],
     queryFn: () => getProducts(undefined, shopId),
     enabled: rawLines.length > 0 && (shopId != null || seededProductId != null),
   });
+  // Без связи — копия каталога ЭТОГО магазина, со ступенями: иначе строка со
+  // сканера или из корзины после перезагрузки считалась по цене карточки за
+  // штуку. Цены карточки вместо магазинных (cardPrices) строки не
+  // переставляют: набранные со связью ступени магазина они бы стёрли.
+  const { data: savedCatalog, cardPrices } = useOfflineCopy<typeof liveCatalog>("products", liveCatalog, `shop${shopId ?? 0}`);
+  const catalog = cardPrices ? undefined : savedCatalog;
 
   /**
    * Строки заказа с ценой магазина и подставленным остатком.
@@ -823,8 +813,8 @@ export default function NewOrderScreen() {
    * правды. Остаток дополняется только у строк, где он неизвестен, то есть
    * пришедших со сканера; выбранные вручную уже несут остаток из каталога.
    * Цену руками на этом экране не набирают, поэтому переставлять её можно
-   * всегда. Без связи каталога нет — строки держат цену и ступени, с которыми
-   * их набрали.
+   * всегда. Без связи — копия этого магазина; нет её — строки держат цену и
+   * ступени, с которыми их набрали.
    */
   const lines = useMemo(() => {
     if (!catalog) return rawLines;
@@ -845,7 +835,7 @@ export default function NewOrderScreen() {
   // Check for saved draft on mount
   useEffect(() => {
     if (skipDraft) return;
-    loadDraft().then(draft => {
+    loadUserDraft<OrderDraft>(orderDraftSlot(userId)).then(draft => {
       if (draft && draft.lines.length > 0) {
         const forShop = draft.shop ? t(` для ${draft.shop.name}`, `: ${draft.shop.name}`) : "";
         Alert.alert(
@@ -872,10 +862,10 @@ export default function NewOrderScreen() {
   useEffect(() => {
     if (!draftChecked || lines.length === 0) return;
     const timer = setTimeout(() => {
-      saveDraft({ shop: selectedShop, lines, notes, paymentMethod, promisedAt });
+      saveUserDraft(orderDraftSlot(userId), { shop: selectedShop, lines, notes, paymentMethod, promisedAt });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [selectedShop, lines, notes, paymentMethod, promisedAt, draftChecked]);
+  }, [selectedShop, lines, notes, paymentMethod, promisedAt, draftChecked, userId]);
 
   // The backend only accepts one order-level discount percentage (per-line
   // discounts aren't stored server-side) and recomputes subtotal itself from

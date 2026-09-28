@@ -105,19 +105,24 @@ describe("session survives a lost connection", () => {
 });
 
 /*
-  Фоновый GPS не переживает отзыв сессии и смену человека.
+  Фоновый GPS не переживает отзыв сессии и смену человека — а точки переживают.
 
   До этого только logout() останавливал трекинг. Токен же чаще «кончается»
   ответом 401 (учётку переиздали, пароль сменили, 30 дней истекли): задача
-  продолжала снимать точки, копила их в pending_locations, и следующий
-  вошедший на сменном телефоне первой же отправкой заливал чужой след под
-  своим именем. Здесь закреплено: отказ сервера в hydrate() и вход другого
-  человека останавливают задачу и стирают буфер.
+  продолжала снимать точки, и следующий вошедший на сменном телефоне первой же
+  отправкой заливал чужой след под своим именем. Потом буфер стали стирать — и
+  401 от истёкшего токена уносил тому же агенту часы маршрута без связи.
+
+  Здесь закреплено: отказ сервера в hydrate() и вход другого человека
+  останавливают задачу, а точки с хозяином остаются на диске (кому их
+  отправлять — keep-own-work.test.tsx). Уходят только точки прежней версии,
+  без хозяина.
 
   Нарочная поломка: убери stopTrackingOnSignOut() из login() — третья
   проверка падает.
 */
 jest.mock("../backgroundLocation", () => ({
+  ...jest.requireActual("../backgroundLocation"),
   stopBackgroundTracking: jest.fn(async () => {}),
 }));
 
@@ -127,22 +132,25 @@ describe("отзыв сессии останавливает фоновый GPS"
   const AsyncStorageMod = require("@react-native-async-storage/async-storage");
   const AsyncStorage = AsyncStorageMod.default ?? AsyncStorageMod;
   const { login: apiLogin } = require("../api");
+  const OWN = { lat: 41.3, lng: 69.2, accuracy: 10, ownerId: 7 };
+  const LEGACY = { lat: 41.4, lng: 69.3, accuracy: 10 };
+  const buffer = async () => JSON.parse((await AsyncStorage.getItem("pending_locations")) ?? "[]");
 
   beforeEach(async () => {
     SecureStore.setItemAsync.mockResolvedValue(undefined);
     SecureStore.deleteItemAsync.mockResolvedValue(undefined);
-    await AsyncStorage.setItem("pending_locations", JSON.stringify([{ lat: 41.3, lng: 69.2 }]));
+    await AsyncStorage.setItem("pending_locations", JSON.stringify([OWN, LEGACY]));
     await AsyncStorage.setItem("gps_auto_track", "1");
   });
 
-  it("сервер отверг сессию в hydrate — задача остановлена, буфер стёрт", async () => {
+  it("сервер отверг сессию в hydrate — задача остановлена, точки хозяина целы", async () => {
     SecureStore.getItemAsync.mockImplementation(async (key: string) => (key === "session_token" ? "tok" : null));
     getMe.mockRejectedValue(Object.assign(new Error("Unauthorized"), { response: { status: 401 } }));
 
     await useAuthStore.getState().hydrate();
 
     expect(stopBackgroundTracking).toHaveBeenCalled();
-    expect(await AsyncStorage.getItem("pending_locations")).toBeNull();
+    expect(await buffer()).toEqual([OWN]);
     expect(await AsyncStorage.getItem("gps_auto_track")).toBeNull();
   });
 
@@ -155,16 +163,16 @@ describe("отзыв сессии останавливает фоновый GPS"
     await useAuthStore.getState().hydrate();
 
     expect(stopBackgroundTracking).not.toHaveBeenCalled();
-    expect(await AsyncStorage.getItem("pending_locations")).not.toBeNull();
+    expect(await buffer()).toEqual([OWN, LEGACY]);
   });
 
-  it("вход другого человека не наследует чужой след", async () => {
+  it("вход другого человека не наследует чужой след, но и не стирает его", async () => {
     apiLogin.mockResolvedValue({ user: { id: 8, name: "Сменщик", role: "agent" } });
 
     await useAuthStore.getState().login("b@test.local", "pw");
 
     expect(stopBackgroundTracking).toHaveBeenCalled();
-    expect(await AsyncStorage.getItem("pending_locations")).toBeNull();
+    expect(await buffer()).toEqual([OWN]);
     expect(useAuthStore.getState().user?.id).toBe(8);
   });
 });

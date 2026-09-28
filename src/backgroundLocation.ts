@@ -3,6 +3,7 @@ import * as Location from "expo-location";
 import { batteryPercent } from "./lib/battery";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { saveLocation } from "./api";
+import { SecureStore } from "./storage";
 
 const BACKGROUND_LOCATION_TASK = "background-location-task";
 
@@ -18,6 +19,10 @@ const PENDING_KEY = "pending_locations";
 // 2000 точек ≈ 200 КБ JSON — безопасно для AsyncStorage. Двухсот хватало на
 // 12 минут езды без связи: за городом мёртвые зоны длиннее, и начало отрезка
 // стиралось навсегда.
+//
+// Предел общий на телефон, а не на человека: точки теперь переживают выход
+// (см. ownerId), и предел «на каждого» рос бы со сменщиками без конца.
+// Вытесняются самые старые — обычно это точки того, кто давно не входил.
 const PENDING_MAX = 2000;
 
 /**
@@ -53,6 +58,33 @@ export interface PendingPoint {
    * времени съёмки не имеют, и отбрасывать их из-за этого нельзя.
    */
   recordedAt?: string;
+  /**
+   * Чья точка — номер вошедшего в момент съёмки.
+   *
+   * Буфер переживает выход и 401: истёкший токен раньше стирал тому же агенту
+   * до трёх часов маршрута без связи. Отправляются только точки вошедшего —
+   * сервер пишет автора из токена, и чужая точка стала бы следом сменщика.
+   * Точки без поля — из прежней версии, она чистила буфер при каждом выходе,
+   * значит они того, кто вошёл сейчас.
+   */
+  ownerId?: number;
+}
+
+/**
+ * Кто сейчас владелец телефона — последний вошедший (профиль, который пишет
+ * store/auth). Переживает 401: точки, снятые до того, как трекинг
+ * остановился, остаются его. Вход другого человека и выход этот профиль
+ * сбрасывают. Из хранилища, а не из стора: фоновая задача на Android
+ * поднимается без экранов, и стор там пуст.
+ */
+async function sessionOwner(): Promise<number | null> {
+  try {
+    const raw = await SecureStore.getItemAsync("cached_user");
+    const id = raw ? (JSON.parse(raw) as { id?: unknown }).id : null;
+    return typeof id === "number" ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 async function readPending(): Promise<PendingPoint[]> {
@@ -120,23 +152,29 @@ export function flushPendingLocations(): Promise<void> {
   return withBuffer(async () => {
     const pending = await readPending();
     if (pending.length === 0) return;
+    // Никто не вошёл — отправлять не под кем. Чужие точки пропускаются и
+    // лежат, пока не войдёт их хозяин.
+    const owner = await sessionOwner();
+    if (owner == null) return;
 
     const remaining = [...pending];
     let sent = 0;
-    while (remaining.length > 0 && sent < FLUSH_BATCH) {
-      const point = remaining[0];
+    let i = 0;
+    while (i < remaining.length && sent < FLUSH_BATCH) {
+      const point = remaining[i];
+      if ((point.ownerId ?? owner) !== owner) { i += 1; continue; }
       try {
         await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt, point.mocked);
-        remaining.shift();
+        remaining.splice(i, 1);
         sent += 1;
         // Пауза между точками: залп подряд упирается в лимит запросов и роняет
         // заодно экранные запросы того же агента.
-        if (remaining.length > 0 && sent < FLUSH_BATCH) await delay(FLUSH_GAP_MS);
+        if (i < remaining.length && sent < FLUSH_BATCH) await delay(FLUSH_GAP_MS);
       } catch (e) {
         // Still offline, or session needs refreshing — stop draining and keep
         // the rest for the next fix. Only a point the server definitively
         // rejected as bad data is not worth retrying forever.
-        if (isPermanentlyRejected(e)) remaining.shift();
+        if (isPermanentlyRejected(e)) remaining.splice(i, 1);
         else break;
       }
     }
@@ -161,6 +199,11 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   // history a dead zone makes irreplaceable.
   const locations = (data as { locations?: Location.LocationObject[] } | null)?.locations;
   if (!locations || locations.length === 0) return;
+  // Хозяин — до отправки: 401 на первой же точке гасит сессию, и после него
+  // спросить было бы уже не у кого. Никто не вошёл — точка ничья, её не
+  // копим: отдать её потом можно только под чужим именем.
+  const ownerId = await sessionOwner();
+  if (ownerId == null) return;
 
   const batteryLevel = await batteryPercent();
   const points: PendingPoint[] = locations.map((location) => ({
@@ -172,6 +215,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     // накопленную точку с задержкой, и её собственная метка точнее.
     recordedAt: new Date(location.timestamp).toISOString(),
     mocked: location.mocked === true,
+    ownerId,
   }));
 
   const toBuffer: PendingPoint[] = [];
@@ -213,8 +257,31 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
  */
 export function bufferLocation(...points: PendingPoint[]): Promise<void> {
   return withBuffer(async () => {
+    // Точку с экрана хозяин получает здесь: вызывающий о нём не знает.
+    const owner = await sessionOwner();
+    const owned = points.flatMap(p => {
+      const ownerId = p.ownerId ?? owner;
+      return ownerId == null ? [] : [{ ...p, ownerId }];
+    });
+    if (owned.length === 0) return;
     const pending = await readPending();
-    await writePending([...pending, ...points]);
+    await writePending([...pending, ...owned]);
+  });
+}
+
+/**
+ * Конец сессии: убрать точки без хозяина — они из прежней версии.
+ *
+ * Прежняя версия стирала буфер при каждом конце сессии, значит такие точки
+ * сняты в той сессии, что кончается сейчас. После неё хозяина уже не назвать:
+ * flushPendingLocations приписал бы их следующему вошедшему, то есть
+ * сменщику. Точки с хозяином не трогаются.
+ */
+export function forgetUnownedPoints(): Promise<void> {
+  return withBuffer(async () => {
+    const pending = await readPending();
+    const owned = pending.filter(p => p.ownerId != null);
+    if (owned.length !== pending.length) await writePending(owned);
   });
 }
 

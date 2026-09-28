@@ -7,7 +7,6 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Spacing, Radii, safeBottomPadding, soft } from "../../src/theme";
 import { getProducts, submitVisitReport, updatePlanStatus, uploadFile, type Product } from "../../src/api";
@@ -18,6 +17,8 @@ import { PressableScale, FadeInItem } from "../../src/components/Animated";
 import { useT } from "../../src/i18n";
 import { ErrorState } from "../../src/components/QueryState";
 import { sendVisitPing } from "../../src/lib/visit-ping";
+import { useAuthStore } from "../../src/store/auth";
+import { visitDraftSlot, loadUserDraft, saveUserDraft, clearUserDraft } from "../../src/lib/user-draft";
 
 interface ChecklistItem {
   productId: number;
@@ -32,38 +33,15 @@ interface ChecklistItem {
 // actions, submitting requires connectivity, and until now a lost connection
 // (a shop's basement, a mall) meant the entire checklist and every photo
 // (already individually uploaded) were gone the moment the screen unmounted.
-// Keyed by planId so switching between plans can't restore the wrong one.
-const draftKey = (planId: string) => `visit_draft_${planId}`;
+// Keyed by planId so switching between plans can't restore the wrong one —
+// и по номеру человека (lib/user-draft): 401 от истёкшего токена больше не
+// стирает чек-лист, а сменщик на том же телефоне его не видит.
 
 interface VisitDraft {
   photos: string[];
   checklist: ChecklistItem[];
   competitorNotes: string;
   savedAt: number;
-}
-
-async function saveVisitDraft(planId: string, draft: Omit<VisitDraft, "savedAt">) {
-  try {
-    await AsyncStorage.setItem(draftKey(planId), JSON.stringify({ ...draft, savedAt: Date.now() }));
-  } catch { /* ignore */ }
-}
-
-async function loadVisitDraft(planId: string): Promise<VisitDraft | null> {
-  try {
-    const raw = await AsyncStorage.getItem(draftKey(planId));
-    if (!raw) return null;
-    const draft = JSON.parse(raw) as VisitDraft;
-    // Expire after 24 hours — a stale draft is more likely to confuse than help.
-    if (Date.now() - draft.savedAt > 24 * 60 * 60 * 1000) {
-      await AsyncStorage.removeItem(draftKey(planId));
-      return null;
-    }
-    return draft;
-  } catch { return null; }
-}
-
-async function clearVisitDraft(planId: string) {
-  try { await AsyncStorage.removeItem(draftKey(planId)); } catch { /* ignore */ }
 }
 
 /** Строка чек-листа: имя товара, галочка «есть на полке», цена и акция. */
@@ -139,6 +117,8 @@ export default function MerchandiserVisitScreen() {
   const colors = useThemeColors();
   const qc = useQueryClient();
   const t = useT();
+  const { user } = useAuthStore();
+  const userId = user?.id;
 
   const [photos, setPhotos] = useState<string[]>([]);
   // Список товаров и правки по нему держатся раздельно: строки меняются только
@@ -158,13 +138,13 @@ export default function MerchandiserVisitScreen() {
     if (!products || rows.length > 0) return;
     const fresh: ChecklistRowData[] = products.map((p: Product) => ({ productId: p.id, productName: p.name }));
     const known = new Set(fresh.map(r => r.productId));
-    loadVisitDraft(planId).then(draft => {
+    loadUserDraft<VisitDraft>(visitDraftSlot(userId, planId)).then(draft => {
       if (draft && (draft.photos.length > 0 || draft.checklist.length > 0 || draft.competitorNotes)) {
         Alert.alert(
           t("Продолжить черновик?", "Qoralamani davom ettirasizmi?"),
           t("Найден незавершённый отчёт по этому визиту — сеть, видимо, прервалась при отправке.", "Bu tashrif bo'yicha tugallanmagan hisobot topildi — yuborishda aloqa uzilgan ko'rinadi."),
           [
-            { text: t("Начать заново", "Qaytadan boshlash"), style: "cancel", onPress: () => { setRows(fresh); clearVisitDraft(planId); } },
+            { text: t("Начать заново", "Qaytadan boshlash"), style: "cancel", onPress: () => { setRows(fresh); clearUserDraft(visitDraftSlot(userId, planId)); } },
             { text: t("Продолжить", "Davom etish"), onPress: () => {
               setPhotos(draft.photos);
               // Merge on productId rather than trusting the two lists to line
@@ -223,10 +203,10 @@ export default function MerchandiserVisitScreen() {
   useEffect(() => {
     if (!draftChecked.current || rows.length === 0) return;
     const timer = setTimeout(() => {
-      saveVisitDraft(planId, { photos, checklist: buildChecklist(), competitorNotes });
+      saveUserDraft(visitDraftSlot(userId, planId), { photos, checklist: buildChecklist(), competitorNotes });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [planId, photos, rows, present, prices, promos, competitorNotes, buildChecklist]);
+  }, [planId, userId, photos, rows, present, prices, promos, competitorNotes, buildChecklist]);
 
   const submitReport = useMutation({
     mutationFn: () => submitVisitReport({ planId: Number(planId), shopId: Number(shopId), photos, checklist: buildChecklist(), competitorNotes: competitorNotes || undefined }),
@@ -235,7 +215,7 @@ export default function MerchandiserVisitScreen() {
       // Точка на карте начальника — как у агента; без неё отчёт мерчандайзера
       // был единственным визитом без координат.
       void sendVisitPing();
-      await clearVisitDraft(planId);
+      await clearUserDraft(visitDraftSlot(userId, planId));
       qc.invalidateQueries({ queryKey: ["plans"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       notify.success(t("Отчёт отправлен!", "Hisobot yuborildi!"));

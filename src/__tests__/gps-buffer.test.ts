@@ -29,6 +29,8 @@ const tick = () => new Promise<void>(r => { setTimeout(r, 1); });
 beforeEach(async () => {
   save.mockReset();
   await AsyncStorage.clear();
+  // Вошедший агент: без него точке некого назвать хозяином, и буфер её не берёт.
+  sessionStorage.setItem("cached_user", JSON.stringify({ id: 7 }));
 });
 
 describe("буфер точек", () => {
