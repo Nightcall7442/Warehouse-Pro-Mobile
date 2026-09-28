@@ -109,6 +109,7 @@ import { linePrice, lineTotal, orderTotals } from "../lib/order-money";
 import { bumpLine, cartSummary } from "../lib/cart";
 import { useOfflineStore } from "../store/offline";
 import { useCartStore } from "../store/cart";
+import { useAuthStore } from "../store/auth";
 import type { ThemeColors } from "../theme";
 
 const apiMock = require("../api");
@@ -117,7 +118,9 @@ const apiMock = require("../api");
 // оставшийся от соседа, открыл бы экран не с той дороги.
 beforeEach(() => {
   for (const k of Object.keys(mockRouteParams)) delete mockRouteParams[k];
-  useCartStore.setState({ lines: [] });
+  useCartStore.setState({ carts: {} });
+  // Заказ оформляет вошедший: без него экран не отправляет и не кладёт в очередь.
+  useAuthStore.setState({ user: { id: 1, name: "Агент", role: "agent" } as never });
 });
 
 const tier = (minQuantity: string, price: string, priority = 0) => ({ minQuantity, price, priority });
@@ -287,7 +290,7 @@ describe("новый заказ из корзины не тянет катало
     // Корзина набрана по карточке: каталог без магазина ей ничего не даст, а
     // весь каталог организации под ключом ["products", 0] тянулся бы впустую.
     Object.assign(mockRouteParams, { fromCart: "1" });
-    useCartStore.setState({ lines: bumpLine([], { id: 7, name: "Сахар 1 кг", unitPrice: "12000.00", available: "100", unit: "kg" }, 2) });
+    useCartStore.setState({ carts: { 1: bumpLine([], { id: 7, name: "Сахар 1 кг", unitPrice: "12000.00", available: "100", unit: "kg" }, 2) } });
     apiMock.getAvailableShops.mockResolvedValue(SHOPS);
     apiMock.getProducts.mockReset();
     apiMock.getProducts.mockImplementation(async (_search?: string, shopId?: number) => CATALOGS[shopId ?? 0]);

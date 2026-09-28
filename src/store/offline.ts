@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { errorText } from "../lib/error-text";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuthStore } from "./auth";
+import { useAuthStore, cachedProfileId } from "./auth";
 import { notify } from "./toast";
 import { tt } from "../i18n";
 import { CreateOrderInput, createOrder, markOutForDelivery, markDelivered, markFailed, completeDelivery, CompleteDeliveryInput } from "../api";
@@ -83,8 +83,9 @@ export interface OfflineOrder {
    * записывались не тому человеку, а отложенные действия курьера отваливались
    * с «заказ не назначен на вас».
    *
-   * Поле необязательное: записи, созданные до этой правки, синхронизируются
-   * по-прежнему. Отбросить их значило бы потерять работу, уже сделанную в поле.
+   * Поле необязательное только ради записей прежних сборок: при чтении с диска
+   * они получают хозяина по профилю телефона или помечаются ничьими
+   * (adoptOwnerless). Запись без хозяина не показывается и не уходит никому.
    */
   ownerId?: number;
 }
@@ -112,8 +113,7 @@ export interface OfflineDeliveryAction {
    * записывались не тому человеку, а отложенные действия курьера отваливались
    * с «заказ не назначен на вас».
    *
-   * Поле необязательное: записи, созданные до этой правки, синхронизируются
-   * по-прежнему. Отбросить их значило бы потерять работу, уже сделанную в поле.
+   * Необязательное — см. то же поле у OfflineOrder.
    */
   ownerId?: number;
 
@@ -168,6 +168,8 @@ interface OfflineStore {
   syncingOrders: boolean;
   syncingActions: boolean;
   load: () => Promise<void>;
+  /** Записи без хозяина — этому хозяину, в памяти и на диске (зовёт auth перед стиранием профиля). */
+  settleOwnerless: (ownerId: number) => Promise<void>;
   /**
    * Ставит запись в очередь. Возвращает, дошла ли она до диска.
    *
@@ -362,15 +364,59 @@ export function isRetryableError(e: unknown): boolean {
  * «Кто сейчас» неизвестен — тоже нельзя. На холодном старте проход стартовал,
  * пока сессия ещё читалась с диска: пользователя нет, и запись с владельцем
  * уходила под тем токеном, который окажется первым. На общем телефоне это
- * заказы агента А на счету агента Б. Записи без владельца (старые) не трогаем.
+ * заказы агента А на счету агента Б.
  */
 export function shouldAutoSync(
   entry: { synced: boolean; retryable?: boolean; ownerId?: number },
   currentUserId?: number,
 ): boolean {
   if (entry.synced || entry.retryable === false) return false;
-  if (entry.ownerId != null && entry.ownerId !== currentUserId) return false;
-  return true;
+  return isOwnedBy(entry, currentUserId);
+}
+
+/**
+ * Своя ли запись: хозяин известен, и это вошедший.
+ *
+ * Одно правило на все очереди, списки и плашку. Запись без хозяина — ничья
+ * для всех: раньше она считалась «старой» и доставалась любому вошедшему, а
+ * без хозяина запись ложилась как раз после 401 — и заказ агента А уходил
+ * под сменщиком Б. Хозяина записям прежних сборок даёт adoptOwnerless.
+ */
+export function isOwnedBy(entry: { ownerId?: number }, userId: number | null | undefined): boolean {
+  return entry.ownerId != null && entry.ownerId === userId;
+}
+
+/** Хозяин «никто»: настоящий номер человека положительный и с ним не совпадёт. */
+export const NO_OWNER = -1;
+
+/**
+ * Записи прежних сборок без хозяина — привязать при чтении с диска.
+ *
+ * Боевая сборка до этой правки клала заказ или отметку в очередь без хозяина,
+ * если ответ 401 успевал обнулить вошедшего, и такая запись уходила под
+ * первым же вошедшим — на сменном телефоне под сменщиком. Хозяин у неё почти
+ * наверняка тот, чей профиль лежит на телефоне: 401 профиль не стирает, а
+ * вход другого человека его заменил бы — но прежняя сборка к тому времени
+ * уже отправила бы запись под ним, и лежать ей было бы незачем.
+ *
+ * Профиля нет — хозяина не назвать: запись помечается ничьей (NO_OWNER) и
+ * больше не показывается и не уходит. Помечается на диске, а не остаётся
+ * пустой: иначе следующее чтение отдало бы её тому, кто войдёт потом.
+ * Профиль не прочитался — не решаем ничего: записи остаются без хозяина,
+ * то есть ничьими, до следующего чтения.
+ *
+ * Возвращает новый список, если кого-то привязали, иначе null.
+ */
+export async function adoptOwnerless<T extends { ownerId?: number }>(list: T[]): Promise<T[] | null> {
+  if (!list.some(e => e.ownerId == null)) return null;
+  const profile = await cachedProfileId();
+  if (profile === undefined) return null;
+  return giveOwnerless(list, profile ?? NO_OWNER);
+}
+
+/** Записям без хозяина — этого хозяина. null — таких записей нет. */
+export function giveOwnerless<T extends { ownerId?: number }>(list: T[], ownerId: number): T[] | null {
+  return list.some(e => e.ownerId == null) ? list.map(e => (e.ownerId == null ? { ...e, ownerId } : e)) : null;
 }
 
 /**
@@ -395,16 +441,38 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
 
   load: async () => {
     const [orders, deliveryActions, shopIds] = await Promise.all([readQueue(), readDeliveryActionsQueue(), readShopIds()]);
-    set({ orders, deliveryActions, shopIds, loaded: true });
+    const [ownOrders, ownActions] = await Promise.all([adoptOwnerless(orders), adoptOwnerless(deliveryActions)]);
+    set({ orders: ownOrders ?? orders, deliveryActions: ownActions ?? deliveryActions, shopIds, loaded: true });
+    // Привязка — сразу на диск: см. adoptOwnerless.
+    if (ownOrders) await writeQueue(ownOrders);
+    if (ownActions) await writeDeliveryActionsQueue(ownActions);
+  },
+
+  settleOwnerless: async (ownerId) => {
+    // Не прочитанная ещё очередь в памяти пуста: запись поверх стёрла бы диск.
+    if (!get().loaded) await get().load();
+    const orders = giveOwnerless(get().orders, ownerId);
+    const deliveryActions = giveOwnerless(get().deliveryActions, ownerId);
+    set({ ...(orders && { orders }), ...(deliveryActions && { deliveryActions }) });
+    if (orders) await writeQueue(orders);
+    if (deliveryActions) await writeDeliveryActionsQueue(deliveryActions);
   },
 
   addOrder: async (order) => {
+    // Без хозяина в очередь не кладём. Экран ставит заказ из onError, а при
+    // 401 перехватчик (src/api.ts) к этому моменту уже обнулил вошедшего:
+    // запись ложилась без ownerId, а такие shouldAutoSync считает старыми и
+    // отдаёт первому же проходу — заказ агента А уходил под токеном
+    // сменщика Б. Поэтому экран снимает хозяина ДО запроса и передаёт сам;
+    // не передал и никто не вошёл — отказ (экран скажет «НЕ сохранён»).
+    const ownerId = order.ownerId ?? currentUserId();
+    if (ownerId == null) return false;
     // Reuse the key from the failed online attempt if one was already generated —
     // regenerating here would let a lost-response case (server created the order,
     // client saw a network error) submit as a genuinely new, duplicate order.
     const withKey = {
       ...order,
-      ownerId: order.ownerId ?? currentUserId(),
+      ownerId,
       // Магазин мог уйти, пока экран заказа был открыт: заказ ляжет уже с настоящим id.
       input: { ...order.input, shopId: resolveShopId(order.input.shopId), idempotencyKey: order.input.idempotencyKey ?? uuidv4() },
       status: "pending" as const,
@@ -418,7 +486,10 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   },
 
   addDeliveryAction: async (action) => {
-    const deliveryActions = [...get().deliveryActions, { ...action, ownerId: action.ownerId ?? currentUserId(), status: "pending" as const }];
+    // То же правило, что у addOrder: хозяин снят экраном до запроса, без него — отказ.
+    const ownerId = action.ownerId ?? currentUserId();
+    if (ownerId == null) return false;
+    const deliveryActions = [...get().deliveryActions, { ...action, ownerId, status: "pending" as const }];
     set({ deliveryActions });
     return writeDeliveryActionsQueue(deliveryActions);
   },
@@ -457,7 +528,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       const skipped = new Set<string>();
       let networkDown = false;
       for (const entry of ordered) {
-        if (networkDown) { skipped.add(entry.id); continue; }
+        // Вошедший — перед каждым запросом, а не раз на проход: см. syncAll.
+        if (networkDown || currentUserId() !== userId) { skipped.add(entry.id); continue; }
         const { action } = entry;
         try {
           // Время отметки — из очереди (createdAt): доставка в 23:50 без связи
@@ -556,7 +628,18 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       // После первого сетевого отказа остальные не пробуем — связи нет.
       const results: PromiseSettledResult<Awaited<ReturnType<typeof createOrder>>>[] = [];
       let networkDown: unknown = null;
+      /*
+        Кто вошёл — сверяется перед КАЖДЫМ запросом, а не раз на проход.
+
+        Токен подставляется в момент запроса (src/api.ts), а запрос висит до
+        таймаута. Агент А на слабой связи жмёт «Выйти», пока висит первый
+        заказ, входит сменщик Б — и остальные заказы из среза А уходили
+        токеном Б: сервер записывал их на Б. Сменился вошедший (или никого) —
+        остаток не трогаем: он ждёт хозяина в прежнем виде, без ошибки.
+      */
+      const skipped = new Set<string>();
       for (const order of pendingOrders) {
+        if (currentUserId() !== userId) { skipped.add(order.id); results.push({ status: "rejected", reason: null }); continue; }
         if (networkDown) { results.push({ status: "rejected", reason: networkDown }); continue; }
         try {
           results.push({ status: "fulfilled", value: await createOrder(order.input) });
@@ -599,6 +682,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       const finalSnapshot = syncingSnapshot.map(o => {
         const result = resultMap.get(o.id);
         if (!result) return o; // shouldn't happen
+        if (skipped.has(o.id)) return { ...o, status: "pending" as const };
         if (result.status === "rejected") {
           failed++;
           return {
@@ -655,6 +739,11 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   // Throw away an entry the server will never accept. Without this the agent
   // is stuck looking at a permanent red row with no way to act on it.
   discardDeliveryAction: async (id) => {
+    // Убрать можно только своё — как и повторить (retryDeliveryAction). Заказ
+    // переназначили с курьера А на Б: отметка А по нему видна Б на карточке,
+    // и «Убрать» стирало работу А.
+    const action = get().deliveryActions.find((a) => a.id === id);
+    if (!action || !isOwnedBy(action, currentUserId())) return;
     const deliveryActions = get().deliveryActions.filter((a) => a.id !== id);
     set({ deliveryActions });
     await writeDeliveryActionsQueue(deliveryActions);
@@ -669,8 +758,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   retry: async (id) => {
     const order = get().orders.find((o) => o.id === id);
     if (!order || order.synced) return false;
-    const uid = currentUserId();
-    if (order.ownerId != null && uid != null && order.ownerId !== uid) return false;
+    // Только своё и только при вошедшем: без токена запрос получит 401, чужое уйдёт под чужим.
+    if (!isOwnedBy(order, currentUserId())) return false;
     // Магазин ещё не ушёл — заказу не с чем уходить (см. isLocalShopId).
     if (isLocalShopId(order.input.shopId)) return false;
 
@@ -703,8 +792,7 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
   retryDeliveryAction: async (id) => {
     const action = get().deliveryActions.find((a) => a.id === id);
     if (!action || action.synced) return false;
-    const uid = currentUserId();
-    if (action.ownerId != null && uid != null && action.ownerId !== uid) return false;
+    if (!isOwnedBy(action, currentUserId())) return false;
 
     const updated = get().deliveryActions.map((a) =>
       a.id === id ? { ...a, status: "syncing" as const, error: undefined } : a

@@ -1,6 +1,8 @@
 import { Alert } from "react-native";
 import * as Haptics from "expo-haptics";
 import { tt } from "../i18n";
+import { useAuthStore } from "../store/auth";
+import { humanError } from "./error-text";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Сообщить, что запись в очередь НЕ легла на диск.
@@ -35,4 +37,39 @@ export function reportNotQueued(what: string) {
     tt("На телефоне нет места, и запись не легла на диск — она держится только в памяти и пропадёт, когда приложение выгрузится.\n\nОсвободите место и повторите действие. Если товар уже отдан или деньги приняты — сообщите в офис прямо сейчас, чтобы отметку поставили вручную.",
       "Telefonda joy yo'q, yozuv diskka tushmadi — u faqat xotirada turibdi va ilova yopilganda yo'qoladi.\n\nJoy bo'shatib, amalni qaytaring. Agar tovar berilgan yoki pul olingan bo'lsa — hoziroq ofisga xabar bering, belgini qo'lda qo'yishsin."),
   );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Действие, когда вошедшего уже нет.
+
+   Ответ 401 обнуляет вошедшего (перехватчик в src/api.ts), а экран может ещё
+   жить: окно подтверждения, «Выехал по всем» на тридцать точек. Такое
+   действие раньше доходило до очереди, та отказывала («хозяина нет») тем же
+   false, что и переполненный диск, — и курьер получал до двадцати девяти окон
+   подряд «На телефоне нет места… сообщите в офис». Причина ложная, указание
+   тоже.
+
+   Теперь хозяин проверяется ДО запроса: без него запрос не уходит и в
+   очередь ничего не ложится, а сказано это честно — одной строкой.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Текст отказа, когда вошедшего нет. Функция: язык берётся в момент отказа. */
+export const sessionEndedText = () => tt("Сессия закончилась — войдите заново", "Sessiya tugadi — qaytadan kiring");
+
+/**
+ * Кто вошёл — или отказ до запроса.
+ *
+ * Ошибка помечена для людей (humanError): errorText и onError экранов
+ * покажут её как есть. isRetryableError считает её не сетевой — в очередь
+ * она не попадёт.
+ */
+export function ownerOrThrow(): number {
+  const id = useAuthStore.getState().user?.id;
+  if (id == null) throw Object.assign(humanError(sessionEndedText()), { sessionEnded: true });
+  return id;
+}
+
+/** Это отказ «сессия закончилась» из ownerOrThrow. */
+export function isSessionEnded(e: unknown): boolean {
+  return (e as { sessionEnded?: boolean } | null)?.sessionEnded === true;
 }

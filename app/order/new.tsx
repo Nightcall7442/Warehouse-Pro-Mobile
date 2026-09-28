@@ -13,6 +13,7 @@ import { useOfflineStore, uuidv4, isRetryableError, isLocalShopId, resolveShopId
 import { usePendingShops } from "../../src/store/shop-queue";
 import { useOfflineCopy } from "../../src/hooks/useOfflineCopy";
 import { useAuthStore } from "../../src/store/auth";
+import { ownerOrThrow, isSessionEnded } from "../../src/lib/offline-guard";
 import { orderDraftSlot, loadUserDraft, saveUserDraft, clearUserDraft } from "../../src/lib/user-draft";
 import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
@@ -700,7 +701,7 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
 // ── Draft auto-save ──────────────────────────────────────────────────────────
 // Черновик — под номером агента (lib/user-draft): переживает 401 и повторный
 // вход, а сменщику на том же телефоне не показывается.
-import { useCartStore } from "../../src/store/cart";
+import { useCartStore, myCartLines } from "../../src/store/cart";
 
 interface OrderDraft {
   shop: Shop | null;
@@ -723,8 +724,15 @@ export default function NewOrderScreen() {
   const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string; productQty?: string; fromCart?: string }>();
   const { addOrder } = useOfflineStore();
   const { user } = useAuthStore();
-  const userId = user?.id;
-  const clearDraft = () => clearUserDraft(orderDraftSlot(userId));
+  /*
+    Слот черновика — того, кто открыл экран, и не меняется до закрытия.
+    Считался он заново при каждой отрисовке, и смена входа при открытом экране
+    записала бы позиции агента А под ключ Б, и Б получил бы «Продолжить
+    черновик?» с чужим заказом. После 401 (вошедшего нет) черновик по-прежнему
+    пишется А: его работа ждёт его возвращения.
+  */
+  const [draftSlot] = useState(() => orderDraftSlot(user?.id));
+  const clearDraft = () => clearUserDraft(draftSlot);
 
   const [step, setStep] = useState(params.productId ? 1 : params.shopId ? 2 : 1);
   const [selectedShop, setSelectedShop] = useState<Shop | null>(
@@ -732,7 +740,8 @@ export default function NewOrderScreen() {
   );
   const [rawLines, setLines] = useState<OrderLine[]>(() => {
     // Из корзины каталога: строки набраны там, здесь — магазин, оплата, отправка.
-    if (params.fromCart) return useCartStore.getState().lines.map(l => ({ ...l }));
+    // Только своя корзина: чужая, оставшаяся в памяти от прежнего входа, не оформляется под вошедшим.
+    if (params.fromCart) return myCartLines().map(l => ({ ...l }));
     if (params.productId && params.productPrice) {
       // Остаток со сканера не приходит, поэтому здесь честное «не знаю», а не
       // ноль. Ноль на этом месте гасил кнопку «Продолжить» и рисовал агенту
@@ -835,7 +844,7 @@ export default function NewOrderScreen() {
   // Check for saved draft on mount
   useEffect(() => {
     if (skipDraft) return;
-    loadUserDraft<OrderDraft>(orderDraftSlot(userId)).then(draft => {
+    loadUserDraft<OrderDraft>(draftSlot).then(draft => {
       if (draft && draft.lines.length > 0) {
         const forShop = draft.shop ? t(` для ${draft.shop.name}`, `: ${draft.shop.name}`) : "";
         Alert.alert(
@@ -862,10 +871,10 @@ export default function NewOrderScreen() {
   useEffect(() => {
     if (!draftChecked || lines.length === 0) return;
     const timer = setTimeout(() => {
-      saveUserDraft(orderDraftSlot(userId), { shop: selectedShop, lines, notes, paymentMethod, promisedAt });
+      saveUserDraft(draftSlot, { shop: selectedShop, lines, notes, paymentMethod, promisedAt });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [selectedShop, lines, notes, paymentMethod, promisedAt, draftChecked, userId]);
+  }, [selectedShop, lines, notes, paymentMethod, promisedAt, draftChecked, draftSlot]);
 
   // The backend only accepts one order-level discount percentage (per-line
   // discounts aren't stored server-side) and recomputes subtotal itself from
@@ -894,12 +903,19 @@ export default function NewOrderScreen() {
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
+    // Автор заказа — до запроса. Заказ ложится в очередь из onError, а при
+    // ответе 401 перехватчик (src/api.ts) к этому моменту уже обнулил
+    // вошедшего: запись без хозяина ушла бы первым проходом под токеном
+    // следующего вошедшего (см. addOrder). Вошедшего нет уже сейчас — отказ
+    // здесь же: запрос не уходит, onError не кладёт заказ в очередь.
+    onMutate: () => ownerOrThrow(),
     // Магазин ещё на телефоне — на сервер заказ не идёт вовсе, сразу в очередь (onError).
     mutationFn: (input: CreateOrderInput) => (isLocalShopId(input.shopId) ? Promise.reject(new Error("shop not sent yet")) : createOrder(input)),
-    onSuccess: (created) => {
+    onSuccess: (created, _input, ownerId) => {
       clearDraft();
-      // Заказ ушёл — корзина каталога выполнила своё.
-      useCartStore.getState().clear();
+      // Заказ ушёл — корзина каталога выполнила своё. Корзина автора заказа, а
+      // не «вошедшего вообще»: корзины других людей на телефоне не трогаем.
+      useCartStore.getState().clear(ownerId);
       // Списки заказов надо пометить устаревшими, иначе агент вернётся на
       // вкладку и не увидит только что созданного: вкладки не размонтируются,
       // пока сверху лежит этот экран, а у запроса ["myOrders"] выдержка две
@@ -913,7 +929,9 @@ export default function NewOrderScreen() {
       else notify.success(t("Заказ создан!", "Buyurtma yaratildi!"));
       router.back();
     },
-    onError: async (e: Error, input) => {
+    onError: async (e: Error, input, ownerId) => {
+      // Сессия кончилась до нажатия: не «нет места», а честно; черновик остаётся.
+      if (isSessionEnded(e)) { notify.error(e.message); return; }
       // Разбор ошибки отдан общей функции, которая уже умеет отличать отказ
       // сервера от неудачи доставки запроса.
       //
@@ -930,7 +948,7 @@ export default function NewOrderScreen() {
       // (src/store/offline.ts), но точка входа сохраняла старую копию.
       const waitsForShop = isLocalShopId(input.shopId);
       if ((isRetryableError(e) || waitsForShop) && selectedShop) {
-        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: input.shopId, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, promisedDeliveryAt: promisedAt ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: linePrice(l), discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
+        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: input.shopId, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, promisedDeliveryAt: promisedAt ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: linePrice(l), discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal, ownerId };
         const queued = await addOrder(offlineOrder);
         if (!queued) {
           // Запись очереди на диск не удалась — на рабочих телефонах кончается
@@ -952,7 +970,9 @@ export default function NewOrderScreen() {
           return;
         }
         clearDraft();
-        useCartStore.getState().clear();
+        // Строки ушли в очередь под автором — его корзина своё отработала, даже
+        // если после 401 вошедшего уже нет.
+        useCartStore.getState().clear(ownerId);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         // Про цену сказано прямо: сервер посчитает итог по своим ценам на
         // момент отправки, а не по тем, что агент видел сейчас. Если за это

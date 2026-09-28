@@ -63,7 +63,7 @@ function pendingNow() {
 }
 
 async function queueShop(extra: Partial<PendingShop["input"]> = {}, photoUri?: string): Promise<PendingShop> {
-  expect(await useShopQueue.getState().add({ name: "Новая точка", city: "Хива", idempotencyKey: KEY, ...extra }, photoUri)).toBe(true);
+  expect(await useShopQueue.getState().add({ name: "Новая точка", city: "Хива", idempotencyKey: KEY, ...extra }, photoUri, 10)).toBe(true);
   return useShopQueue.getState().shops[useShopQueue.getState().shops.length - 1];
 }
 
@@ -91,7 +91,7 @@ describe("магазин без связи и заказ на него", () => {
     expect(await useOfflineStore.getState().addOrder(order(shop.localId))).toBe(true);
     expect(await useOfflineStore.getState().syncAll()).toEqual({ synced: 0, failed: 0 });
     expect(apiMock.createOrder).not.toHaveBeenCalled();
-    expect(orderShopWait(shop.localId, useShopQueue.getState().shops)).toBe("waiting");
+    expect(orderShopWait(shop.localId, useShopQueue.getState().shops, true)).toBe("waiting");
 
     // Связь есть: фото, магазин с ключом экрана, затем id в заказе.
     apiMock.uploadFile.mockResolvedValue("https://s3/shops/1.jpg");
@@ -173,7 +173,7 @@ describe("магазин без связи и заказ на него", () => {
     expect(apiMock.createShop).toHaveBeenCalledTimes(1);
     expect(apiMock.createOrder).not.toHaveBeenCalled();
     expect(useOfflineStore.getState().orders.map(o => o.input.shopId)).toEqual([shop.localId]);
-    expect(orderShopWait(shop.localId, useShopQueue.getState().shops)).toBe("blocked");
+    expect(orderShopWait(shop.localId, useShopQueue.getState().shops, true)).toBe("blocked");
     // Ручной повтор заказа тоже не отправляет временный id.
     expect(await useOfflineStore.getState().retry("o1")).toBe(false);
     expect(apiMock.createOrder).not.toHaveBeenCalled();
@@ -215,9 +215,9 @@ describe("магазин без связи и заказ на него", () => {
     // Перезапуск: память пуста, на диске — вчерашний магазин.
     useShopQueue.setState({ shops: [], loaded: false });
     const second = { name: "Вторая", idempotencyKey: "2b7a1c2e-3d4f-4a5b-8c6d-7e8f9a0b1c2d" };
-    expect(await useShopQueue.getState().add(second)).toBe(true);
+    expect(await useShopQueue.getState().add(second, undefined, 10)).toBe(true);
     // Запись не легла на диск, агент нажал «Создать» ещё раз — та же попытка.
-    expect(await useShopQueue.getState().add({ ...second, ownerName: "Бахтиёр" })).toBe(true);
+    expect(await useShopQueue.getState().add({ ...second, ownerName: "Бахтиёр" }, undefined, 10)).toBe(true);
 
     const onDisk: PendingShop[] = JSON.parse((await AsyncStorage.getItem("pending_shops"))!);
     expect(onDisk.map(s => s.input.name)).toEqual(["Первая", "Вторая"]);
@@ -249,6 +249,54 @@ describe("магазин без связи и заказ на него", () => {
     expect(pairs).toHaveLength(50);
     expect(pairs[pairs.length - 1]).toEqual([-60, 1060]);
     expect(resolveShopId(-60)).toBe(1060);
+  });
+
+  it("без хозяина магазин в очередь не ложится; лежащий без хозяина — ничей: не виден и не уходит", async () => {
+    // Хозяина не передали (экран не снял его до запроса) — отказ, а не «ничья» запись.
+    expect(await useShopQueue.getState().add({ name: "Ничья", idempotencyKey: KEY }, undefined, undefined)).toBe(false);
+    expect(useShopQueue.getState().shops).toEqual([]);
+    expect(await AsyncStorage.getItem("pending_shops")).toBeNull();
+
+    // Запись без хозяина (так она ложилась после 401) не своя ни для кого —
+    // даже для того, кто сейчас вошёл.
+    const shop = await queueShop();
+    useShopQueue.setState({ shops: [{ ...shop, ownerId: undefined }] });
+    expect(pendingNow()).toEqual([]);
+    expect(await useShopQueue.getState().sync()).toEqual({ synced: 0, failed: 0 });
+    expect(apiMock.createShop).not.toHaveBeenCalled();
+  });
+
+  it("403 на создание (истекла подписка) — не отказ навсегда: проход идёт дальше, магазин уходит следующим проходом", async () => {
+    await queueShop({ name: "Первая" });
+    await queueShop({ name: "Вторая", idempotencyKey: "2b7a1c2e-3d4f-4a5b-8c6d-7e8f9a0b1c2d" });
+    await useOfflineStore.getState().addOrder({ ...order(useShopQueue.getState().shops[0].localId), ownerId: 10 });
+    // Так приходит 403 от сервера (withSubscriptionGate): статус и конверт tRPC.
+    const forbidden = Object.assign(new Error("Подписка истекла"), { response: { status: 403 }, trpcMessage: "Подписка истекла", serverRejected: true });
+    apiMock.createShop.mockRejectedValueOnce(forbidden).mockResolvedValueOnce({ id: 507 });
+
+    // Проход на 403 не встаёт: второй магазин уходит.
+    expect(await useShopQueue.getState().sync()).toEqual({ synced: 1, failed: 1 });
+    expect(apiMock.createShop.mock.calls.map((c: [{ name: string }]) => c[0].name)).toEqual(["Первая", "Вторая"]);
+    const [first] = useShopQueue.getState().shops;
+    expect(first.input.name).toBe("Первая");
+    // Не отвергнут: причина на карточке, заказ на него ждёт, а не «не уйдёт».
+    expect(first.retryable).toBe(true);
+    expect(first.error).toBe("Подписка истекла");
+    expect(orderShopWait(first.localId, useShopQueue.getState().shops, true)).toBe("waiting");
+    expect(pendingNow().map(p => p.name)).toEqual(["Первая"]);
+
+    // Подписку продлили — следующий автопроход берёт его сам, без «Повторить».
+    apiMock.createShop.mockResolvedValueOnce({ id: 508 });
+    expect(await useShopQueue.getState().sync()).toEqual({ synced: 1, failed: 0 });
+    expect(apiMock.createShop.mock.calls.map((c: [{ name: string }]) => c[0].name)).toEqual(["Первая", "Вторая", "Первая"]);
+    expect(useShopQueue.getState().shops).toEqual([]);
+    expect(useOfflineStore.getState().orders[0].input.shopId).toBe(508);
+  });
+
+  it("очередь магазинов ещё не прочитана с диска — заказ ждёт, а не «не уйдёт»", () => {
+    expect(orderShopWait(-5, [], false)).toBe("waiting");
+    expect(orderShopWait(-5, [], true)).toBe("blocked");
+    expect(orderShopWait(42, [], false)).toBeNull();
   });
 
   it("сеть упала на первом — остальные ждут, по порядку создания", async () => {

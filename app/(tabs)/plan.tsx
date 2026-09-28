@@ -18,6 +18,7 @@ import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, getMySalary, Plan 
 import { useRouter } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { useAuthStore } from "../../src/store/auth";
+import { ownerOrThrow } from "../../src/lib/offline-guard";
 import { useVisitQueue } from "../../src/store/visit-queue";
 import { useQueuedPlans } from "../../src/lib/plan-queue";
 import { QueueNote } from "../../src/components/plans/QueueNote";
@@ -289,6 +290,10 @@ export default function PlanScreen() {
     экрана, но подключена только к AgentPlansView.
   */
   const updateMutation = useMutation({
+    // Агент — до запроса: при 401 отметка ложится в очередь уже после того,
+    // как перехватчик обнулил вошедшего (см. add в store/visit-queue).
+    // Вошедшего нет уже сейчас — отказ до запроса (lib/offline-guard).
+    onMutate: () => ownerOrThrow(),
     mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) => updatePlanStatus(planId, status),
     onSuccess: (_d, variables) => {
       qc.invalidateQueries({ queryKey: ["plans"] });
@@ -296,13 +301,13 @@ export default function PlanScreen() {
       // Точка на карте начальника — следом за отметкой, как в AgentPlansView.
       if (variables.status === "visited") void sendVisitPing();
     },
-    onError: async (e: Error, variables) => {
+    onError: async (e: Error, variables, ownerId) => {
       if (!isRetryableError(e)) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         notify.error(t(`Отметка не сохранена: ${e.message}`, `Belgi saqlanmadi: ${e.message}`));
         return;
       }
-      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status });
+      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status, ownerId });
       if (ok) notify.info(t("Нет связи — отметка сохранена и уйдёт сама", "Aloqa yo'q — belgi saqlandi, o'zi yuboriladi"));
       else notify.error(t(`Отметка не сохранена: ${e.message}. Повторите, когда появится связь.`, `Belgi saqlanmadi: ${e.message}. Aloqa paydo bo'lganda qayta urining.`));
     },

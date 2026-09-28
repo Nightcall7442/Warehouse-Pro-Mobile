@@ -4,7 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { useAuthStore } from "./auth";
 import { errorText } from "../lib/error-text";
-import { isLocalShopId, isRetryableError, shouldAutoSync, useOfflineStore } from "./offline";
+import { isLocalShopId, isOwnedBy, isRetryableError, shouldAutoSync, useOfflineStore } from "./offline";
 import { createShop, uploadFile, type CreateShopInput, type Shop } from "../api";
 import { notify } from "./toast";
 import { tt } from "../i18n";
@@ -94,8 +94,16 @@ interface ShopQueue {
   loaded: boolean;
   syncing: boolean;
   load: () => Promise<void>;
-  /** Ставит магазин в очередь; возвращает, дошла ли запись до диска. */
-  add: (input: PendingShop["input"], photoUri?: string) => Promise<boolean>;
+  /**
+   * Ставит магазин в очередь; возвращает, дошла ли запись до диска.
+   *
+   * Хозяин — обязательный и снимается экраном ДО запроса: в очередь магазин
+   * попадает из onError, а при 401 перехватчик (src/api.ts) к этому моменту
+   * уже обнулил вошедшего. Взятый здесь, из стора, хозяин был бы пустым, и
+   * магазин агента А видел бы и отправлял под собой следующий вошедший.
+   * Без хозяина — отказ: экран скажет «Магазин НЕ сохранён».
+   */
+  add: (input: PendingShop["input"], photoUri: string | undefined, ownerId: number | undefined) => Promise<boolean>;
   sync: () => Promise<{ synced: number; failed: number }>;
   /** Убрать магазин — вместе с заказами на него: без магазина они не уйдут никогда. */
   remove: (localId: number) => Promise<void>;
@@ -117,7 +125,8 @@ export const useShopQueue = create<ShopQueue>((set, get) => {
 
     load: async () => { set({ shops: await read(), loaded: true }); },
 
-    add: async (input, photoUri) => {
+    add: async (input, photoUri, ownerId) => {
+      if (ownerId == null) return false;
       // Запись поверх непрочитанного диска стёрла бы магазины прошлого запуска.
       if (!get().loaded) await get().load();
       // Тот же ключ — та же попытка (не записалось, нажали «Создать» ещё раз):
@@ -129,7 +138,7 @@ export const useShopQueue = create<ShopQueue>((set, get) => {
         localId, input,
         photoUri: photoUri ? await keepPhoto(photoUri) : undefined,
         createdAt: same?.createdAt ?? new Date().toISOString(),
-        ownerId: useAuthStore.getState().user?.id,
+        ownerId,
         synced: false, status_: "pending",
       };
       if (same && same.photoUri !== entry.photoUri) dropPhoto(same.photoUri);
@@ -146,19 +155,24 @@ export const useShopQueue = create<ShopQueue>((set, get) => {
       set({ syncing: true });
       try {
         const userId = useAuthStore.getState().user?.id;
-        // Правило владельца то же, что у остальных очередей: чужое не отправляем.
+        // Вошедший — перед каждым запросом, а не раз на проход: см. syncAll в
+        // store/offline. Снимок или создание висят на слабой связи, А выходит,
+        // входит Б — и остаток уходил бы токеном Б.
+        const still = () => useAuthStore.getState().user?.id === userId;
+        // Правило владельца то же, что у остальных очередей: чужое и ничьё не отправляем.
         const pending = get().shops.filter(s => shouldAutoSync(s, userId)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
         if (pending.length === 0) return { synced: 0, failed: 0 };
 
         let synced = 0, failed = 0, networkDown = false;
         const outcome = new Map<number, Partial<PendingShop>>();
         for (const s of pending) {
-          if (networkDown) { outcome.set(s.localId, { status_: "pending" }); continue; }
+          if (networkDown || !still()) { outcome.set(s.localId, { status_: "pending" }); continue; }
           try {
             const photo = await photoUrlOf(s);
             // Загруженное запоминается сразу: сорвётся создание — повтор не
             // погонит снимок по слабой связи второй раз.
             if (photo.url && photo.url !== s.input.photoUrl) await patch(s.localId, { input: { ...s.input, photoUrl: photo.url } });
+            if (!still()) { outcome.set(s.localId, { status_: "pending" }); continue; }
             const res = await createShop({ ...s.input, photoUrl: photo.url });
             // Сначала заказы получают настоящий id, потом запись уходит из
             // очереди: оборвись всё здесь — повтор с тем же ключом вернёт
@@ -169,9 +183,18 @@ export const useShopQueue = create<ShopQueue>((set, get) => {
             outcome.set(s.localId, { synced: true });
           } catch (e) {
             failed++;
+            // 403 остаётся повторяемым, как во всех очередях (isRetryableError):
+            // его же отдаёт сервер при истёкшей подписке. Отказом по существу
+            // он метил «отвергнутыми» все магазины агента за один проход,
+            // заказы на них получали «не уйдёт» с кнопкой «Удалить», а после
+            // продления автопроход их уже не брал. Но и проход 403 не
+            // останавливает, как останавливает «нет связи»: сервер ответил,
+            // и за этим магазином могут стоять те, которым он не откажет.
+            // Причина видна на карточке, магазин уйдёт следующим проходом.
             const retryable = isRetryableError(e);
+            const forbidden = (e as { response?: { status?: number } })?.response?.status === 403;
             outcome.set(s.localId, { status_: "failed", error: errorText(e), retryable });
-            if (retryable) networkDown = true;
+            if (retryable && !forbidden) networkDown = true;
           }
         }
         // Сливаем с тем, что добавили, пока шёл проход; отправленное — вон.
@@ -204,11 +227,14 @@ export const useShopQueue = create<ShopQueue>((set, get) => {
   };
 });
 
-/** Свои неотправленные магазины (телефон бывает общим — чужие не показываем). */
+/**
+ * Свои неотправленные магазины (телефон бывает общим — чужие не показываем).
+ * Без хозяина — не свой ни для кого (isOwnedBy).
+ */
 export function useMyPendingShops(): PendingShop[] {
   const shops = useShopQueue(s => s.shops);
   const userId = useAuthStore(s => s.user?.id);
-  return useMemo(() => shops.filter(s => !s.synced && (s.ownerId == null || s.ownerId === userId)), [shops, userId]);
+  return useMemo(() => shops.filter(s => !s.synced && isOwnedBy(s, userId)), [shops, userId]);
 }
 
 /** Сервер отказал по существу — сам магазин не уйдёт. */
@@ -232,9 +258,15 @@ export function usePendingShops(): Shop[] {
  * Что держит заказ из очереди: null — ничего (магазин настоящий);
  * «waiting» — магазин ещё не ушёл; «blocked» — магазин отвергнут или пропал,
  * и заказ сам не уйдёт.
+ *
+ * loaded — прочитана ли очередь магазинов с диска. На холодном старте она
+ * читается позже экрана, и пустой список значил «пропал»: у всех заказов на
+ * новые точки стояло «не уйдёт» с кнопкой «Удалить», и агент удалял рабочий
+ * заказ. Пока не прочитано — ждёт.
  */
-export function orderShopWait(shopId: number, shops: PendingShop[]): null | "waiting" | "blocked" {
+export function orderShopWait(shopId: number, shops: PendingShop[], loaded: boolean): null | "waiting" | "blocked" {
   if (!isLocalShopId(shopId)) return null;
+  if (!loaded) return "waiting";
   const s = shops.find(x => x.localId === shopId);
   return s && !isRejectedShop(s) ? "waiting" : "blocked";
 }

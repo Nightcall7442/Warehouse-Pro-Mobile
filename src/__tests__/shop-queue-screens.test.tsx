@@ -23,6 +23,7 @@ jest.mock("../api", () => ({
   getMyOrders: jest.fn(async () => []),
 }));
 jest.mock("../backgroundLocation", () => ({
+  flushPendingLocations: jest.fn(async () => {}),
   startBackgroundTracking: jest.fn(async () => ({ success: true })),
   stopBackgroundTracking: jest.fn(async () => {}),
   isBackgroundTrackingActive: jest.fn(async () => false),
@@ -73,6 +74,17 @@ jest.mock("../store/theme", () => {
   };
   return { useThemeColors: () => colors, useThemeStore: () => ({ isDark: false }) };
 });
+// Корневая раскладка (AutoSync) тянет шрифты, заставку и слежение за сетью.
+jest.mock("@react-native-community/netinfo", () => ({ __esModule: true, default: { addEventListener: jest.fn(() => () => {}) } }));
+jest.mock("expo-splash-screen", () => ({ preventAutoHideAsync: jest.fn(async () => {}), hideAsync: jest.fn(async () => {}) }));
+jest.mock("@expo-google-fonts/manrope", () => ({ useFonts: () => [true] }));
+jest.mock("@expo-google-fonts/jetbrains-mono", () => ({ JetBrainsMono_400Regular: 0 }));
+jest.mock("react-native-gesture-handler", () => ({ GestureHandlerRootView: ({ children }: { children: unknown }) => children }));
+// Оболочка раскладки вокруг AutoSync — здесь не проверяется, а тянет нативное.
+jest.mock("../components/LockScreen", () => ({ LockScreen: () => null }));
+jest.mock("../hooks/usePushNotifications", () => ({ usePushNotifications: () => {} }));
+jest.mock("../hooks/useAutoLock", () => ({ useAutoLock: () => {} }));
+jest.mock("../hooks/useVisitReminders", () => ({ useVisitReminders: () => {} }));
 jest.mock("../store/recentShops", () => ({
   getRecentShopIds: jest.fn(async () => []),
   addRecentShop: jest.fn(async () => {}),
@@ -80,8 +92,10 @@ jest.mock("../store/recentShops", () => ({
 
 import React from "react";
 import { readFileSync } from "fs";
+import { AutoSync, queryClient } from "../../app/_layout";
+import { OfflineBanner } from "../components/OfflineBanner";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NewOrderScreen from "../../app/order/new";
 import NewShopScreen from "../../app/shop/new";
@@ -219,6 +233,8 @@ describe("вкладка «Магазины»: ждущий магазин", () 
     useShopQueue.setState({ shops: [pending()] });
     mount(<PendingShops />);
     expect(screen.getByText("Новый · ждёт отправки")).toBeTruthy();
+    // Ждёт и ничего не сорвалось — убирать нечего.
+    expect(screen.queryByText("Убрать")).toBeNull();
     fireEvent.click(screen.getByText("Заказ"));
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: "/order/new", params: { shopId: String(LOCAL), shopName: "Новая точка" } });
   });
@@ -263,6 +279,16 @@ describe("вкладка «Заказы»: заказ на новый магаз
     alert.mockRestore();
   });
 
+  it("очередь магазинов ещё не прочитана (холодный старт) — заказ ждёт, удалить его не предлагают", async () => {
+    // Магазин лежит на диске, но память ещё пуста: пустой список не значит «пропал».
+    useShopQueue.setState({ shops: [], loaded: false });
+    useOfflineStore.setState({ orders: [queued("o1", LOCAL)] });
+    mount(<OrdersScreen />);
+    expect(await screen.findByText("Ждёт отправки нового магазина")).toBeTruthy();
+    expect(screen.queryByText("Новый магазин не принят — заказ не уйдёт")).toBeNull();
+    expect(screen.queryByText("Удалить из очереди")).toBeNull();
+  });
+
   it("ручная отправка — сначала новый магазин, следом заказ на него с настоящим id", async () => {
     useShopQueue.setState({ shops: [pending()] });
     useOfflineStore.setState({ orders: [queued("o1", LOCAL)] });
@@ -277,15 +303,125 @@ describe("вкладка «Заказы»: заказ на новый магаз
 });
 
 describe("запуск прохода", () => {
-  it("магазины уходят раньше заказов, очередь читается при старте, баннер их считает", () => {
-    const layout = readFileSync("app/_layout.tsx", "utf8");
-    expect(layout).toContain("void useShopQueue.getState().load();");
-    // Заказы — в продолжении прохода магазинов, а не рядом с ним.
-    expect(layout).toMatch(/useShopQueue\.getState\(\)\.sync\(\)\.then\(\(\{ synced \}\) => \{[\s\S]*?return syncAll\(\)/);
-    expect(layout).not.toMatch(/tasks\.push\(syncAll\(\)/);
-    const banner = readFileSync("src/components/OfflineBanner.tsx", "utf8");
-    expect(banner).toContain("pendingOrders + pendingActions + pendingVisits + pendingShops");
-    // Карточки ждущих магазинов — на вкладке «Магазины».
+  it("AutoSync: сначала новый магазин, следом заказ на него — уже с настоящим id", async () => {
+    useShopQueue.setState({ shops: [pending()] });
+    useOfflineStore.setState({ orders: [{ id: "o1", shopName: "Новая точка", createdAt: new Date().toISOString(), synced: false, ownerId: 10, status: "pending",
+      input: { shopId: LOCAL, items: [{ productId: 7, quantity: 1, unitPrice: 12000 }], idempotencyKey: "1b7a1c2e-3d4f-4a5b-8c6d-7e8f9a0b1c2d" } }] });
+    useAuthStore.setState({ isAuthenticated: true });
+    apiMock.createShop.mockResolvedValue({ id: 909 });
+    apiMock.createOrder.mockResolvedValue({ id: 1, total: 12000 });
+
+    mount(<AutoSync />);
+    await waitFor(() => expect(apiMock.createOrder).toHaveBeenCalledWith(expect.objectContaining({ shopId: 909 })));
+    expect(apiMock.createShop).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: KEY }));
+    expect(apiMock.createShop.mock.invocationCallOrder[0]).toBeLessThan(apiMock.createOrder.mock.invocationCallOrder[0]);
+    // Ни одной попытки с временным id.
+    expect(apiMock.createOrder.mock.calls.every((c: any[]) => c[0].shopId === 909)).toBe(true);
+    await waitFor(() => expect(useOfflineStore.getState().orders.filter(o => !o.synced)).toEqual([]));
+  });
+
+  it("плашка считает только свои ждущие магазины", () => {
+    // Магазин сменщика на общем телефоне: у этого агента его нет ни на вкладке, ни в проходе.
+    useShopQueue.setState({ shops: [pending({ ownerId: 77 })] });
+    const other = mount(<OfflineBanner />);
+    expect(screen.queryByText(/магазин/)).toBeNull();
+    other.unmount();
+
+    useShopQueue.setState({ shops: [pending(), pending({ localId: LOCAL - 1, ownerId: 77 })] });
+    mount(<OfflineBanner />);
+    expect(screen.getByText("1 магазин ожидает отправки")).toBeTruthy();
+  });
+
+  it("очередь читается при старте, карточки ждущих магазинов — на вкладке «Магазины»", () => {
+    expect(readFileSync("app/_layout.tsx", "utf8")).toContain("void useShopQueue.getState().load();");
     expect(readFileSync("app/(tabs)/shops.tsx", "utf8")).toContain("<PendingShops />");
+  });
+});
+
+// ── Плашка: только свои записи ──────────────────────────────────────────────
+describe("плашка считает только свою работу", () => {
+  it("заказы, отметки и визиты сменщика и ничьи не считаются", () => {
+    const { useVisitQueue } = require("../store/visit-queue");
+    const now = new Date().toISOString();
+    const order = (id: string, ownerId?: number) => ({ id, shopName: "Точка", createdAt: now, synced: false, ownerId,
+      input: { shopId: 1, items: [{ productId: 7, quantity: 1, unitPrice: 12000 }] } });
+    const action = (id: string, ownerId?: number) => ({ id, action: { type: "markOutForDelivery" as const, orderId: 41 }, createdAt: now, synced: false, ownerId });
+    useOfflineStore.setState({ orders: [order("o1", 10), order("o2", 77), order("o3")], deliveryActions: [action("d1", 10), action("d2", 77)] });
+    useVisitQueue.setState({ actions: [{ id: "v1", planId: 5, status: "visited", createdAt: now, synced: false, ownerId: 10 },
+      { id: "v2", planId: 6, status: "visited", createdAt: now, synced: false, ownerId: 77 }] });
+    mount(<OfflineBanner />);
+    expect(screen.getByText("1 заказ, 1 отметка доставки и 1 визит ожидают отправки")).toBeTruthy();
+    useVisitQueue.setState({ actions: [] });
+  });
+});
+
+// ── 403 при истёкшей подписке ───────────────────────────────────────────────
+/*
+  403 повторяемый: подписка истекла — магазин уйдёт сам после продления. Но
+  тот же 403 приходит, когда роль агента больше не заводит магазины, и тогда
+  навсегда. Без «Убрать» у повторяемой неудачи магазин и его заказы висели бы
+  вечно. Нарочная поломка: «Убрать» снова только у отвергнутого — падает.
+*/
+describe("вкладка «Магазины»: 403 при истёкшей подписке", () => {
+  it("причина на карточке, магазин ждёт и уйдёт сам — но «Убрать» есть: 403 бывает и навсегда", async () => {
+    useShopQueue.setState({ shops: [pending({ status_: "failed", retryable: true, error: "Подписка истекла" })] });
+    useOfflineStore.setState({ orders: [{ id: "o1", shopName: "Новая точка", createdAt: new Date().toISOString(), synced: false, ownerId: 10,
+      input: { shopId: LOCAL, items: [{ productId: 7, quantity: 1, unitPrice: 12000 }], idempotencyKey: "1b7a1c2e-3d4f-4a5b-8c6d-7e8f9a0b1c2d" } }] });
+    // «Убрать» в окне подтверждения нажато сразу.
+    const alert = jest.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => { buttons?.[1]?.onPress?.(); });
+    try {
+      mount(<PendingShops />);
+      expect(screen.getByText(/Подписка истекла/)).toBeTruthy();
+      expect(screen.getByText("Новый · ждёт отправки")).toBeTruthy();
+      expect(screen.getByText("Заказ")).toBeTruthy();
+
+      fireEvent.click(screen.getByText("Убрать"));
+      // Спрошено так же, как у отвергнутого: с заказами, которые уйдут вместе с ним.
+      expect(alert).toHaveBeenCalledWith("Убрать магазин?", expect.stringContaining("1 заказ на него"), expect.anything());
+      await waitFor(() => expect(useShopQueue.getState().shops).toEqual([]));
+      expect(useOfflineStore.getState().orders).toEqual([]);
+    } finally {
+      alert.mockRestore();
+    }
+  });
+});
+
+// ── Кэш запросов при смене человека ─────────────────────────────────────────
+/*
+  Ключи вида ["myOrders"] без номера человека: Б, вошедший вскоре после А,
+  видел заказы А из кэша, и их даже не перезапрашивали. Проверяется кэш самого
+  приложения (queryClient из app/_layout), а не свой: нарочные поломки —
+  убрать client.clear() из forgetOnPersonSwitch или саму строку
+  forgetOnPersonSwitch(queryClient) — проверку роняют обе.
+*/
+describe("вошёл другой человек — кэш запросов прежнего стирается", () => {
+  it("Б не видит заказ А до ответа сервера; тот же А после 401 своё не теряет", async () => {
+    const A = { id: 10, name: "Агент А", role: "agent" };
+    const B = { id: 11, name: "Агент Б", role: "agent" };
+    const client = queryClient;
+    const show = () => render(<QueryClientProvider client={client}><OrdersScreen /></QueryClientProvider>);
+    try {
+      apiMock.getMyOrders.mockResolvedValueOnce([{ id: 1, orderNumber: "ЗК-1", shopName: "Лавка А", total: "1000", status: "new", createdAt: new Date().toISOString() }]);
+      const forA = show();
+      expect(await screen.findByText("Лавка А")).toBeTruthy();
+      forA.unmount();
+
+      // 401 и снова А — кэш его.
+      useAuthStore.setState({ user: null });
+      useAuthStore.setState({ user: A as never });
+      expect(client.getQueryData(["myOrders"])).toHaveLength(1);
+
+      // Выход, вход Б; сервер Б ещё не ответил.
+      useAuthStore.setState({ user: null });
+      apiMock.getMyOrders.mockReturnValueOnce(new Promise(() => {}));
+      useAuthStore.setState({ user: B as never });
+      show();
+      await act(async () => { await new Promise(r => { setTimeout(r, 50); }); });
+      expect(screen.queryByText("Лавка А")).toBeNull();
+      // И запрос за заказами Б ушёл, а не был «свежим» из кэша А.
+      expect(apiMock.getMyOrders).toHaveBeenCalledTimes(2);
+    } finally {
+      client.clear();
+    }
   });
 });

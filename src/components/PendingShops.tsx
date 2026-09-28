@@ -15,7 +15,8 @@ import { useShopQueue, useMyPendingShops, isRejectedShop, type PendingShop } fro
  *
  * Открыть карточку нельзя: номера на сервере у магазина ещё нет. Заказ
  * оформить можно сразу. Отвергнутый сервером показывает причину и
- * «Повторить» / «Убрать» — как визит на плане.
+ * «Повторить» / «Убрать» — как визит на плане; «Убрать» есть у любой
+ * неудачной попытки (см. ниже про 403).
  */
 export function PendingShops() {
   const shops = useMyPendingShops();
@@ -75,7 +76,16 @@ function PendingShopCard({ shop }: { shop: PendingShop }) {
           {t("Сервер не принял магазин: ", "Server do'konni qabul qilmadi: ")}{shop.error}
         </Text>
       ) : (
-        <Badge variant="warning">{t("Новый · ждёт отправки", "Yangi · yuborishni kutmoqda")}</Badge>
+        <>
+          <Badge variant="warning">{t("Новый · ждёт отправки", "Yangi · yuborishni kutmoqda")}</Badge>
+          {/* Сервер ответил, но не навсегда (403 при истёкшей подписке): причина
+              видна, а магазин уйдёт сам следующим проходом. */}
+          {shop.status_ === "failed" && shop.error ? (
+            <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary }} numberOfLines={3}>
+              {t("Последняя попытка: ", "Oxirgi urinish: ")}{shop.error}
+            </Text>
+          ) : null}
+        </>
       )}
       {waiting > 0 && (
         <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary }}>
@@ -84,15 +94,19 @@ function PendingShopCard({ shop }: { shop: PendingShop }) {
       )}
       <View style={{ flexDirection: "row", gap: Spacing.sm, flexWrap: "wrap" }}>
         {rejected ? (
-          <>
-            <Button size="sm" variant="secondary" icon="refresh-cw" onPress={() => { void onRetry(); }}>{t("Повторить", "Qayta")}</Button>
-            <Button size="sm" variant="secondary" icon="x" onPress={confirmRemove}>{t("Убрать", "Olib tashlash")}</Button>
-          </>
+          <Button size="sm" variant="secondary" icon="refresh-cw" onPress={() => { void onRetry(); }}>{t("Повторить", "Qayta")}</Button>
         ) : (
           <Button size="sm" variant="secondary" icon="plus"
             onPress={() => router.push({ pathname: "/order/new", params: { shopId: String(shop.localId), shopName: name } })}>
             {t("Заказ", "Buyurtma")}
           </Button>
+        )}
+        {/* «Убрать» — у любой неудачной карточки, не только отвергнутой. 403
+            повторяемый (подписка истекла — уйдёт сам), но тот же 403 приходит,
+            когда роль агента больше не заводит магазины, — и тогда навсегда:
+            без этой кнопки магазин и его заказы висели бы на телефоне вечно. */}
+        {shop.status_ === "failed" && (
+          <Button size="sm" variant="secondary" icon="x" onPress={confirmRemove}>{t("Убрать", "Olib tashlash")}</Button>
         )}
       </View>
     </Card>

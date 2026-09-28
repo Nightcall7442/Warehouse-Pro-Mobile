@@ -118,7 +118,10 @@ export default function MerchandiserVisitScreen() {
   const qc = useQueryClient();
   const t = useT();
   const { user } = useAuthStore();
-  const userId = user?.id;
+  // Слот черновика — того, кто открыл экран, и до закрытия не меняется: смена
+  // входа при открытом отчёте записала бы чек-лист мерчандайзера А под ключ Б
+  // (см. тот же слот в app/order/new.tsx).
+  const [draftSlot] = useState(() => visitDraftSlot(user?.id, planId));
 
   const [photos, setPhotos] = useState<string[]>([]);
   // Список товаров и правки по нему держатся раздельно: строки меняются только
@@ -138,13 +141,13 @@ export default function MerchandiserVisitScreen() {
     if (!products || rows.length > 0) return;
     const fresh: ChecklistRowData[] = products.map((p: Product) => ({ productId: p.id, productName: p.name }));
     const known = new Set(fresh.map(r => r.productId));
-    loadUserDraft<VisitDraft>(visitDraftSlot(userId, planId)).then(draft => {
+    loadUserDraft<VisitDraft>(draftSlot).then(draft => {
       if (draft && (draft.photos.length > 0 || draft.checklist.length > 0 || draft.competitorNotes)) {
         Alert.alert(
           t("Продолжить черновик?", "Qoralamani davom ettirasizmi?"),
           t("Найден незавершённый отчёт по этому визиту — сеть, видимо, прервалась при отправке.", "Bu tashrif bo'yicha tugallanmagan hisobot topildi — yuborishda aloqa uzilgan ko'rinadi."),
           [
-            { text: t("Начать заново", "Qaytadan boshlash"), style: "cancel", onPress: () => { setRows(fresh); clearUserDraft(visitDraftSlot(userId, planId)); } },
+            { text: t("Начать заново", "Qaytadan boshlash"), style: "cancel", onPress: () => { setRows(fresh); clearUserDraft(draftSlot); } },
             { text: t("Продолжить", "Davom etish"), onPress: () => {
               setPhotos(draft.photos);
               // Merge on productId rather than trusting the two lists to line
@@ -203,10 +206,10 @@ export default function MerchandiserVisitScreen() {
   useEffect(() => {
     if (!draftChecked.current || rows.length === 0) return;
     const timer = setTimeout(() => {
-      saveUserDraft(visitDraftSlot(userId, planId), { photos, checklist: buildChecklist(), competitorNotes });
+      saveUserDraft(draftSlot, { photos, checklist: buildChecklist(), competitorNotes });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [planId, userId, photos, rows, present, prices, promos, competitorNotes, buildChecklist]);
+  }, [draftSlot, photos, rows, present, prices, promos, competitorNotes, buildChecklist]);
 
   const submitReport = useMutation({
     mutationFn: () => submitVisitReport({ planId: Number(planId), shopId: Number(shopId), photos, checklist: buildChecklist(), competitorNotes: competitorNotes || undefined }),
@@ -215,7 +218,7 @@ export default function MerchandiserVisitScreen() {
       // Точка на карте начальника — как у агента; без неё отчёт мерчандайзера
       // был единственным визитом без координат.
       void sendVisitPing();
-      await clearUserDraft(visitDraftSlot(userId, planId));
+      await clearUserDraft(draftSlot);
       qc.invalidateQueries({ queryKey: ["plans"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       notify.success(t("Отчёт отправлен!", "Hisobot yuborildi!"));

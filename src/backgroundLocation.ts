@@ -76,9 +76,16 @@ export interface PendingPoint {
  * остановился, остаются его. Вход другого человека и выход этот профиль
  * сбрасывают. Из хранилища, а не из стора: фоновая задача на Android
  * поднимается без экранов, и стор там пуст.
+ *
+ * Сначала gps_owner из AsyncStorage (store/auth, writeCachedUser): SecureStore
+ * на заблокированном iPhone не читается, и из-за него терялась вся пачка
+ * точек. Профиль из SecureStore — только если номера ещё нет (поставлено до
+ * этой версии и приложение с тех пор не открывали).
  */
 async function sessionOwner(): Promise<number | null> {
   try {
+    const own = await AsyncStorage.getItem("gps_owner");
+    if (own != null) return Number(own);
     const raw = await SecureStore.getItemAsync("cached_user");
     const id = raw ? (JSON.parse(raw) as { id?: unknown }).id : null;
     return typeof id === "number" ? id : null;
@@ -163,6 +170,11 @@ export function flushPendingLocations(): Promise<void> {
     while (i < remaining.length && sent < FLUSH_BATCH) {
       const point = remaining[i];
       if ((point.ownerId ?? owner) !== owner) { i += 1; continue; }
+      // Хозяин — перед каждой точкой, а не раз на пачку: токен подставляется
+      // в момент запроса (src/api.ts), а запрос висит до таймаута. А вышел,
+      // пока висела первая точка, вошёл Б — и остаток пачки А уходил следом
+      // Б. Сменился или никого — остаток ждёт хозяина.
+      if ((await sessionOwner()) !== owner) break;
       try {
         await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt, point.mocked);
         remaining.splice(i, 1);
@@ -227,7 +239,9 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   let serverRefusing = false;
   for (let i = 0; i < points.length; i++) {
     const point = points[i];
-    if (serverRefusing) { toBuffer.push(point); continue; }
+    // Хозяин — перед каждой отправкой, как в flushPendingLocations: сменился
+    // посреди пачки — остаток в буфер под своим хозяином, а не под чужим токеном.
+    if (serverRefusing || (i > 0 && (await sessionOwner()) !== ownerId)) { toBuffer.push(point); continue; }
     try {
       await saveLocation(point.lat, point.lng, point.accuracy, point.batteryLevel, point.recordedAt, point.mocked);
       if (i < points.length - 1) await delay(FLUSH_GAP_MS);
@@ -270,18 +284,23 @@ export function bufferLocation(...points: PendingPoint[]): Promise<void> {
 }
 
 /**
- * Конец сессии: убрать точки без хозяина — они из прежней версии.
+ * Конец сессии: точкам без хозяина (из прежней версии) — хозяина или вон.
  *
  * Прежняя версия стирала буфер при каждом конце сессии, значит такие точки
- * сняты в той сессии, что кончается сейчас. После неё хозяина уже не назвать:
+ * сняты в той сессии, что кончается сейчас, — у того, чей профиль ещё лежит
+ * на телефоне. После 401 он лежит (перехватчик профиль не стирает), и точки
+ * отдаются ему: раньше они выбрасывались, и истёкший токен уносил агенту
+ * маршрут, снятый без связи до обновления. При выходе и входе профиль
+ * стирается раньше, хозяина не назвать — точки уходят, иначе
  * flushPendingLocations приписал бы их следующему вошедшему, то есть
  * сменщику. Точки с хозяином не трогаются.
  */
-export function forgetUnownedPoints(): Promise<void> {
+export function settleUnownedPoints(): Promise<void> {
   return withBuffer(async () => {
     const pending = await readPending();
-    const owned = pending.filter(p => p.ownerId != null);
-    if (owned.length !== pending.length) await writePending(owned);
+    if (pending.every(p => p.ownerId != null)) return;
+    const owner = await sessionOwner();
+    await writePending(pending.flatMap(p => (p.ownerId != null ? [p] : owner != null ? [{ ...p, ownerId: owner }] : [])));
   });
 }
 

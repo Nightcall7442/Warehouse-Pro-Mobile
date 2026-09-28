@@ -14,6 +14,7 @@ import { Card, Button } from "../../src/components/ui";
 import { createShop, uploadFile, getTerritories, Territory } from "../../src/api";
 import { uuidv4, isRetryableError } from "../../src/store/offline";
 import { useShopQueue } from "../../src/store/shop-queue";
+import { ownerOrThrow } from "../../src/lib/offline-guard";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
@@ -173,6 +174,11 @@ export default function NewShopScreen() {
   const shopInput = () => ({ name, ownerName: owner || undefined, phone: phone || undefined, city: city || undefined, district: district || undefined, address: address || undefined, notes: notes || undefined, photoUrl: photo || uploadedRef.current || undefined, gpsLat: gpsLat || undefined, gpsLng: gpsLng || undefined, territoryId, idempotencyKey: idempotencyKeyRef.current });
 
   const mutation = useMutation({
+    // Хозяин магазина — до запроса: ответ 401 обнулит вошедшего раньше, чем
+    // сработает onError, и магазин лёг бы в очередь ничьим (см. shop-queue add).
+    // Вошедшего нет уже сейчас — отказ здесь же: запрос не уходит, onError
+    // покажет «Сессия закончилась» (не сетевая ошибка — в очередь не ляжет).
+    onMutate: () => ownerOrThrow(),
     mutationFn: async () => {
       const input = shopInput();
       if (!input.photoUrl && localPhoto) {
@@ -195,7 +201,7 @@ export default function NewShopScreen() {
       // Повтор после оборванной связи — не ошибка и не второй магазин.
       notify.success(res?.idempotent ? t("Магазин уже был создан", "Do'kon allaqachon yaratilgan") : t("Магазин создан", "Do'kon yaratildi"));
     },
-    onError: async (e: Error) => {
+    onError: async (e: Error, _vars, ownerId) => {
       /*
         Связи нет — магазин ложится в очередь (store/shop-queue) с тем же
         ключом попытки: дошёл ли первый запрос, сервер узнает по ключу. Раньше
@@ -204,7 +210,7 @@ export default function NewShopScreen() {
       */
       if (isRetryableError(e)) {
         const input = shopInput();
-        const saved = await useShopQueue.getState().add(input, input.photoUrl ? undefined : localPhoto ?? undefined);
+        const saved = await useShopQueue.getState().add(input, input.photoUrl ? undefined : localPhoto ?? undefined, ownerId);
         if (saved) {
           router.back();
           notify.info(t("Нет связи — магазин сохранён на телефоне и уйдёт сам. Заказ на него можно оформить уже сейчас.", "Aloqa yo'q — do'kon telefonda saqlandi va o'zi yuboriladi. Unga buyurtmani hozir rasmiylashtirish mumkin."));

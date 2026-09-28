@@ -3,7 +3,7 @@ import { validateDeliveryForm } from "../../src/lib/delivery-validation";
 import { parseDueDate } from "../../src/lib/due-date";
 import { plural } from "../../src/lib/plural";
 import { qty } from "../../src/lib/format";
-import { reportNotQueued } from "../../src/lib/offline-guard";
+import { reportNotQueued, ownerOrThrow } from "../../src/lib/offline-guard";
 import { Button } from "../../src/components/ui";
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform,
@@ -93,7 +93,7 @@ export default function DeliveryScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [returnedQty, setReturnedQty] = useState<Record<number, string>>({});
 
-  const queueOffline = async (input: CompleteDeliveryInput) => {
+  const queueOffline = async (input: CompleteDeliveryInput, ownerId: number | undefined) => {
     // Признак записи на диск обязан дойти до onSuccess: без него экран
     // рапортовал «сохранено офлайн» даже тогда, когда ничего не сохранил.
     const queued = await addDeliveryAction({
@@ -101,14 +101,20 @@ export default function DeliveryScreen() {
       action: { type: "completeDelivery", input },
       createdAt: new Date().toISOString(),
       synced: false,
+      ownerId,
     });
     return { offline: true as const, queued, result: input.result, finalStatus: "" };
   };
 
   const mutation = useMutation({
     mutationFn: async (input: CompleteDeliveryInput) => {
+      // Курьер — до запроса: при 401 перехватчик обнулит вошедшего раньше,
+      // чем доставка ляжет в очередь, и она ушла бы под сменщиком. Вошедшего
+      // нет уже сейчас — не отправляем и не кладём, onError скажет «Сессия
+      // закончилась» (lib/offline-guard).
+      const ownerId = ownerOrThrow();
       const net = await Network.getNetworkStateAsync();
-      if (!net.isConnected) return queueOffline(input);
+      if (!net.isConnected) return queueOffline(input, ownerId);
 
       try {
         return await completeDelivery(input);
@@ -125,7 +131,7 @@ export default function DeliveryScreen() {
         // никогда, и при ответе шлюза курьер получал тост «Ошибка», отдав
         // товар и взяв наличные. Комментарий выше описывает именно этот
         // исход — он и наступал.
-        if (isRetryableError(e)) return queueOffline(input);
+        if (isRetryableError(e)) return queueOffline(input, ownerId);
         throw e; // a real rejection from the server — the courier must see it
       }
     },

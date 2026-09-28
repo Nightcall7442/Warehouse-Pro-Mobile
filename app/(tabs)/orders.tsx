@@ -14,7 +14,7 @@ import { offlineOrderTotal } from "../../src/lib/order-money";
 import type { OfflineOrder } from "../../src/store/offline";
 import { useThemeColors } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { useOfflineStore } from "../../src/store/offline";
+import { useOfflineStore, isOwnedBy } from "../../src/store/offline";
 import { useShopQueue, orderShopWait } from "../../src/store/shop-queue";
 import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
 
@@ -73,6 +73,8 @@ export default function OrdersScreen() {
   const offline = useOfflineStore();
   const { orders: offlineOrders, deliveryActions, syncAll, retry, retryDeliveryAction, syncingOrders, syncingActions } = offline;
   const pendingShops = useShopQueue(s => s.shops);
+  // Пока очередь магазинов не прочитана с диска, «магазина нет» не значит «пропал».
+  const shopsLoaded = useShopQueue(s => s.loaded);
 
   const { data: orders, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ["myOrders"],
@@ -85,11 +87,12 @@ export default function OrdersScreen() {
   const pendingOffline = useMemo(() => {
     // Чужая запись (оставшаяся в очереди с прошлой смены на этом устройстве)
     // не показывается — иначе кнопка "Повтор" рядом с ней ничего бы не сделала.
-    return offlineOrders.filter(o => !o.synced && (o.ownerId == null || o.ownerId === user?.id));
+    // Ничья — тоже: без хозяина запись не своя ни для кого (isOwnedBy).
+    return offlineOrders.filter(o => !o.synced && isOwnedBy(o, user?.id));
   }, [offlineOrders, user?.id]);
 
   const pendingActions = useMemo(() => {
-    return deliveryActions.filter(a => !a.synced && (a.ownerId == null || a.ownerId === user?.id));
+    return deliveryActions.filter(a => !a.synced && isOwnedBy(a, user?.id));
   }, [deliveryActions, user?.id]);
 
   const queryClient = useQueryClient();
@@ -374,7 +377,7 @@ export default function OrdersScreen() {
           if (item.type === "pending") {
             const o = item.order;
             // Заказ на магазин, заведённый без связи, уходит только за ним.
-            const shopWait = orderShopWait(o.input.shopId, pendingShops);
+            const shopWait = orderShopWait(o.input.shopId, pendingShops, shopsLoaded);
             const time = (() => { try { return format(parseISO(o.createdAt), "HH:mm", { locale: ru }); } catch { return ""; } })();
             // Открыть нечего: номера у заказа нет, пока его не принял сервер.
             return (

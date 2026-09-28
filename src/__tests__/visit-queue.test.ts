@@ -177,18 +177,16 @@ describe("очередь визитов", () => {
 
 describe("экран планов и запуск", () => {
   const fs = require("fs") as typeof import("fs");
-  it("без связи отметка и фото уходят в очередь; проход запускается вместе с остальными", () => {
-    const view = fs.readFileSync("src/components/plans/AgentPlansView.tsx", "utf-8");
-    expect(view).toContain("queueVisit.add({ planId: variables.planId, status: variables.status })");
-    expect(view).toContain('queueVisit.add({ planId, status: "visited", photoUri: uri })');
+  // Пути экрана в очередь (без фото, с файлом, с готовой ссылкой) проверяются
+  // поведением: keep-own-work.test, «отметки визита».
+  it("проход визитов запускается вместе с остальными", () => {
     const layout = fs.readFileSync("app/_layout.tsx", "utf-8");
     expect(layout).toContain("useVisitQueue.getState().sync()");
     expect(layout).toContain("useVisitQueue.getState().load()");
   });
 
-  it("привязка фото сорвалась по сети — в очередь с готовой ссылкой; визит из очереди снимает точку", () => {
+  it("визит из очереди снимает точку", () => {
     const view = fs.readFileSync("src/components/plans/AgentPlansView.tsx", "utf-8");
-    expect(view).toContain('queueVisit.add({ planId: variables.planId, status: "visited", photoUrl: variables.photoUrl })');
     // Три пути в очередь — три точки: без фото, с файлом, с готовой ссылкой.
     expect(view.split("void sendVisitPing()").length - 1).toBe(5);
   });

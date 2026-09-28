@@ -3,6 +3,7 @@ import { SecureStore } from "../storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getMe, login as apiLogin, logout as apiLogout, API_BASE, User } from "../api";
 import { sweepDrafts } from "../lib/user-draft";
+import { forgetOtherOwnersCopies } from "../lib/offline-copy";
 
 interface AuthState {
   user: User | null;
@@ -74,11 +75,67 @@ async function readCachedUser(): Promise<User | null> {
   }
 }
 
+/**
+ * Номер человека из профиля на телефоне: null — профиля нет, undefined — не
+ * прочитался (связка ключей iPhone заперта, пока экран заблокирован).
+ *
+ * Нужен очередям, чтобы привязать записи прежних сборок без хозяина
+ * (adoptOwnerless в store/offline). Два «нет» различаются намеренно: «профиля
+ * нет» — запись ничья навсегда, «не прочитался» — решать рано.
+ */
+export async function cachedProfileId(): Promise<number | null | undefined> {
+  let raw: string | null;
+  try { raw = await SecureStore.getItemAsync(CACHED_USER_KEY); } catch { return undefined; }
+  try {
+    const id = raw ? (JSON.parse(raw) as { id?: unknown }).id : null;
+    return typeof id === "number" ? id : null;
+  } catch { return null; }
+}
+
+/**
+ * Номер хозяина точек GPS — рядом с профилем, но в AsyncStorage.
+ *
+ * Фоновая задача узнавала хозяина из SecureStore, а связка ключей iPhone по
+ * умолчанию закрыта, пока экран заблокирован, — то есть ровно тогда, когда
+ * телефон в кармане и GPS работает. Чтение бросало, хозяина не было, и вся
+ * пачка точек выбрасывалась. Номер человека — не секрет. Пишется и стирается
+ * там же, где профиль, читается в backgroundLocation.ts (sessionOwner).
+ */
+const GPS_OWNER_KEY = "gps_owner";
+
+/**
+ * Записи прежних сборок, так и не получившие хозяина, — уходящему профилю.
+ *
+ * Хозяина им даёт чтение очереди по профилю на телефоне (adoptOwnerless в
+ * store/offline). Но на iPhone с запертой связкой ключей профиль не читается,
+ * и запись остаётся ничьей до следующего чтения — а к нему профиль мог стать
+ * чужим: вошёл Б, и заказ агента А ушёл бы под Б. Поэтому, пока профиль ещё
+ * прежний, ничьё отдаётся ему. Не прочитался и сейчас — вошедшему; нет и
+ * его — никому (NO_OWNER): другому человеку запись не достаётся никогда.
+ */
+async function settleOwnerlessWork(): Promise<void> {
+  try {
+    // require, а не импорт: очереди сами импортируют этот файл (так же
+    // сделан backgroundLocation в stopTrackingOnSignOut).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useOfflineStore, NO_OWNER } = require("./offline") as typeof import("./offline");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useVisitQueue } = require("./visit-queue") as typeof import("./visit-queue");
+    const ownerId = (await cachedProfileId()) ?? useAuthStore.getState().user?.id ?? NO_OWNER;
+    await Promise.all([useOfflineStore.getState().settleOwnerless(ownerId), useVisitQueue.getState().settleOwnerless(ownerId)]);
+  } catch (e) {
+    if (__DEV__) console.warn("Не удалось привязать записи без хозяина:", e); // i18n-ignore: журнал разработчика, не экран
+  }
+}
+
 async function writeCachedUser(user: User | null): Promise<void> {
+  // Профиль стирается (вход другого, выход, отказ сессии) — ничьё сперва ему.
+  if (!user) await settleOwnerlessWork();
   try {
     if (user) await SecureStore.setItemAsync(CACHED_USER_KEY, JSON.stringify(user));
     else await SecureStore.deleteItemAsync(CACHED_USER_KEY);
   } catch { /* cache is best-effort */ }
+  await (user ? AsyncStorage.setItem(GPS_OWNER_KEY, String(user.id)) : AsyncStorage.removeItem(GPS_OWNER_KEY)).catch(() => {});
 }
 
 
@@ -119,8 +176,9 @@ export async function clearUserScopedCaches(): Promise<void> {
  * токена уносил тому же агенту до трёх часов маршрута без связи: дыра на
  * карте, антифрод «не был». Теперь каждая точка помечена владельцем, и
  * flushPendingLocations отправляет только точки вошедшего; чужие ждут своего
- * человека (backgroundLocation.ts). Уходят только точки прежней версии, без
- * хозяина: после конца сессии их уже некому приписать.
+ * человека (backgroundLocation.ts). Точки прежней версии, без хозяина,
+ * получают хозяина по профилю, если он ещё лежит (401), иначе уходят:
+ * см. settleUnownedPoints.
  */
 export async function stopTrackingOnSignOut(): Promise<void> {
   try {
@@ -133,10 +191,10 @@ export async function stopTrackingOnSignOut(): Promise<void> {
     // выполнялась бы — то есть проверять было бы нечего. Так же сделан
     // отложенный доступ к этому файлу из src/api.ts.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { stopBackgroundTracking, forgetUnownedPoints } = require("../backgroundLocation") as typeof import("../backgroundLocation");
+    const { stopBackgroundTracking, settleUnownedPoints } = require("../backgroundLocation") as typeof import("../backgroundLocation");
     await stopBackgroundTracking();
     // Сначала остановить задачу, потом чистить: иначе она допишет точку после.
-    await forgetUnownedPoints();
+    await settleUnownedPoints();
   } catch (e) {
     if (__DEV__) console.warn("Не удалось остановить фоновый трекинг при выходе:", e); // i18n-ignore: журнал разработчика, не экран
   }
@@ -204,6 +262,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (!isAuthRejection(e)) {
         const cached = await readCachedUser();
         if (cached) {
+          // Заново — ради номера хозяина GPS: у поставленных до этой версии
+          // его в AsyncStorage ещё нет, а без связи getMe выше не ответил.
+          await writeCachedUser(cached);
           set({ user: cached, isAuthenticated: true, isLoading: false });
           return;
         }
@@ -238,6 +299,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     if (result?.user) {
       await writeCachedUser(result.user);
+      // Копии каталога прежних людей — вон (lib/offline-copy); их работа остаётся.
+      await forgetOtherOwnersCopies(result.user.id);
       set({ user: result.user, isAuthenticated: true });
     } else {
       throw new Error('No user data in response');

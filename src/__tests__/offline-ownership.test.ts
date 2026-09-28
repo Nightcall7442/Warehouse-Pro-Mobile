@@ -90,10 +90,10 @@ describe("точки входа пользуются общим разбором
 describe("записи очереди помечены автором", () => {
   const src = read("src/store/offline.ts");
 
-  it("владелец проставляется при постановке в очередь", () => {
+  // Отказ очереди без хозяина проверяется поведением: keep-own-work.test,
+  // «без хозяина ни одна очередь запись не берёт».
+  it("у записи есть поле хозяина", () => {
     expect(src).toMatch(/ownerId\?: number/);
-    expect(src).toMatch(/ownerId: order\.ownerId \?\? currentUserId\(\)/);
-    expect(src).toMatch(/ownerId: action\.ownerId \?\? currentUserId\(\)/);
   });
 
   it("чужая запись не отправляется", () => {
@@ -110,12 +110,13 @@ describe("записи очереди помечены автором", () => {
     expect(shouldAutoSync({ synced: false, ownerId: 5 }, undefined)).toBe(false);
   });
 
-  it("записи без владельца по-прежнему уходят", () => {
-    // Созданные до этой правки. Отбросить их значило бы потерять работу,
-    // уже сделанную в поле.
-    expect(shouldAutoSync({ synced: false }, 10)).toBe(true);
-    expect(shouldAutoSync({ synced: false }, undefined)).toBe(true);
-    expect(shouldAutoSync({ synced: false, retryable: false }, 10)).toBe(false);
+  it("запись без владельца — ничья: не уходит ни под кем", () => {
+    // Решение владельца 28.09.2026. Без хозяина запись ложилась после 401 и
+    // уходила под первым вошедшим — на сменном телефоне под сменщиком.
+    // Записям прежних сборок хозяина даёт adoptOwnerless (keep-own-work.test).
+    expect(shouldAutoSync({ synced: false }, 10)).toBe(false);
+    expect(shouldAutoSync({ synced: false }, undefined)).toBe(false);
+    expect(shouldAutoSync({ synced: false, ownerId: 10, retryable: false }, 10)).toBe(false);
   });
 
   it("выход из аккаунта чистит кэши, но не очередь", () => {

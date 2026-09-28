@@ -9,6 +9,10 @@ jest.mock("../api", () => ({
 
 import { useOfflineStore, isRetryableError, uuidv4, deliveryActionTitle } from "../store/offline";
 import { createOrder } from "../api";
+import { useAuthStore } from "../store/auth";
+
+// Заказы кладёт вошедший: без хозяина очередь запись не берёт (keep-own-work.test).
+beforeEach(() => { useAuthStore.setState({ user: { id: 1, name: "Агент", role: "agent" } as never }); });
 
 const mockCreateOrder = createOrder as jest.MockedFunction<typeof createOrder>;
 

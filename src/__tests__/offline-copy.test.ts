@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, beforeEach } from "@jest/globals";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { saveOfflineCopy, loadOfflineCopy, forgetOfflineCopies } from "../lib/offline-copy";
+import { saveOfflineCopy, loadOfflineCopy, forgetOtherOwnersCopies } from "../lib/offline-copy";
 
 beforeEach(async () => { await AsyncStorage.clear(); });
 
@@ -58,12 +58,31 @@ describe("отложенная копия", () => {
     expect(await loadOfflineCopy("shops", 7)).toBeNull();
   });
 
-  it("копии можно забыть", async () => {
+  it("вход человека стирает копии всех остальных — по префиксу, не по списку", async () => {
+    const sugar = [{ id: 1, name: "Сахар", unitPrice: "11000.00", basePrice: "12000.00" }];
     await saveOfflineCopy("shops", 7, ["a"]);
-    await saveOfflineCopy("products", 7, ["b"]);
-    await forgetOfflineCopies(7);
-    expect(await loadOfflineCopy("shops", 7)).toBeNull();
-    expect(await loadOfflineCopy("products", 7)).toBeNull();
+    await saveOfflineCopy("products", 7, sugar, "shop1");
+    // Запись цен, выпавшая из списка магазинов, — по списку её не найти.
+    await AsyncStorage.setItem("offlineCopy.products.7.shop9", "{}");
+    // Номер 70 начинается с 7, но это другой человек.
+    await saveOfflineCopy("shops", 70, ["c"]);
+    await saveOfflineCopy("shops", 8, ["b"]);
+    await saveOfflineCopy("products", 8, sugar, "shop2");
+    // Черновик того, кто ушёл, — его работа, а не копия.
+    await AsyncStorage.setItem("order_draft:7", "{}");
+
+    await forgetOtherOwnersCopies(8);
+
+    const left = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith("offlineCopy.")).sort();
+    expect(left).toEqual(["offlineCopy.products.8", "offlineCopy.products.8.scopes", "offlineCopy.products.8.shop2", "offlineCopy.shops.8"]);
+    expect(await AsyncStorage.getItem("order_draft:7")).toBe("{}");
+  });
+
+  it("два сохранения для разных магазинов разом — оба остаются в списке", async () => {
+    // Экран заказа и окно выбора товара сохраняют копию одновременно.
+    const sugar = [{ id: 1, name: "Сахар", unitPrice: "11000.00", basePrice: "12000.00" }];
+    await Promise.all([saveOfflineCopy("products", 7, sugar, "shop1"), saveOfflineCopy("products", 7, sugar, "shop2")]);
+    expect(JSON.parse((await AsyncStorage.getItem("offlineCopy.products.7.scopes"))!)).toEqual(["shop1", "shop2"]);
   });
 });
 

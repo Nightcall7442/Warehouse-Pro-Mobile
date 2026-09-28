@@ -115,8 +115,10 @@ describe("session survives a lost connection", () => {
 
   Здесь закреплено: отказ сервера в hydrate() и вход другого человека
   останавливают задачу, а точки с хозяином остаются на диске (кому их
-  отправлять — keep-own-work.test.tsx). Уходят только точки прежней версии,
-  без хозяина.
+  отправлять — keep-own-work.test.tsx). Точки прежней версии, без хозяина,
+  при входе и отказе в hydrate уходят: профиль к этому мигу стёрт, хозяина не
+  назвать. После 401 в перехватчике они достаются хозяину профиля
+  (settleUnownedPoints, keep-own-work.test.tsx).
 
   Нарочная поломка: убери stopTrackingOnSignOut() из login() — третья
   проверка падает.
@@ -168,6 +170,8 @@ describe("отзыв сессии останавливает фоновый GPS"
 
   it("вход другого человека не наследует чужой след, но и не стирает его", async () => {
     apiLogin.mockResolvedValue({ user: { id: 8, name: "Сменщик", role: "agent" } });
+    // Профиль прежнего вход стирает до запроса — хозяина у точек прежней версии нет.
+    SecureStore.getItemAsync.mockImplementation(async () => null);
 
     await useAuthStore.getState().login("b@test.local", "pw");
 

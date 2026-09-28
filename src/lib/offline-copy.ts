@@ -77,8 +77,22 @@ async function readJson<T>(k: string): Promise<T | null> {
   }
 }
 
+/*
+  Сохранения идут по одному. Список магазинов (scopes) обновляется чтением и
+  перезаписью, а сохраняют копию двое сразу — экран заказа и окно выбора
+  товара. Два сохранения для разных магазинов вперемешку теряли один из списка,
+  и его запись цен уже никогда не вытеснялась.
+*/
+let turn: Promise<unknown> = Promise.resolve();
+
 /** scope — магазин (и прайс-лист), чьи это цены; нужен только каталогу. */
-export async function saveOfflineCopy<T>(kind: OfflineKind, ownerId: number, data: T, scope?: string): Promise<void> {
+export function saveOfflineCopy<T>(kind: OfflineKind, ownerId: number, data: T, scope?: string): Promise<void> {
+  const next = turn.then(() => save(kind, ownerId, data, scope));
+  turn = next;
+  return next;
+}
+
+async function save<T>(kind: OfflineKind, ownerId: number, data: T, scope?: string): Promise<void> {
   try {
     const savedAt = new Date().toISOString();
     await AsyncStorage.setItem(key(kind, ownerId), JSON.stringify({ data, savedAt } satisfies Stored<T>));
@@ -120,9 +134,24 @@ export async function loadOfflineCopy<T>(kind: OfflineKind, ownerId: number, sco
   return { data: data as T, savedAt, cardPrices: !own };
 }
 
-export async function forgetOfflineCopies(ownerId: number): Promise<void> {
+/**
+ * Вход человека: копии всех остальных — вон.
+ *
+ * Копия каталога — мегабайт и больше на человека, плюс до тридцати записей
+ * цен. На сменном телефоне они копились за каждым, кто хоть раз входил, а у
+ * AsyncStorage на Android предел около 6 МБ, и переполнение роняет запись
+ * очереди заказов — ровно то, от чего бережёт SHOP_PRICES_MAX. Прежнему
+ * человеку копия без связи не нужна: войти без связи он не сможет, а со
+ * связью она перезапишется.
+ *
+ * Ключи ищутся по префиксу, а не по списку scopes: запись, выпавшая из
+ * списка, иначе не стёрлась бы никогда. Черновики и точки GPS других людей
+ * здесь не трогаются — это их работа (решение владельца 28.09.2026).
+ */
+export async function forgetOtherOwnersCopies(ownerId: number): Promise<void> {
   try {
-    const scopes = (await readJson<string[]>(scopesKey(ownerId))) ?? [];
-    await AsyncStorage.multiRemove([key("shops", ownerId), key("products", ownerId), scopesKey(ownerId), ...scopes.map(s => pricesKey(ownerId, s))]);
+    // offlineCopy.<вид>.<человек>[.<магазин>]
+    const foreign = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith("offlineCopy.") && k.split(".")[2] !== String(ownerId));
+    if (foreign.length > 0) await AsyncStorage.multiRemove(foreign);
   } catch { /* см. выше */ }
 }
