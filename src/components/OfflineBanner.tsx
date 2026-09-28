@@ -3,8 +3,10 @@ import { View, Text, Animated } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useOfflineStore } from "../store/offline";
+import { useOfflineStore, isOwnedBy } from "../store/offline";
+import { useAuthStore } from "../store/auth";
 import { useVisitQueue } from "../store/visit-queue";
+import { useMyPendingShops } from "../store/shop-queue";
 import { Typography } from "../theme";
 import { useThemeColors } from "../store/theme";
 import { plural } from "../lib/plural";
@@ -20,16 +22,21 @@ export function OfflineBanner() {
   const [isOnline, setIsOnline] = useState(true);
   const [animVal] = useState(new Animated.Value(0));
   const { orders, deliveryActions } = useOfflineStore();
+  // Только своё — как на вкладке «Заказы» (isOwnedBy): на сменном телефоне Б
+  // читал «1 заказ ожидает» про заказ А, которого у него нигде нет.
+  const userId = useAuthStore(s => s.user?.id);
 
   // Очереди считаются раздельно. Раньше они складывались в одно число, а
   // подпись всегда говорила «заказ/заказов» — и курьер, отметивший две доставки
   // без связи, читал наверху «2 заказов ожидают синхронизации». Заказов он не
   // создаёт вовсе: он искал их и не понимал, ушли его отметки или нет.
-  const pendingOrders = orders.filter(o => !o.synced).length;
-  const pendingActions = deliveryActions.filter(a => !a.synced).length;
+  const pendingOrders = orders.filter(o => !o.synced && isOwnedBy(o, userId)).length;
+  const pendingActions = deliveryActions.filter(a => !a.synced && isOwnedBy(a, userId)).length;
   // Третья очередь — визиты; отвергнутые сервером не «ожидают», они показаны на плане.
-  const pendingVisits = useVisitQueue(s => s.actions.filter(a => !a.synced && a.retryable !== false).length);
-  const pendingCount = pendingOrders + pendingActions + pendingVisits;
+  const pendingVisits = useVisitQueue(s => s.actions.filter(a => !a.synced && a.retryable !== false && isOwnedBy(a, userId)).length);
+  // Четвёртая — новые магазины; отвергнутые показаны на вкладке «Магазины».
+  const pendingShops = useMyPendingShops().filter(x => x.retryable !== false).length;
+  const pendingCount = pendingOrders + pendingActions + pendingVisits + pendingShops;
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener(state => {
@@ -71,6 +78,7 @@ export function OfflineBanner() {
     pendingOrders > 0 ? t(`${pendingOrders} ${plural(pendingOrders, "заказ", "заказа", "заказов")}`, `${pendingOrders} ta buyurtma`) : null,
     pendingActions > 0 ? t(`${pendingActions} ${plural(pendingActions, "отметка", "отметки", "отметок")} доставки`, `${pendingActions} ta yetkazish belgisi`) : null,
     pendingVisits > 0 ? t(`${pendingVisits} ${plural(pendingVisits, "визит", "визита", "визитов")}`, `${pendingVisits} ta tashrif`) : null,
+    pendingShops > 0 ? t(`${pendingShops} ${plural(pendingShops, "магазин", "магазина", "магазинов")}`, `${pendingShops} ta do'kon`) : null,
   ].filter((x): x is string => Boolean(x));
   const and = t(" и ", " va ");
   const queued = parts.length > 1 ? parts.slice(0, -1).join(", ") + and + parts[parts.length - 1] : (parts[0] ?? "");

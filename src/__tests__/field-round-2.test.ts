@@ -78,8 +78,9 @@ describe("«выехал по всем»", () => {
     const header = DELIVERIES.indexOf('title: t("ОЖИДАЮТ ДОСТАВКИ"');
     must(at > 0 && at < header, "кнопки «Выехал по всем» нет над разделом ожидающих");
     // Подряд через await, а не Promise.all: очередь без сети ложится по одной
-    // в порядке списка, а на сети в полёте один запрос.
-    must(/for \(const order of orders\) \{\s*try \{ await mutateOutAsync\(order\); \}/.test(DELIVERIES),
+    // в порядке списка, а на сети в полёте один запрос. Перед точкой — только
+    // проверка, что вошедший ещё есть (после 401 цикл встаёт, keep-own-work).
+    must(/for \(const order of orders\) \{\s*(?:\/\/[^\n]*\n\s*)*if \(!useAuthStore\.getState\(\)\.user\) \{ ended = true; break; \}\s*try \{ await mutateOutAsync\(order\); \}/.test(DELIVERIES),
       "точки уходят не по одной и не по порядку");
     must(!/Promise\.all\([^)]*mutateOut/.test(DELIVERIES), "«по всем» стреляет всеми разом");
   });

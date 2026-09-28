@@ -17,7 +17,7 @@ import { getProducts, getCategories, Product } from "../../src/api";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
 import { Typography, Spacing, Radii, ThemeColors, soft, BOTTOM_TAB_HEIGHT } from "../../src/theme";
-import { useCartStore, useCartSummary } from "../../src/store/cart";
+import { useCartStore, useCartSummary, useMyCartLines } from "../../src/store/cart";
 import { plural } from "../../src/lib/plural";
 import { SearchInput, Card, Button } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
@@ -122,7 +122,7 @@ export default function CatalogScreen() {
   // Корзина: строки копятся здесь, заказ оформляется один раз на экране заказа.
   const cartAdd = useCartStore(s => s.add);
   const cartClear = useCartStore(s => s.clear);
-  const cartLines = useCartStore(s => s.lines);
+  const cartLines = useMyCartLines();
   const cart = useCartSummary();
   const inCart = useMemo(() => new Map(cartLines.map(l => [l.productId, Number(l.quantity || 0)])), [cartLines]);
 

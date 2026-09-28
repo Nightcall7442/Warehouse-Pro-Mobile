@@ -7,10 +7,14 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
-import { getAvailableShops, getProducts, createOrder, Shop } from "../../src/api";
+import { getAvailableShops, getProducts, createOrder, Shop, type CreateOrderInput } from "../../src/api";
 import { PromisedDelivery } from "../../src/components/order/PromisedDelivery";
-import { useOfflineStore, uuidv4, isRetryableError } from "../../src/store/offline";
+import { useOfflineStore, uuidv4, isRetryableError, isLocalShopId, resolveShopId } from "../../src/store/offline";
+import { usePendingShops } from "../../src/store/shop-queue";
 import { useOfflineCopy } from "../../src/hooks/useOfflineCopy";
+import { useAuthStore } from "../../src/store/auth";
+import { ownerOrThrow, isSessionEnded } from "../../src/lib/offline-guard";
+import { orderDraftSlot, loadUserDraft, saveUserDraft, clearUserDraft } from "../../src/lib/user-draft";
 import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
@@ -128,7 +132,11 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
     покрыты тестом, но провод отсюда потерялся при слиянии ветвей 07.09.
   */
   const { data: liveShops, isLoading: liveLoading } = useQuery({ queryKey: ["availableShops"], queryFn: getAvailableShops });
-  const { data: shops, fromCopy, savedAt } = useOfflineCopy<typeof liveShops>("shops", liveShops);
+  const { data: savedShops, fromCopy, savedAt } = useOfflineCopy<typeof liveShops>("shops", liveShops);
+  // Магазины, заведённые без связи (store/shop-queue), — первыми: заказ на
+  // новую точку оформляют тут же, у её прилавка.
+  const pendingShops = usePendingShops();
+  const shops = useMemo(() => (pendingShops.length > 0 ? [...pendingShops, ...(savedShops ?? [])] : savedShops), [pendingShops, savedShops]);
   // Пока грузится живое, но копия уже есть — показываем копию, не скелет.
   const isLoading = liveLoading && !shops;
   // Про возраст копии сказано прямо: по остаткам и ценам агент разговаривает
@@ -186,6 +194,7 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
             <Text style={{ fontSize: Typography.size.sm, color: colors.text.tertiary }} numberOfLines={1}>
               {[shop.ownerName, shop.city].filter(Boolean).join(" · ") || "—"}
             </Text>
+            {isLocalShopId(shop.id) && <Text style={{ fontSize: Typography.size.xs, color: colors.status.warning, fontFamily: Typography.fontMedium }}>{t("Новый · ждёт отправки", "Yangi · yuborishni kutmoqda")}</Text>}
             {hasDebt && <Text style={{ fontSize: Typography.size.xs, color: colors.status.danger, fontFamily: Typography.fontMedium, marginTop: 2 }}>{t("Долг", "Qarz")}: {Number(shop.debt).toLocaleString("ru")} {t("сум", "so'm")}</Text>}
           </View>
           {selected ? (
@@ -394,13 +403,16 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
   const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const debouncedSearch = useDebounce(search, 300);
   const [onlyInStock, setOnlyInStock] = useState(true);
-  // Тот же запасной путь, что у магазинов: см. ShopPicker.
+  // Тот же запасной путь, что у магазинов: см. ShopPicker. Копия — ЭТОГО
+  // магазина: у каждого свои цены и ступени (lib/offline-copy).
   const { data: liveProducts, isLoading: liveLoading } = useQuery({ queryKey: ["products", shopId ?? 0], queryFn: () => getProducts(undefined, shopId) });
-  const { data: products, fromCopy, savedAt } = useOfflineCopy<typeof liveProducts>("products", liveProducts);
+  const { data: products, fromCopy, savedAt, cardPrices } = useOfflineCopy<typeof liveProducts>("products", liveProducts, `shop${shopId ?? 0}`);
   const isLoading = liveLoading && !products;
-  const copyNotice = fromCopy && savedAt
-    ? t(`Каталог сохранён ${new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru")} — связи нет, остатки и цены могли измениться`, `Katalog ${new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru")} da saqlangan — aloqa yo'q, qoldiq va narxlar o'zgargan bo'lishi mumkin`)
-    : null;
+  const savedOn = savedAt ? new Date(savedAt).toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru") : "";
+  const copyNotice = !fromCopy || !savedAt ? null
+    // Этот магазин со связью не открывали — его цен на телефоне нет.
+    : cardPrices ? t(`Цен этого магазина на телефоне нет — показаны базовые цены без ступеней, сумму пересчитают при отправке. Каталог от ${savedOn}`, `Bu do'kon narxlari telefonda yo'q — pog'onasiz asosiy narxlar ko'rsatilgan, summa yuborishda qayta hisoblanadi. Katalog ${savedOn}`)
+    : t(`Каталог сохранён ${savedOn} — связи нет, остатки и цены могли измениться`, `Katalog ${savedOn} da saqlangan — aloqa yo'q, qoldiq va narxlar o'zgargan bo'lishi mumkin`);
 
   const filtered = useMemo(() => {
     let list = (products ?? []).filter(p => !debouncedSearch || p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || (p.code ?? "").toLowerCase().includes(debouncedSearch.toLowerCase()));
@@ -687,9 +699,9 @@ function ReviewStep({ shopName, lines, notes, onNotesChange, paymentMethod, onPa
 }
 
 // ── Draft auto-save ──────────────────────────────────────────────────────────
-const DRAFT_KEY = "order_draft";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCartStore } from "../../src/store/cart";
+// Черновик — под номером агента (lib/user-draft): переживает 401 и повторный
+// вход, а сменщику на том же телефоне не показывается.
+import { useCartStore, myCartLines } from "../../src/store/cart";
 
 interface OrderDraft {
   shop: Shop | null;
@@ -702,30 +714,6 @@ interface OrderDraft {
   savedAt: number;
 }
 
-async function saveDraft(draft: Omit<OrderDraft, "savedAt">) {
-  try {
-    await AsyncStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, savedAt: Date.now() }));
-  } catch { /* ignore */ }
-}
-
-async function loadDraft(): Promise<OrderDraft | null> {
-  try {
-    const raw = await AsyncStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    const draft = JSON.parse(raw) as OrderDraft;
-    // Expire after 24 hours
-    if (Date.now() - draft.savedAt > 24 * 60 * 60 * 1000) {
-      await AsyncStorage.removeItem(DRAFT_KEY);
-      return null;
-    }
-    return draft;
-  } catch { return null; }
-}
-
-async function clearDraft() {
-  try { await AsyncStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
-}
-
 // ── Main Screen ──────────────────────────────────────────────────────────────
 export default function NewOrderScreen() {
   const router = useRouter();
@@ -735,6 +723,16 @@ export default function NewOrderScreen() {
   const t = useT();
   const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string; productQty?: string; fromCart?: string }>();
   const { addOrder } = useOfflineStore();
+  const { user } = useAuthStore();
+  /*
+    Слот черновика — того, кто открыл экран, и не меняется до закрытия.
+    Считался он заново при каждой отрисовке, и смена входа при открытом экране
+    записала бы позиции агента А под ключ Б, и Б получил бы «Продолжить
+    черновик?» с чужим заказом. После 401 (вошедшего нет) черновик по-прежнему
+    пишется А: его работа ждёт его возвращения.
+  */
+  const [draftSlot] = useState(() => orderDraftSlot(user?.id));
+  const clearDraft = () => clearUserDraft(draftSlot);
 
   const [step, setStep] = useState(params.productId ? 1 : params.shopId ? 2 : 1);
   const [selectedShop, setSelectedShop] = useState<Shop | null>(
@@ -742,7 +740,8 @@ export default function NewOrderScreen() {
   );
   const [rawLines, setLines] = useState<OrderLine[]>(() => {
     // Из корзины каталога: строки набраны там, здесь — магазин, оплата, отправка.
-    if (params.fromCart) return useCartStore.getState().lines.map(l => ({ ...l }));
+    // Только своя корзина: чужая, оставшаяся в памяти от прежнего входа, не оформляется под вошедшим.
+    if (params.fromCart) return myCartLines().map(l => ({ ...l }));
     if (params.productId && params.productPrice) {
       // Остаток со сканера не приходит, поэтому здесь честное «не знаю», а не
       // ноль. Ноль на этом месте гасил кнопку «Продолжить» и рисовал агенту
@@ -799,13 +798,20 @@ export default function NewOrderScreen() {
    * остатка). Строкам из корзины он ничего не даст — это та же карточка, по
    * которой их набрали, — а весь каталог организации тянулся бы впустую.
    */
-  const shopId = selectedShop?.id;
+  const sid = selectedShop ? resolveShopId(selectedShop.id) : undefined;
+  const shopId = sid != null && !isLocalShopId(sid) ? sid : undefined;
   const seededProductId = params.productId ? Number(params.productId) : null;
-  const { data: catalog } = useQuery({
+  const { data: liveCatalog } = useQuery({
     queryKey: ["products", shopId ?? 0],
     queryFn: () => getProducts(undefined, shopId),
     enabled: rawLines.length > 0 && (shopId != null || seededProductId != null),
   });
+  // Без связи — копия каталога ЭТОГО магазина, со ступенями: иначе строка со
+  // сканера или из корзины после перезагрузки считалась по цене карточки за
+  // штуку. Цены карточки вместо магазинных (cardPrices) строки не
+  // переставляют: набранные со связью ступени магазина они бы стёрли.
+  const { data: savedCatalog, cardPrices } = useOfflineCopy<typeof liveCatalog>("products", liveCatalog, `shop${shopId ?? 0}`);
+  const catalog = cardPrices ? undefined : savedCatalog;
 
   /**
    * Строки заказа с ценой магазина и подставленным остатком.
@@ -816,8 +822,8 @@ export default function NewOrderScreen() {
    * правды. Остаток дополняется только у строк, где он неизвестен, то есть
    * пришедших со сканера; выбранные вручную уже несут остаток из каталога.
    * Цену руками на этом экране не набирают, поэтому переставлять её можно
-   * всегда. Без связи каталога нет — строки держат цену и ступени, с которыми
-   * их набрали.
+   * всегда. Без связи — копия этого магазина; нет её — строки держат цену и
+   * ступени, с которыми их набрали.
    */
   const lines = useMemo(() => {
     if (!catalog) return rawLines;
@@ -838,7 +844,7 @@ export default function NewOrderScreen() {
   // Check for saved draft on mount
   useEffect(() => {
     if (skipDraft) return;
-    loadDraft().then(draft => {
+    loadUserDraft<OrderDraft>(draftSlot).then(draft => {
       if (draft && draft.lines.length > 0) {
         const forShop = draft.shop ? t(` для ${draft.shop.name}`, `: ${draft.shop.name}`) : "";
         Alert.alert(
@@ -865,10 +871,10 @@ export default function NewOrderScreen() {
   useEffect(() => {
     if (!draftChecked || lines.length === 0) return;
     const timer = setTimeout(() => {
-      saveDraft({ shop: selectedShop, lines, notes, paymentMethod, promisedAt });
+      saveUserDraft(draftSlot, { shop: selectedShop, lines, notes, paymentMethod, promisedAt });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [selectedShop, lines, notes, paymentMethod, promisedAt, draftChecked]);
+  }, [selectedShop, lines, notes, paymentMethod, promisedAt, draftChecked, draftSlot]);
 
   // The backend only accepts one order-level discount percentage (per-line
   // discounts aren't stored server-side) and recomputes subtotal itself from
@@ -897,11 +903,19 @@ export default function NewOrderScreen() {
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
-    mutationFn: createOrder,
-    onSuccess: (created) => {
+    // Автор заказа — до запроса. Заказ ложится в очередь из onError, а при
+    // ответе 401 перехватчик (src/api.ts) к этому моменту уже обнулил
+    // вошедшего: запись без хозяина ушла бы первым проходом под токеном
+    // следующего вошедшего (см. addOrder). Вошедшего нет уже сейчас — отказ
+    // здесь же: запрос не уходит, onError не кладёт заказ в очередь.
+    onMutate: () => ownerOrThrow(),
+    // Магазин ещё на телефоне — на сервер заказ не идёт вовсе, сразу в очередь (onError).
+    mutationFn: (input: CreateOrderInput) => (isLocalShopId(input.shopId) ? Promise.reject(new Error("shop not sent yet")) : createOrder(input)),
+    onSuccess: (created, _input, ownerId) => {
       clearDraft();
-      // Заказ ушёл — корзина каталога выполнила своё.
-      useCartStore.getState().clear();
+      // Заказ ушёл — корзина каталога выполнила своё. Корзина автора заказа, а
+      // не «вошедшего вообще»: корзины других людей на телефоне не трогаем.
+      useCartStore.getState().clear(ownerId);
       // Списки заказов надо пометить устаревшими, иначе агент вернётся на
       // вкладку и не увидит только что созданного: вкладки не размонтируются,
       // пока сверху лежит этот экран, а у запроса ["myOrders"] выдержка две
@@ -915,7 +929,9 @@ export default function NewOrderScreen() {
       else notify.success(t("Заказ создан!", "Buyurtma yaratildi!"));
       router.back();
     },
-    onError: async (e: Error) => {
+    onError: async (e: Error, input, ownerId) => {
+      // Сессия кончилась до нажатия: не «нет места», а честно; черновик остаётся.
+      if (isSessionEnded(e)) { notify.error(e.message); return; }
       // Разбор ошибки отдан общей функции, которая уже умеет отличать отказ
       // сервера от неудачи доставки запроса.
       //
@@ -930,8 +946,9 @@ export default function NewOrderScreen() {
       //
       // Ровно эта ошибка описана и исправлена в самой очереди
       // (src/store/offline.ts), но точка входа сохраняла старую копию.
-      if (isRetryableError(e) && selectedShop) {
-        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, promisedDeliveryAt: promisedAt ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: linePrice(l), discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal };
+      const waitsForShop = isLocalShopId(input.shopId);
+      if ((isRetryableError(e) || waitsForShop) && selectedShop) {
+        const offlineOrder = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, input: { shopId: input.shopId, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt", idempotencyKey: idempotencyKeyRef.current ?? undefined, promisedDeliveryAt: promisedAt ?? undefined, discount: overallDiscountPercent, items: lines.map(l => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: linePrice(l), discount: Number(l.discount || 0) })) }, shopName: selectedShop.name ?? "", createdAt: new Date().toISOString(), synced: false, quotedTotal, ownerId };
         const queued = await addOrder(offlineOrder);
         if (!queued) {
           // Запись очереди на диск не удалась — на рабочих телефонах кончается
@@ -953,13 +970,17 @@ export default function NewOrderScreen() {
           return;
         }
         clearDraft();
-        useCartStore.getState().clear();
+        // Строки ушли в очередь под автором — его корзина своё отработала, даже
+        // если после 401 вошедшего уже нет.
+        useCartStore.getState().clear(ownerId);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         // Про цену сказано прямо: сервер посчитает итог по своим ценам на
         // момент отправки, а не по тем, что агент видел сейчас. Если за это
         // время прайс поменяется, после синхронизации придёт отдельное
         // сообщение с обеими суммами.
-        notify.info(t("Ошибка сети. Заказ сохранён офлайн. Итог будет пересчитан по ценам на момент отправки.", "Tarmoq xatosi. Buyurtma oflayn saqlandi. Jami yuborish paytidagi narxlar bo'yicha qayta hisoblanadi."));
+        notify.info(waitsForShop
+          ? t("Заказ сохранён и уйдёт сразу за новым магазином. Итог будет пересчитан по ценам на момент отправки.", "Buyurtma saqlandi va yangi do'kondan keyin darhol yuboriladi. Jami yuborish paytidagi narxlar bo'yicha qayta hisoblanadi.")
+          : t("Ошибка сети. Заказ сохранён офлайн. Итог будет пересчитан по ценам на момент отправки.", "Tarmoq xatosi. Buyurtma oflayn saqlandi. Jami yuborish paytidagi narxlar bo'yicha qayta hisoblanadi."));
         router.back();
       } else {
         notify.error(e.message ?? t("Ошибка", "Xatolik"));
@@ -996,7 +1017,8 @@ export default function NewOrderScreen() {
     if (!selectedShop) return;
     if (!idempotencyKeyRef.current) idempotencyKeyRef.current = uuidv4();
     const input = {
-      shopId: selectedShop.id, notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt",
+      // Магазин с телефона мог уже уйти, пока набирали заказ, — тогда id настоящий.
+      shopId: resolveShopId(selectedShop.id), notes, paymentMethod: paymentMethod as "cash" | "card" | "transfer" | "debt",
       idempotencyKey: idempotencyKeyRef.current,
       promisedDeliveryAt: promisedAt ?? undefined,
       discount: overallDiscountPercent,
@@ -1040,7 +1062,7 @@ export default function NewOrderScreen() {
       {/* Content */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); addRecentShopSafely(s.id); }} colors={colors} />}
-        {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} shopId={selectedShop?.id} />}
+        {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} shopId={shopId} />}
         {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} promisedAt={promisedAt} onPromisedChange={setPromisedAt} colors={colors} />}
       </ScrollView>
 

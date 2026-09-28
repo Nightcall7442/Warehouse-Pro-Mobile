@@ -9,23 +9,28 @@
  * экран заказа со своей очередью офлайна и сбросом остатков.
  */
 import { readFileSync } from "node:fs";
-import { useCartStore } from "../store/cart";
+import { useCartStore, myCartLines } from "../store/cart";
+import { useAuthStore } from "../store/auth";
 import { cartSummary } from "../lib/cart";
 
 const p = (id: number, price = "1000") => ({ id, name: `Товар ${id}`, unitPrice: price, available: "10", unit: "pcs" });
 
-beforeEach(() => useCartStore.getState().clear());
+// Корзина — вошедшего: без него «+» ничего не кладёт (keep-own-work.test).
+beforeEach(() => {
+  useAuthStore.setState({ user: { id: 1, name: "Агент", role: "agent" } as never });
+  useCartStore.setState({ carts: {} });
+});
 
 describe("корзина", () => {
   it("копит строки и количества; минус до нуля убирает строку", () => {
     const c = useCartStore.getState();
     c.add(p(1)); c.add(p(1)); c.add(p(2, "500"));
-    expect(useCartStore.getState().lines.map(l => [l.productId, l.quantity])).toEqual([[1, "2"], [2, "1"]]);
-    expect(cartSummary(useCartStore.getState().lines)).toEqual({ count: 2, total: 2500 });
+    expect(myCartLines().map(l => [l.productId, l.quantity])).toEqual([[1, "2"], [2, "1"]]);
+    expect(cartSummary(myCartLines())).toEqual({ count: 2, total: 2500 });
     c.add(p(2), -1);
-    expect(useCartStore.getState().lines.map(l => l.productId)).toEqual([1]);
+    expect(myCartLines().map(l => l.productId)).toEqual([1]);
     c.clear();
-    expect(useCartStore.getState().lines).toEqual([]);
+    expect(myCartLines()).toEqual([]);
   });
 });
 
@@ -45,8 +50,9 @@ describe("каталог и экран заказа", () => {
   });
 
   it("экран заказа берёт строки из корзины и чистит её после отправки — и онлайн, и в очередь", () => {
-    expect(order).toContain("if (params.fromCart) return useCartStore.getState().lines.map(l => ({ ...l }));");
+    expect(order).toContain("if (params.fromCart) return myCartLines().map(l => ({ ...l }));");
     expect(order).toContain("params.shopId || params.productId || params.fromCart");
-    expect(order.match(/useCartStore\.getState\(\)\.clear\(\);/g)?.length).toBe(2);
+    // Чистится корзина автора заказа, а не все корзины телефона.
+    expect(order.match(/useCartStore\.getState\(\)\.clear\(ownerId\);/g)?.length).toBe(2);
   });
 });

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { bumpLine, cartSummary, type CartLine } from "../lib/cart";
+import { useAuthStore } from "./auth";
 
 /*
   Корзина каталога: строки копятся на телефоне, заказ оформляется один раз.
@@ -13,22 +14,57 @@ import { bumpLine, cartSummary, type CartLine } from "../lib/cart";
   это обычный экран нового заказа с готовыми строками.
 
   Живёт в памяти: черновик самого заказа хранит уже экран заказа.
+
+  Корзина — у каждого своя (по номеру человека). Память процесса переживает
+  смену входа: на сменном телефоне Б после входа видел на каталоге «В заказе:
+  N товаров → Оформить» с позициями А и оформлял их заказом под собой. Потом
+  корзина стала одной с пометкой хозяина — и первое же «+» у Б стирало
+  корзину А, а заказ Б её чистил. Теперь Б видит, пополняет и чистит только
+  свою, а корзина А ждёт его повторного входа после 401. Без вошедшего строке
+  лечь некуда — «+» ничего не делает.
 */
 interface CartState {
-  lines: CartLine[];
+  /** Строки по номеру человека; читать их может только он (myCartLines). */
+  carts: Record<number, CartLine[]>;
   add: (p: { id: number; name: string; unitPrice: string; available?: string | null; unit?: string }, delta?: number) => void;
-  clear: () => void;
+  /** Опустошить корзину этого человека; по умолчанию — вошедшего. */
+  clear: (ownerId?: number) => void;
 }
 
-export const useCartStore = create<CartState>((set, get) => ({
-  lines: [],
-  add: (p, delta = 1) => set({ lines: bumpLine(get().lines, p, delta) }),
-  clear: () => set({ lines: [] }),
+const NONE: CartLine[] = [];
+
+export const useCartStore = create<CartState>((set) => ({
+  carts: {},
+  add: (p, delta = 1) => {
+    const ownerId = useAuthStore.getState().user?.id;
+    if (ownerId == null) return;
+    set(s => ({ carts: { ...s.carts, [ownerId]: bumpLine(s.carts[ownerId] ?? NONE, p, delta) } }));
+  },
+  clear: (ownerId = useAuthStore.getState().user?.id) => {
+    if (ownerId == null) return;
+    set(s => {
+      const carts = { ...s.carts };
+      delete carts[ownerId];
+      return { carts };
+    });
+  },
 }));
+
+/** Строки корзины вошедшего — для экрана заказа. Чужая корзина для него пуста. */
+export function myCartLines(): CartLine[] {
+  const userId = useAuthStore.getState().user?.id;
+  return (userId != null && useCartStore.getState().carts[userId]) || NONE;
+}
+
+/** То же, подпиской — для каталога. */
+export function useMyCartLines(): CartLine[] {
+  const userId = useAuthStore(s => s.user?.id);
+  return useCartStore(s => (userId != null && s.carts[userId]) || NONE);
+}
 
 /** Сколько позиций и на сколько — для плашки внизу каталога. */
 export function useCartSummary(): { count: number; total: number; units: number } {
-  const lines = useCartStore(s => s.lines);
+  const lines = useMyCartLines();
   const { count, total } = cartSummary(lines);
   return { count, total, units: lines.reduce((n, l) => n + Number(l.quantity || 0), 0) };
 }

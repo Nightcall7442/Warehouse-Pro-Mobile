@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { SecureStore } from "../storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getMe, login as apiLogin, logout as apiLogout, API_BASE, User } from "../api";
+import { sweepDrafts } from "../lib/user-draft";
+import { forgetOtherOwnersCopies } from "../lib/offline-copy";
 
 interface AuthState {
   user: User | null;
@@ -73,39 +75,92 @@ async function readCachedUser(): Promise<User | null> {
   }
 }
 
+/**
+ * Номер человека из профиля на телефоне: null — профиля нет, undefined — не
+ * прочитался (связка ключей iPhone заперта, пока экран заблокирован).
+ *
+ * Нужен очередям, чтобы привязать записи прежних сборок без хозяина
+ * (adoptOwnerless в store/offline). Два «нет» различаются намеренно: «профиля
+ * нет» — запись ничья навсегда, «не прочитался» — решать рано.
+ */
+export async function cachedProfileId(): Promise<number | null | undefined> {
+  let raw: string | null;
+  try { raw = await SecureStore.getItemAsync(CACHED_USER_KEY); } catch { return undefined; }
+  try {
+    const id = raw ? (JSON.parse(raw) as { id?: unknown }).id : null;
+    return typeof id === "number" ? id : null;
+  } catch { return null; }
+}
+
+/**
+ * Номер хозяина точек GPS — рядом с профилем, но в AsyncStorage.
+ *
+ * Фоновая задача узнавала хозяина из SecureStore, а связка ключей iPhone по
+ * умолчанию закрыта, пока экран заблокирован, — то есть ровно тогда, когда
+ * телефон в кармане и GPS работает. Чтение бросало, хозяина не было, и вся
+ * пачка точек выбрасывалась. Номер человека — не секрет. Пишется и стирается
+ * там же, где профиль, читается в backgroundLocation.ts (sessionOwner).
+ */
+const GPS_OWNER_KEY = "gps_owner";
+
+/**
+ * Записи прежних сборок, так и не получившие хозяина, — уходящему профилю.
+ *
+ * Хозяина им даёт чтение очереди по профилю на телефоне (adoptOwnerless в
+ * store/offline). Но на iPhone с запертой связкой ключей профиль не читается,
+ * и запись остаётся ничьей до следующего чтения — а к нему профиль мог стать
+ * чужим: вошёл Б, и заказ агента А ушёл бы под Б. Поэтому, пока профиль ещё
+ * прежний, ничьё отдаётся ему. Не прочитался и сейчас — вошедшему; нет и
+ * его — никому (NO_OWNER): другому человеку запись не достаётся никогда.
+ */
+async function settleOwnerlessWork(): Promise<void> {
+  try {
+    // require, а не импорт: очереди сами импортируют этот файл (так же
+    // сделан backgroundLocation в stopTrackingOnSignOut).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useOfflineStore, NO_OWNER } = require("./offline") as typeof import("./offline");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useVisitQueue } = require("./visit-queue") as typeof import("./visit-queue");
+    const ownerId = (await cachedProfileId()) ?? useAuthStore.getState().user?.id ?? NO_OWNER;
+    await Promise.all([useOfflineStore.getState().settleOwnerless(ownerId), useVisitQueue.getState().settleOwnerless(ownerId)]);
+  } catch (e) {
+    if (__DEV__) console.warn("Не удалось привязать записи без хозяина:", e); // i18n-ignore: журнал разработчика, не экран
+  }
+}
+
 async function writeCachedUser(user: User | null): Promise<void> {
+  // Профиль стирается (вход другого, выход, отказ сессии) — ничьё сперва ему.
+  if (!user) await settleOwnerlessWork();
   try {
     if (user) await SecureStore.setItemAsync(CACHED_USER_KEY, JSON.stringify(user));
     else await SecureStore.deleteItemAsync(CACHED_USER_KEY);
   } catch { /* cache is best-effort */ }
+  await (user ? AsyncStorage.setItem(GPS_OWNER_KEY, String(user.id)) : AsyncStorage.removeItem(GPS_OWNER_KEY)).catch(() => {});
 }
 
 
 /**
- * Стереть данные, показанные предыдущему пользователю.
+ * Стереть кэши, показанные предыдущему пользователю.
  *
- * Здесь только кэши и черновики — то, что можно получить заново. Очереди
- * отправки не входят: они содержат работу, которой ещё нет на сервере.
+ * Здесь только то, что можно получить заново. Очереди отправки не входят: они
+ * содержат работу, которой ещё нет на сервере.
  *
  * Экспортируется, потому что сессия заканчивается не только через logout().
  * Куда чаще она просто перестаёт действовать: токен истёк, учётку отозвали — и
- * перехватчик ответа 401 (src/api.ts) гасит сессию, минуя эту функцию. Тогда
- * кэши оставались на диске, и следующий вошедший на общем сменном телефоне
- * получал предложение «Продолжить черновик?» с позициями, количествами и
- * скидками чужого клиента — и мог отправить этот заказ от своего имени.
+ * перехватчик ответа 401 (src/api.ts) гасит сессию, минуя эту функцию.
+ *
+ * Черновики заказа и визита больше не стираются: они лежат под номером
+ * человека (lib/user-draft), чужой их не найдёт, а свой после повторного
+ * входа продолжит. Раньше 401 от истёкшего токена стирал мерчандайзеру
+ * чек-лист на двести позиций. Уходят только старые ключи без человека и
+ * просроченные.
  */
 export async function clearUserScopedCaches(): Promise<void> {
-  const exact = ["cached_products", "recent_shops", "order_draft"];
+  const exact = ["cached_products", "recent_shops"];
   for (const key of exact) {
     await AsyncStorage.removeItem(key).catch(() => {});
   }
-  // Черновики отчётов о визите лежат под ключом с номером плана, поэтому
-  // перечислить их заранее нельзя — они ищутся по началу имени.
-  try {
-    const keys = await AsyncStorage.getAllKeys();
-    const drafts = keys.filter(k => k.startsWith("visit_draft_"));
-    if (drafts.length > 0) await AsyncStorage.multiRemove(drafts);
-  } catch { /* хранилище недоступно — выход всё равно должен состояться */ }
+  await sweepDrafts();
 }
 
 /**
@@ -114,17 +169,16 @@ export async function clearUserScopedCaches(): Promise<void> {
  * Телефон в поле сменный. Выход из аккаунта не трогал ни фоновую задачу, ни
  * флаг автотрекинга: уведомление «Геолокация активна» продолжало висеть, точки
  * снимались каждые 50 м / 2 мин у человека, который уже не в системе, и
- * копились в буфере pending_locations (до 200 штук). Первая же удачная
- * отправка у СЛЕДУЮЩЕГО вошедшего вызывала flushPending и заливала чужие точки
- * под его сессией: сервер берёт автора из токена, а время съёмки приходит
- * честное — на карте супервайзера сменщик «был» там, где ходил предыдущий
- * агент, в те часы, когда его там не было. На этих же записях строятся отчёт о
- * посещениях и проверка геозоны.
+ * первая же удачная отправка у СЛЕДУЮЩЕГО вошедшего заливала их под его
+ * сессией: сервер берёт автора из токена.
  *
- * Буфер именно стирается, а не помечается автором, как это сделано для
- * очередей заказов: дослать точки позже некуда — сервер всё равно запишет их
- * на того, кто вошёл сейчас. Незакрытого долга здесь нет, в отличие от заказа,
- * который магазин уже ждёт.
+ * Буфер точек при этом НЕ стирается. Раньше стирался — и 401 от истёкшего
+ * токена уносил тому же агенту до трёх часов маршрута без связи: дыра на
+ * карте, антифрод «не был». Теперь каждая точка помечена владельцем, и
+ * flushPendingLocations отправляет только точки вошедшего; чужие ждут своего
+ * человека (backgroundLocation.ts). Точки прежней версии, без хозяина,
+ * получают хозяина по профилю, если он ещё лежит (401), иначе уходят:
+ * см. settleUnownedPoints.
  */
 export async function stopTrackingOnSignOut(): Promise<void> {
   try {
@@ -137,32 +191,29 @@ export async function stopTrackingOnSignOut(): Promise<void> {
     // выполнялась бы — то есть проверять было бы нечего. Так же сделан
     // отложенный доступ к этому файлу из src/api.ts.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { stopBackgroundTracking } = require("../backgroundLocation") as typeof import("../backgroundLocation");
+    const { stopBackgroundTracking, settleUnownedPoints } = require("../backgroundLocation") as typeof import("../backgroundLocation");
     await stopBackgroundTracking();
+    // Сначала остановить задачу, потом чистить: иначе она допишет точку после.
+    await settleUnownedPoints();
   } catch (e) {
     if (__DEV__) console.warn("Не удалось остановить фоновый трекинг при выходе:", e); // i18n-ignore: журнал разработчика, не экран
   }
-  // Порядок важен: сначала остановить задачу, потом чистить буфер — иначе
-  // очередной фоновый вызов допишет точку уже после очистки.
-  await AsyncStorage.removeItem("pending_locations").catch(() => {});
   // Иначе экран GPS у следующего вошедшего сам включит трекинг по чужому
   // флагу, ничего не спросив.
   await AsyncStorage.removeItem("gps_auto_track").catch(() => {});
 }
 
 /**
- * Сессию отозвал сервер (401/403): стереть всё, что принадлежало человеку.
+ * Сессию отозвал сервер (401/403): погасить сессию и фоновый GPS.
  *
  * Пути отзыва три — перехватчик 401 в api.ts, hydrate() и вход по
  * биометрии, — и до этого только logout() останавливал фоновый GPS. После
- * 401 задача продолжала снимать точки, получала 401, считала его временным
- * отказом и копила до 200 точек в pending_locations; следующий вошедший на
- * том же сменном телефоне первой же удачной отправкой заливал чужой след под
- * своим токеном — сервер берёт автора из сессии, а время съёмки приходит
- * честное. Карта супервайзера и антифрод строились на чужих точках.
+ * 401 задача продолжала снимать точки, и следующий вошедший на том же
+ * сменном телефоне заливал чужой след под своим токеном — сервер берёт
+ * автора из сессии.
  *
- * Очереди заказов и отметок не трогаются: там несделанная работа, помеченная
- * автором.
+ * Работа человека не трогается: очереди заказов и отметок, буфер точек и
+ * черновики помечены владельцем и ждут, пока он войдёт снова.
  */
 export async function endSessionLocally(): Promise<void> {
   await SecureStore.deleteItemAsync("session_token").catch(() => {});
@@ -211,6 +262,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (!isAuthRejection(e)) {
         const cached = await readCachedUser();
         if (cached) {
+          // Заново — ради номера хозяина GPS: у поставленных до этой версии
+          // его в AsyncStorage ещё нет, а без связи getMe выше не ответил.
+          await writeCachedUser(cached);
           set({ user: cached, isAuthenticated: true, isLoading: false });
           return;
         }
@@ -227,15 +281,15 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email, password, tenantId, code) => {
     // Вход чистит кэши предыдущей сессии независимо от того, чем она
-    // закончилась.
-    //
-    // Через logout() сессия заканчивается далеко не всегда: чаще токен просто
+    // закончилась: через logout() — далеко не всегда, чаще токен просто
     // перестаёт действовать, и перехватчик 401 уводит на логин, минуя logout.
-    // Кэши при этом оставались на диске, и следующему вошедшему на сменном
-    // телефоне предлагали продолжить чужой черновик заказа. Чистится до
-    // запроса: даже если сеть отвалится посередине, чужого на телефоне уже
-    // нет.
+    // Чистится до запроса: даже если сеть отвалится посередине, чужого на
+    // телефоне уже нет.
     await clearUserScopedCaches();
+    // Профиль прежнего человека — тоже до запроса. По нему буфер GPS решает,
+    // чьи точки отправлять (backgroundLocation.ts): между новым токеном и
+    // записью нового профиля точки прежнего ушли бы под чужим токеном.
+    await writeCachedUser(null);
     // И фоновый GPS предыдущего человека: если его сессия кончилась не через
     // logout(), задача всё ещё копит точки, и первая же удачная отправка
     // нового вошедшего залила бы их под его именем.
@@ -245,6 +299,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     if (result?.user) {
       await writeCachedUser(result.user);
+      // Копии каталога прежних людей — вон (lib/offline-copy); их работа остаётся.
+      await forgetOtherOwnersCopies(result.user.id);
       set({ user: result.user, isAuthenticated: true });
     } else {
       throw new Error('No user data in response');
@@ -301,19 +357,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Всё, что показывалось предыдущему пользователю, уходит вместе с ним.
     //
     // Телефон в поле часто общий: агент сдаёт смену и передаёт его сменщику.
-    // Без этой очистки следующий вошедший первые секунды видел чужой каталог,
-    // чужие недавние магазины и мог открыть чужой недописанный заказ или отчёт
-    // о визите.
+    // Без этой очистки следующий вошедший первые секунды видел чужой каталог и
+    // чужие недавние магазины. Черновики заказа и визита лежат под номером
+    // человека (lib/user-draft) — чужой их не найдёт, а свой продолжит.
     //
-    // Очереди отправки здесь НЕ трогаются намеренно. Это несделанная работа —
-    // заказы и действия курьера, ещё не дошедшие до сервера, — и стирать её при
+    // Очереди отправки и буфер точек GPS здесь НЕ трогаются намеренно. Это
+    // несделанная работа, ещё не дошедшая до сервера, — и стирать её при
     // выходе значит терять смену человека. Они помечены автором (ownerId) и
     // просто ждут, пока он войдёт снова.
     await clearUserScopedCaches();
 
     // Фоновый сбор координат — тоже «предыдущий пользователь»: он продолжал
-    // работать и после выхода, складывая точки в буфер, который доставался
-    // сменщику.
+    // работать и после выхода, снимая точки человека, которого уже нет.
     await stopTrackingOnSignOut();
 
     set({ user: null, isAuthenticated: false });

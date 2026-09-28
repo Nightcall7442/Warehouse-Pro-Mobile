@@ -147,6 +147,29 @@ describe("очередь визитов видна", () => {
     expect(isRejected(result.current.queued.get(1)!)).toBe(false);
   });
 
+  /*
+    Сменный телефон: визиты агента 77 ждут в очереди, вошёл агент 10.
+    Нарочные поломки: убрать сверку хозяина из useQueuedPlans — план 10
+    подменяется визитом 77; из remove или retry очереди визитов — 10
+    стирает или перезапускает визит 77.
+  */
+  it("чужая запись план не подменяет и не показывается; убрать или повторить её нельзя", async () => {
+    const foreign = [
+      { id: "x", planId: 1, status: "visited" as const, createdAt: "2026-09-19T10:00:00Z", synced: false, ownerId: 77, status_: "pending" as const },
+      { id: "y", planId: 2, status: "visited" as const, createdAt: "2026-09-19T10:01:00Z", synced: false, ownerId: 77, status_: "failed" as const, retryable: false, error: "План назначен другому" },
+    ];
+    useVisitQueue.setState({ actions: foreign });
+    const { result } = renderHook(() => useQueuedPlans(plans));
+    expect(result.current.plans.map(p => p.status)).toEqual(["planned", "planned", "visited"]);
+    expect(result.current.queued.size).toBe(0);
+
+    await useVisitQueue.getState().remove("x");
+    await useVisitQueue.getState().retry("y");
+    await new Promise(r => setTimeout(r, 0));
+    expect(useVisitQueue.getState().actions).toEqual(foreign);
+    expect(apiMock.updatePlanStatus).not.toHaveBeenCalled();
+  });
+
   it("«Повторить» снимает отказ и запускает проход", async () => {
     apiMock.updatePlanStatus.mockResolvedValue(undefined);
     useVisitQueue.setState({ actions: [
@@ -164,7 +187,7 @@ describe("очередь визитов видна", () => {
       expect(src).toContain("useQueuedPlans(serverPlans)");
       expect(src).toContain("<QueueNote action={queued.get(plan.id)!}");
     }
-    expect(readFileSync("src/components/OfflineBanner.tsx", "utf8")).toContain("useVisitQueue(s => s.actions.filter(a => !a.synced && a.retryable !== false).length)");
+    expect(readFileSync("src/components/OfflineBanner.tsx", "utf8")).toContain("useVisitQueue(s => s.actions.filter(a => !a.synced && a.retryable !== false && isOwnedBy(a, userId)).length)");
   });
 });
 

@@ -18,6 +18,7 @@ import {
 import { notify } from "../../store/toast";
 import { useThemeColors, useThemeStore } from "../../store/theme";
 import { useAuthStore } from "../../store/auth";
+import { ownerOrThrow, sessionEndedText } from "../../lib/offline-guard";
 import { Typography, Spacing, Radii, BOTTOM_TAB_HEIGHT } from "../../theme";
 import { ScreenHeader, EmptyState, Card } from "../ui";
 import { ErrorState } from "../QueryState";
@@ -93,6 +94,10 @@ export function AgentPlansView() {
   };
 
   const updateMutation = useMutation({
+    // Агент — до запроса: при 401 отметка ложится в очередь уже после того,
+    // как перехватчик обнулил вошедшего (см. add в store/visit-queue).
+    // Вошедшего нет уже сейчас — отказ до запроса (lib/offline-guard).
+    onMutate: () => ownerOrThrow(),
     mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) =>
       updatePlanStatus(planId, status),
     onSuccess: (_data, variables) => {
@@ -120,9 +125,9 @@ export function AgentPlansView() {
       показывал пропуск, KPI считал прогул. Отказ по существу (план не ваш,
       уже отмечен) — по-прежнему ошибка вслух.
     */
-    onError: async (e: Error, variables) => {
+    onError: async (e: Error, variables, ownerId) => {
       if (!isRetryableError(e)) { notify.error(errorText(e)); return; }
-      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status });
+      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status, ownerId });
       if (ok) notify.info(t("Нет связи — отметка сохранена и уйдёт сама", "Aloqa yo'q — belgi saqlandi, o'zi yuboriladi"));
       else notify.error(errorText(e));
       // Точка снимается сейчас, где агент стоит, и ждёт связи в буфере: иначе
@@ -134,6 +139,7 @@ export function AgentPlansView() {
   const queueVisit = useVisitQueue();
 
   const photoMutation = useMutation({
+    onMutate: () => ownerOrThrow(),
     mutationFn: ({ planId, photoUrl }: { planId: number; photoUrl: string }) =>
       saveVisitPhoto(planId, photoUrl),
     onSuccess: () => {
@@ -147,9 +153,9 @@ export function AgentPlansView() {
       с готовой ссылкой, не с файлом. Раньше — тост об ошибке, фото в S3
       сиротой, визит не отмечен.
     */
-    onError: async (e: Error, variables) => {
+    onError: async (e: Error, variables, ownerId) => {
       if (!isRetryableError(e)) { notify.error(errorText(e)); return; }
-      const ok = await queueVisit.add({ planId: variables.planId, status: "visited", photoUrl: variables.photoUrl });
+      const ok = await queueVisit.add({ planId: variables.planId, status: "visited", photoUrl: variables.photoUrl, ownerId });
       if (ok) notify.info(t("Нет связи — фото и отметка сохранены и уйдут сами", "Aloqa yo'q — rasm va belgi saqlandi, o'zi yuboriladi"));
       else notify.error(errorText(e));
       if (ok) void sendVisitPing();
@@ -198,6 +204,9 @@ export function AgentPlansView() {
     });
     if (!result.canceled && result.assets?.[0]?.uri) {
       const uri = result.assets[0].uri;
+      // Хозяин снимка — до загрузки, по той же причине, что в updateMutation.
+      const ownerId = useAuthStore.getState().user?.id;
+      if (ownerId == null) { notify.error(sessionEndedText()); return; }
       try {
         // Снимок уменьшается перед отправкой: камера отдаёт полное разрешение.
         const { dataUrl } = await preparePhoto(uri);
@@ -210,7 +219,7 @@ export function AgentPlansView() {
       } catch (e) {
         // Без связи снимок ждёт в очереди ссылкой на файл камеры и грузится
         // при первой связи вместе с отметкой.
-        if (isRetryableError(e) && await queueVisit.add({ planId, status: "visited", photoUri: uri })) {
+        if (isRetryableError(e) && await queueVisit.add({ planId, status: "visited", photoUri: uri, ownerId })) {
           notify.info(t("Нет связи — фото и отметка сохранены и уйдут сами", "Aloqa yo'q — rasm va belgi saqlandi, o'zi yuboriladi"));
           void sendVisitPing();
         } else {

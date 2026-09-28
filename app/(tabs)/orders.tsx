@@ -14,7 +14,8 @@ import { offlineOrderTotal } from "../../src/lib/order-money";
 import type { OfflineOrder } from "../../src/store/offline";
 import { useThemeColors } from "../../src/store/theme";
 import { useAuthStore } from "../../src/store/auth";
-import { useOfflineStore } from "../../src/store/offline";
+import { useOfflineStore, isOwnedBy } from "../../src/store/offline";
+import { useShopQueue, orderShopWait } from "../../src/store/shop-queue";
 import { Typography, Spacing, Radii, KpiColors } from "../../src/theme";
 
 import { Card, Badge } from "../../src/components/ui";
@@ -71,6 +72,9 @@ export default function OrdersScreen() {
   const { user } = useAuthStore();
   const offline = useOfflineStore();
   const { orders: offlineOrders, deliveryActions, syncAll, retry, retryDeliveryAction, syncingOrders, syncingActions } = offline;
+  const pendingShops = useShopQueue(s => s.shops);
+  // Пока очередь магазинов не прочитана с диска, «магазина нет» не значит «пропал».
+  const shopsLoaded = useShopQueue(s => s.loaded);
 
   const { data: orders, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ["myOrders"],
@@ -83,11 +87,12 @@ export default function OrdersScreen() {
   const pendingOffline = useMemo(() => {
     // Чужая запись (оставшаяся в очереди с прошлой смены на этом устройстве)
     // не показывается — иначе кнопка "Повтор" рядом с ней ничего бы не сделала.
-    return offlineOrders.filter(o => !o.synced && (o.ownerId == null || o.ownerId === user?.id));
+    // Ничья — тоже: без хозяина запись не своя ни для кого (isOwnedBy).
+    return offlineOrders.filter(o => !o.synced && isOwnedBy(o, user?.id));
   }, [offlineOrders, user?.id]);
 
   const pendingActions = useMemo(() => {
-    return deliveryActions.filter(a => !a.synced && (a.ownerId == null || a.ownerId === user?.id));
+    return deliveryActions.filter(a => !a.synced && isOwnedBy(a, user?.id));
   }, [deliveryActions, user?.id]);
 
   const queryClient = useQueryClient();
@@ -177,7 +182,8 @@ export default function OrdersScreen() {
                     <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary }}>{t("Отправка...", "Yuborilmoqda...")}</Text>
                   </View>
                 ) : (
-                  <TouchableOpacity onPress={() => syncAll()} style={{ marginTop: 4 }}>
+                  // Сначала новые магазины: заказ на точку, заведённую без связи, иначе не сдвинется.
+                  <TouchableOpacity onPress={() => { void useShopQueue.getState().sync().then(() => syncAll()); }} style={{ marginTop: 4 }}>
                     <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontSemibold }}>
                       {t("Нажмите для повторной отправки", "Qayta yuborish uchun bosing")}
                     </Text>
@@ -370,6 +376,8 @@ export default function OrdersScreen() {
           }
           if (item.type === "pending") {
             const o = item.order;
+            // Заказ на магазин, заведённый без связи, уходит только за ним.
+            const shopWait = orderShopWait(o.input.shopId, pendingShops, shopsLoaded);
             const time = (() => { try { return format(parseISO(o.createdAt), "HH:mm", { locale: ru }); } catch { return ""; } })();
             // Открыть нечего: номера у заказа нет, пока его не принял сервер.
             return (
@@ -386,9 +394,21 @@ export default function OrdersScreen() {
                     {offlineOrderTotal(o).toLocaleString("ru")}
                   </Text>
                 </View>
-                <Badge variant={o.status === "failed" ? "danger" : "warning"} style={{ marginTop: Spacing.sm }}>
-                  {o.status === "failed" ? t("Сервер отклонил", "Server rad etdi") : t("Ожидает отправки", "Yuborish kutilmoqda")}
+                <Badge variant={o.status === "failed" || shopWait === "blocked" ? "danger" : "warning"} style={{ marginTop: Spacing.sm }}>
+                  {shopWait === "blocked" ? t("Новый магазин не принят — заказ не уйдёт", "Yangi do'kon qabul qilinmadi — buyurtma yuborilmaydi")
+                    : shopWait === "waiting" ? t("Ждёт отправки нового магазина", "Yangi do'kon yuborilishini kutmoqda")
+                    : o.status === "failed" ? t("Сервер отклонил", "Server rad etdi") : t("Ожидает отправки", "Yuborish kutilmoqda")}
                 </Badge>
+                {/* Сам не уйдёт никогда: без выхода строка висела бы вечно (магазин
+                    могли и убрать с телефона, пока заказ лежал в черновике). */}
+                {shopWait === "blocked" && (
+                  <TouchableOpacity onPress={() => confirmDiscard(o.shopName, () => offline.remove(o.id))}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: Spacing.sm, alignSelf: "flex-start" }}>
+                    <Feather name="x" size={14} color={colors.text.muted} />
+                    <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary }}>{t("Удалить из очереди", "Navbatdan o'chirish")}</Text>
+                  </TouchableOpacity>
+                )}
               </Card>
             );
           }

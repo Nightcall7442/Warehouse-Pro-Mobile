@@ -3,7 +3,7 @@ import { parseAmount } from "../../src/lib/order-money";
 import { useRefreshOnFocus } from "../../src/hooks/useRefreshOnFocus";
 import { useScrollTopOnFocus } from "../../src/hooks/useScrollTopOnFocus";
 import { useRouter } from "expo-router";
-import { reportNotQueued } from "../../src/lib/offline-guard";
+import { reportNotQueued, ownerOrThrow, sessionEndedText } from "../../src/lib/offline-guard";
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
   RefreshControl, ActivityIndicator, Linking, Alert, Modal, Pressable,
@@ -16,8 +16,12 @@ import { useThemeColors } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding } from "../../src/theme";
 import { Card, Button, Badge, SectionHeader, EmptyState } from "../../src/components/ui";
 import { mapUrl, FAIL_REASONS, FAIL_REASON_MAX, failReason, failReasonLabel } from "../../src/lib/courier-route";
-import { listMyDeliveries, type Delivery } from "../../src/api";
-import { useOfflineStore, isRetryableError, deliveryActionOrderId } from "../../src/store/offline";
+// Отметки — обычным импортом: модуль всё равно подключён ради списка, а
+// отложенный import() в тестовой среде не работает, и путь курьера после 401
+// нечем было бы проверить.
+import { listMyDeliveries, markOutForDelivery, markDelivered, markFailed, type Delivery } from "../../src/api";
+import { useOfflineStore, isRetryableError, deliveryActionOrderId, isOwnedBy } from "../../src/store/offline";
+import { useAuthStore } from "../../src/store/auth";
 import { errorText } from "../../src/lib/error-text";
 import { notify } from "../../src/store/toast";
 import * as Haptics from "expo-haptics";
@@ -188,7 +192,15 @@ export default function DeliveriesScreen() {
     queryFn: () => listMyDeliveries(),
   });
 
-  const { addDeliveryAction, deliveryActions, retryDeliveryAction, discardDeliveryAction } = useOfflineStore();
+  const { addDeliveryAction, deliveryActions: allActions, retryDeliveryAction, discardDeliveryAction } = useOfflineStore();
+  /*
+    Только свои отметки. Карточки ключуются номером заказа, а заказ могли
+    переназначить с курьера А на Б: отметка А ложилась на карточку Б — либо
+    «ждут отправки» без кнопок, либо «отклонено» с «Убрать», стиравшим
+    работу А. Правило то же, что у очереди (isOwnedBy).
+  */
+  const userId = useAuthStore(s => s.user?.id);
+  const deliveryActions = useMemo(() => allActions.filter(a => isOwnedBy(a, userId)), [allActions, userId]);
 
   // An order queued offline stays in `myDeliveries` untouched — there's no
   // server response to update it with yet — so without this, the card kept
@@ -259,6 +271,11 @@ export default function DeliveriesScreen() {
         shopName: order.shopName,
         createdAt: new Date().toISOString(),
         synced: false,
+        // Курьер — до запроса: при 401 отметка ложится в очередь уже после
+        // того, как перехватчик обнулил вошедшего (см. addDeliveryAction).
+        // Вошедшего нет уже сейчас — запрос не уходит, в очередь ничего не
+        // ложится, onError скажет «Сессия закончилась» (lib/offline-guard).
+        ownerId: ownerOrThrow(),
       };
       const net = await Network.getNetworkStateAsync();
       if (!net.isConnected) {
@@ -269,7 +286,6 @@ export default function DeliveriesScreen() {
         });
         return { offline: true, queued };
       }
-      const { markOutForDelivery } = await import("../../src/api");
       try {
         // return await, а не return: без await обещание уходит из try наружу,
         // и написанный ниже перехват не срабатывал ни разу — ошибка сети
@@ -318,6 +334,11 @@ export default function DeliveriesScreen() {
         shopName: order.shopName,
         createdAt: new Date().toISOString(),
         synced: false,
+        // Курьер — до запроса: при 401 отметка ложится в очередь уже после
+        // того, как перехватчик обнулил вошедшего (см. addDeliveryAction).
+        // Вошедшего нет уже сейчас — запрос не уходит, в очередь ничего не
+        // ложится, onError скажет «Сессия закончилась» (lib/offline-guard).
+        ownerId: ownerOrThrow(),
       };
       const net = await Network.getNetworkStateAsync();
       if (!net.isConnected) {
@@ -328,7 +349,6 @@ export default function DeliveriesScreen() {
         });
         return { offline: true, queued };
       }
-      const { markDelivered } = await import("../../src/api");
       try {
         // return await, а не return: без await обещание уходит из try наружу,
         // и написанный ниже перехват не срабатывал ни разу — ошибка сети
@@ -378,6 +398,11 @@ export default function DeliveriesScreen() {
         shopName: order.shopName,
         createdAt: new Date().toISOString(),
         synced: false,
+        // Курьер — до запроса: при 401 отметка ложится в очередь уже после
+        // того, как перехватчик обнулил вошедшего (см. addDeliveryAction).
+        // Вошедшего нет уже сейчас — запрос не уходит, в очередь ничего не
+        // ложится, onError скажет «Сессия закончилась» (lib/offline-guard).
+        ownerId: ownerOrThrow(),
       };
       const net = await Network.getNetworkStateAsync();
       if (!net.isConnected) {
@@ -388,7 +413,6 @@ export default function DeliveriesScreen() {
         });
         return { offline: true, queued };
       }
-      const { markFailed } = await import("../../src/api");
       try {
         // return await, а не return: без await обещание уходит из try наружу,
         // и написанный ниже перехват не срабатывал ни разу — ошибка сети
@@ -559,14 +583,21 @@ export default function DeliveriesScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         bulkOut.current = true;
         let failed = 0;
+        let ended = false;
         try {
           for (const order of orders) {
+            // Ответ 401 на одной из точек обнулил вошедшего: остальные не
+            // отмечаем вовсе. Раньше цикл шёл дальше, и каждая следующая
+            // точка давала своё окно «нет места» — до двадцати девяти подряд.
+            if (!useAuthStore.getState().user) { ended = true; break; }
             try { await mutateOutAsync(order); } catch { failed += 1; }
           }
         } finally {
           bulkOut.current = false;
         }
         qc.invalidateQueries({ queryKey: ["myDeliveries"] });
+        // Одно честное сообщение вместо итога: отмеченное до 401 лежит в очереди под курьером.
+        if (ended) { notify.error(sessionEndedText()); return; }
         const done = orders.length - failed;
         if (failed === 0) notify.success(t(`Выехал по ${done} ${plural(done, "точке", "точкам", "точкам")}`, `${done} ta nuqta bo'yicha yo'lga chiqdingiz`));
         else notify.warning(t(`Выехал по ${done} из ${n}, не вышло: ${failed}`, `${n} tadan ${done} tasi yo'lda, chiqmadi: ${failed}`));

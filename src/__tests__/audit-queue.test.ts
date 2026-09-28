@@ -55,6 +55,7 @@ jest.mock("../api", () => ({
 jest.mock("../backgroundLocation", () => ({
   startBackgroundTracking: jest.fn(async () => ({ success: true })),
   stopBackgroundTracking: jest.fn(async () => {}),
+  settleUnownedPoints: jest.fn(async () => {}),
   isBackgroundTrackingActive: jest.fn(async () => false),
 }));
 
@@ -163,6 +164,8 @@ describe("истёкшая сессия не хоронит очередь", () 
 
   it("после 401 заказ снова уходит следующим проходом, а не остаётся красным навсегда", async () => {
     apiMock.createOrder.mockRejectedValue(sessionExpiredError(401));
+    // Заказ агента и сам агент: ничьё (без хозяина) очередь не отправляет никому.
+    useAuthStore.setState({ user: { id: 1, name: "Агент А" }, isAuthenticated: true });
     useOfflineStore.setState({
       orders: [{
         id: "o1",
@@ -170,6 +173,7 @@ describe("истёкшая сессия не хоронит очередь", () 
         shopName: "Магазин у дороги",
         createdAt: new Date().toISOString(),
         synced: false,
+        ownerId: 1,
       }],
     });
 
@@ -191,6 +195,8 @@ describe("истёкшая сессия не хоронит очередь", () 
 
 // ── 2. Отметка о доставке, поставленная во время прохода ────────────────────
 describe("проход синхронизации не затирает то, что пришло во время него", () => {
+  // Отметки курьера и сам курьер: ничьё очередь не отправляет никому.
+  beforeEach(() => { useAuthStore.setState({ user: { id: 1, name: "Агент А" }, isAuthenticated: true }); });
   it("отметка о доставке, поставленная в полёте, остаётся и в стейте, и на диске", async () => {
     let finishFlight: (v: unknown) => void = () => {};
     apiMock.markOutForDelivery.mockImplementation(
@@ -203,6 +209,7 @@ describe("проход синхронизации не затирает то, ч
         action: { type: "markOutForDelivery", orderId: 101 },
         createdAt: new Date().toISOString(),
         synced: false,
+        ownerId: 1,
       }],
     });
 
@@ -216,6 +223,8 @@ describe("проход синхронизации не затирает то, ч
       action: { type: "markDelivered", orderId: 102, cashAmount: "450000.00" },
       createdAt: new Date().toISOString(),
       synced: false,
+      // Хозяина экран снимает до запроса: без него очередь запись не берёт.
+      ownerId: 1,
     } as any);
 
     finishFlight({});
@@ -234,6 +243,7 @@ describe("проход синхронизации не затирает то, ч
 
 // ── 2а. Очередь курьера: по одному и в порядке постановки ──────────────────
 describe("отметки курьера уходят по одной и по порядку", () => {
+  beforeEach(() => { useAuthStore.setState({ user: { id: 1, name: "Агент А" }, isAuthenticated: true }); });
   const at = (sec: number) => new Date(Date.UTC(2026, 8, 12, 10, 0, sec)).toISOString();
 
   it("порядок — по createdAt, а не по положению в списке; «выехал» раньше «доставлен»", async () => {
@@ -242,8 +252,8 @@ describe("отметки курьера уходят по одной и по п�
     apiMock.markDelivered.mockImplementation(async (id: number) => { calls.push(`done:${id}`); });
     useOfflineStore.setState({
       deliveryActions: [
-        { id: "b", action: { type: "markDelivered", orderId: 7, cashAmount: "10" }, createdAt: at(5), synced: false },
-        { id: "a", action: { type: "markOutForDelivery", orderId: 7 }, createdAt: at(1), synced: false },
+        { id: "b", action: { type: "markDelivered", orderId: 7, cashAmount: "10" }, createdAt: at(5), synced: false, ownerId: 1 },
+        { id: "a", action: { type: "markOutForDelivery", orderId: 7 }, createdAt: at(1), synced: false, ownerId: 1 },
       ],
     });
     const r = await useOfflineStore.getState().syncDeliveryActions();
@@ -256,8 +266,8 @@ describe("отметки курьера уходят по одной и по п�
     apiMock.markDelivered.mockResolvedValue(undefined);
     useOfflineStore.setState({
       deliveryActions: [
-        { id: "a", action: { type: "markOutForDelivery", orderId: 7 }, createdAt: at(1), synced: false },
-        { id: "b", action: { type: "markDelivered", orderId: 8, cashAmount: "10" }, createdAt: at(2), synced: false },
+        { id: "a", action: { type: "markOutForDelivery", orderId: 7 }, createdAt: at(1), synced: false, ownerId: 1 },
+        { id: "b", action: { type: "markDelivered", orderId: 8, cashAmount: "10" }, createdAt: at(2), synced: false, ownerId: 1 },
       ],
     });
     const r = await useOfflineStore.getState().syncDeliveryActions();
@@ -275,8 +285,8 @@ describe("отметки курьера уходят по одной и по п�
     apiMock.markDelivered.mockResolvedValue(undefined);
     useOfflineStore.setState({
       deliveryActions: [
-        { id: "a", action: { type: "markOutForDelivery", orderId: 7 }, createdAt: at(1), synced: false },
-        { id: "b", action: { type: "markDelivered", orderId: 8, cashAmount: "10" }, createdAt: at(2), synced: false },
+        { id: "a", action: { type: "markOutForDelivery", orderId: 7 }, createdAt: at(1), synced: false, ownerId: 1 },
+        { id: "b", action: { type: "markDelivered", orderId: 8, cashAmount: "10" }, createdAt: at(2), synced: false, ownerId: 1 },
       ],
     });
     const r = await useOfflineStore.getState().syncDeliveryActions();
@@ -287,6 +297,10 @@ describe("отметки курьера уходят по одной и по п�
 
 // ── 3. Переполненное хранилище ──────────────────────────────────────────────
 describe("постановка в очередь честно сообщает о неудаче", () => {
+  // Кто-то вошёл: без хозяина очередь запись не берёт вовсе (keep-own-work.test),
+  // и «false» здесь значил бы не переполненный диск, а отказ по хозяину.
+  beforeEach(() => { useAuthStore.setState({ user: { id: 1, name: "Агент А" }, isAuthenticated: true }); });
+
   it("addOrder возвращает false, если запись на диск не удалась", async () => {
     storage.setItem.mockRejectedValue(new Error("QUOTA_EXCEEDED"));
     const ok = await useOfflineStore.getState().addOrder({
@@ -326,7 +340,7 @@ describe("постановка в очередь честно сообщает �
 
 // ── 4. Общий сменный телефон ────────────────────────────────────────────────
 describe("смена агента на общем телефоне", () => {
-  it("выход останавливает фоновый трекинг и стирает буфер координат", async () => {
+  it("выход останавливает фоновый трекинг, а буфер координат оставляет хозяину", async () => {
     useAuthStore.setState({ user: { id: 1, name: "Агент А" }, isAuthenticated: true });
 
     await useAuthStore.getState().logout();
@@ -335,7 +349,8 @@ describe("смена агента на общем телефоне", () => {
     // берёт автора из токена, а время съёмки приходит честное.
     expect(bgLocation.stopBackgroundTracking).toHaveBeenCalled();
     const removed = storage.removeItem.mock.calls.map((c: any[]) => c[0]);
-    expect(removed).toContain("pending_locations");
+    // Буфер не стирается: точки помечены хозяином и ждут его входа.
+    expect(removed).not.toContain("pending_locations");
     expect(removed).toContain("gps_auto_track");
   });
 
@@ -345,9 +360,9 @@ describe("смена агента на общем телефоне", () => {
     await useAuthStore.getState().login("b@example.com", "pass");
 
     // Сессия предыдущего агента чаще заканчивается ответом 401, а не выходом:
-    // тогда черновик заказа оставался на диске, и следующему предлагали
-    // «Продолжить черновик?» с чужим магазином, позициями и скидками.
-    expect(storage.removeItem.mock.calls.map((c: any[]) => c[0])).toContain("order_draft");
+    // тогда каталог и недавние магазины прежнего оставались на диске.
+    // Черновики — под номером человека и сменщику не видны (keep-own-work).
+    expect(storage.removeItem.mock.calls.map((c: any[]) => c[0])).toContain("cached_products");
   });
 
   it("очередь отправки при выходе НЕ трогается — это несделанная работа", async () => {
@@ -435,9 +450,11 @@ describe("перехватчик 401 в сетевом слое", () => {
     await expect(getMe()).rejects.toBeTruthy();
 
     expect(freshAuth.getState().isAuthenticated).toBe(false);
-    // Раньше здесь стирался только токен, а черновик заказа и кэш магазинов
-    // предыдущего агента оставались на диске до следующего logout(), которого
-    // могло и не быть.
-    expect(freshStorage.removeItem.mock.calls.map((c: any[]) => c[0])).toContain("order_draft");
+    // Раньше здесь стирался только токен, а кэш каталога и магазинов
+    // предыдущего агента оставался на диске до следующего logout(), которого
+    // могло и не быть. Буфер точек — его работа — не стирается.
+    const removed = freshStorage.removeItem.mock.calls.map((c: any[]) => c[0]);
+    expect(removed).toContain("cached_products");
+    expect(removed).not.toContain("pending_locations");
   });
 });

@@ -12,7 +12,9 @@ import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Radii, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
 import { Card, Button } from "../../src/components/ui";
 import { createShop, uploadFile, getTerritories, Territory } from "../../src/api";
-import { uuidv4 } from "../../src/store/offline";
+import { uuidv4, isRetryableError } from "../../src/store/offline";
+import { useShopQueue } from "../../src/store/shop-queue";
+import { ownerOrThrow } from "../../src/lib/offline-guard";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { PressableScale, FadeInItem } from "../../src/components/Animated";
@@ -42,6 +44,9 @@ export default function NewShopScreen() {
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
+  // Снимок, который не удалось загрузить без связи: файл на телефоне, уйдёт вместе с магазином.
+  const [localPhoto, setLocalPhoto] = useState<string | null>(null);
+  const shownPhoto = photo ?? localPhoto;
   const [gpsLat, setGpsLat] = useState<string | null>(null);
   const [gpsLng, setGpsLng] = useState<string | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -66,7 +71,17 @@ export default function NewShopScreen() {
       const { dataUrl } = await preparePhoto(res.assets[0].uri);
       const url = await uploadFile(dataUrl, "shops");
       setPhoto(url);
-    } catch (e) { notify.error(e instanceof Error ? e.message : t("Ошибка загрузки", "Yuklashda xato")); }
+      setLocalPhoto(null);
+    } catch (e) {
+      // Без связи снимок не выбрасывается: остаётся файлом и уйдёт с магазином.
+      if (isRetryableError(e)) {
+        setLocalPhoto(res.assets[0].uri);
+        setPhoto(null);
+        notify.info(t("Нет связи — фото осталось на телефоне и уйдёт вместе с магазином", "Aloqa yo'q — rasm telefonda qoldi va do'kon bilan birga yuboriladi"));
+        return;
+      }
+      notify.error(e instanceof Error ? e.message : t("Ошибка загрузки", "Yuklashda xato"));
+    }
   };
 
   const takePhoto = async () => {
@@ -153,9 +168,24 @@ export default function NewShopScreen() {
    * при каждом рендере нельзя.
    */
   const idempotencyKeyRef = useRef(uuidv4());
+  // Снимок с телефона, загруженный при «Создать»: сорвётся само создание — в
+  // очередь уйдёт уже ссылка, и файл не погонят по слабой связи второй раз.
+  const uploadedRef = useRef<string | null>(null);
+  const shopInput = () => ({ name, ownerName: owner || undefined, phone: phone || undefined, city: city || undefined, district: district || undefined, address: address || undefined, notes: notes || undefined, photoUrl: photo || uploadedRef.current || undefined, gpsLat: gpsLat || undefined, gpsLng: gpsLng || undefined, territoryId, idempotencyKey: idempotencyKeyRef.current });
 
   const mutation = useMutation({
-    mutationFn: () => createShop({ name, ownerName: owner || undefined, phone: phone || undefined, city: city || undefined, district: district || undefined, address: address || undefined, notes: notes || undefined, photoUrl: photo || undefined, gpsLat: gpsLat || undefined, gpsLng: gpsLng || undefined, territoryId, idempotencyKey: idempotencyKeyRef.current }),
+    // Хозяин магазина — до запроса: ответ 401 обнулит вошедшего раньше, чем
+    // сработает onError, и магазин лёг бы в очередь ничьим (см. shop-queue add).
+    // Вошедшего нет уже сейчас — отказ здесь же: запрос не уходит, onError
+    // покажет «Сессия закончилась» (не сетевая ошибка — в очередь не ляжет).
+    onMutate: () => ownerOrThrow(),
+    mutationFn: async () => {
+      const input = shopInput();
+      if (!input.photoUrl && localPhoto) {
+        input.photoUrl = uploadedRef.current = await uploadFile((await preparePhoto(localPhoto)).dataUrl, "shops");
+      }
+      return createShop(input);
+    },
     // "shops" and "availableShops" are two different endpoints (the latter
     // backs the shop picker in order creation and the catalog screen) — only
     // invalidating "shops" left a just-created shop missing from both until a
@@ -171,15 +201,29 @@ export default function NewShopScreen() {
       // Повтор после оборванной связи — не ошибка и не второй магазин.
       notify.success(res?.idempotent ? t("Магазин уже был создан", "Do'kon allaqachon yaratilgan") : t("Магазин создан", "Do'kon yaratildi"));
     },
-    onError: (e: Error) => {
-      // "timeout of 15000ms exceeded" агенту не говорит ничего, а нажать кнопку
-      // ещё раз предлагает прямо. Теперь повтор безопасен — тот же ключ вернёт
-      // тот же магазин, — но сказать об этом надо человеческими словами.
-      const msg = e.message ?? "";
-      const network = /timeout|network|econn|aborted/i.test(msg);
-      notify.error(network
-        ? t("Связь пропала. Нажмите «Создать» ещё раз — повтор не создаст второй магазин.", "Aloqa uzildi. «Yaratish»ni yana bosing — ikkinchi do'kon yaratilmaydi.")
-        : msg || t("Не удалось создать магазин", "Do'kon yaratilmadi"));
+    onError: async (e: Error, _vars, ownerId) => {
+      /*
+        Связи нет — магазин ложится в очередь (store/shop-queue) с тем же
+        ключом попытки: дошёл ли первый запрос, сервер узнает по ключу. Раньше
+        здесь было «Нажмите «Создать» ещё раз», а заказ на новую точку без
+        связи оформить было нельзя вовсе.
+      */
+      if (isRetryableError(e)) {
+        const input = shopInput();
+        const saved = await useShopQueue.getState().add(input, input.photoUrl ? undefined : localPhoto ?? undefined, ownerId);
+        if (saved) {
+          router.back();
+          notify.info(t("Нет связи — магазин сохранён на телефоне и уйдёт сам. Заказ на него можно оформить уже сейчас.", "Aloqa yo'q — do'kon telefonda saqlandi va o'zi yuboriladi. Unga buyurtmani hozir rasmiylashtirish mumkin."));
+          return;
+        }
+        // Не записалось на диск (нет места) — форма остаётся, и сказано это окном, а не тостом.
+        Alert.alert(
+          t("Магазин НЕ сохранён", "Do'kon SAQLANMADI"),
+          t("На телефоне нет места. Освободите место и нажмите «Создать» ещё раз — повтор не создаст второй магазин.", "Telefonda joy yo'q. Joy bo'shating va «Yaratish»ni yana bosing — ikkinchi do'kon yaratilmaydi."),
+        );
+        return;
+      }
+      notify.error(e.message || t("Не удалось создать магазин", "Do'kon yaratilmadi"));
     },
   });
 
@@ -190,7 +234,7 @@ export default function NewShopScreen() {
    * её получают, стоя у витрины, и потерять её обиднее прочего.
    */
   const hasInput =
-    Boolean(name || owner || phone || city || district || address || notes || photo || gpsLat);
+    Boolean(name || owner || phone || city || district || address || notes || shownPhoto || gpsLat);
 
   function requestClose() {
     if (!hasInput) {
@@ -232,9 +276,9 @@ export default function NewShopScreen() {
         <FadeInItem delay={0}>
         {/* Photo */}
         <PressableScale onPress={pickPhoto} haptic="light">
-          <Card style={{ width: "100%", height: 160, overflow: "hidden", marginBottom: 20, ...(photo ? soft(isDark).raisedSm : soft(isDark).inset), borderStyle: "dashed", padding: 0 }}>
-            {photo ? (
-              <Image source={{ uri: photo }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+          <Card style={{ width: "100%", height: 160, overflow: "hidden", marginBottom: 20, ...(shownPhoto ? soft(isDark).raisedSm : soft(isDark).inset), borderStyle: "dashed", padding: 0 }}>
+            {shownPhoto ? (
+              <Image source={{ uri: shownPhoto }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             ) : (
               <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
                 <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent.primary + "22", alignItems: "center", justifyContent: "center" }}>
@@ -247,8 +291,8 @@ export default function NewShopScreen() {
           </Card>
         </PressableScale>
 
-        {photo && (
-          <TouchableOpacity onPress={() => setPhoto(null)}
+        {shownPhoto && (
+          <TouchableOpacity onPress={() => { setPhoto(null); setLocalPhoto(null); }}
             style={{ alignSelf: "center", marginTop: -12, marginBottom: 16, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.status.dangerDim, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radii.full }}>
             <Feather name="trash-2" size={13} color={colors.status.danger} />
             <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.status.danger }}>{t("Удалить фото", "Rasmni o'chirish")}</Text>
