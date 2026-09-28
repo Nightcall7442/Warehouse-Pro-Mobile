@@ -55,6 +55,7 @@ jest.mock("../api", () => ({
 jest.mock("../backgroundLocation", () => ({
   startBackgroundTracking: jest.fn(async () => ({ success: true })),
   stopBackgroundTracking: jest.fn(async () => {}),
+  forgetUnownedPoints: jest.fn(async () => {}),
   isBackgroundTrackingActive: jest.fn(async () => false),
 }));
 
@@ -326,7 +327,7 @@ describe("постановка в очередь честно сообщает �
 
 // ── 4. Общий сменный телефон ────────────────────────────────────────────────
 describe("смена агента на общем телефоне", () => {
-  it("выход останавливает фоновый трекинг и стирает буфер координат", async () => {
+  it("выход останавливает фоновый трекинг, а буфер координат оставляет хозяину", async () => {
     useAuthStore.setState({ user: { id: 1, name: "Агент А" }, isAuthenticated: true });
 
     await useAuthStore.getState().logout();
@@ -335,7 +336,8 @@ describe("смена агента на общем телефоне", () => {
     // берёт автора из токена, а время съёмки приходит честное.
     expect(bgLocation.stopBackgroundTracking).toHaveBeenCalled();
     const removed = storage.removeItem.mock.calls.map((c: any[]) => c[0]);
-    expect(removed).toContain("pending_locations");
+    // Буфер не стирается: точки помечены хозяином и ждут его входа.
+    expect(removed).not.toContain("pending_locations");
     expect(removed).toContain("gps_auto_track");
   });
 
@@ -345,9 +347,9 @@ describe("смена агента на общем телефоне", () => {
     await useAuthStore.getState().login("b@example.com", "pass");
 
     // Сессия предыдущего агента чаще заканчивается ответом 401, а не выходом:
-    // тогда черновик заказа оставался на диске, и следующему предлагали
-    // «Продолжить черновик?» с чужим магазином, позициями и скидками.
-    expect(storage.removeItem.mock.calls.map((c: any[]) => c[0])).toContain("order_draft");
+    // тогда каталог и недавние магазины прежнего оставались на диске.
+    // Черновики — под номером человека и сменщику не видны (keep-own-work).
+    expect(storage.removeItem.mock.calls.map((c: any[]) => c[0])).toContain("cached_products");
   });
 
   it("очередь отправки при выходе НЕ трогается — это несделанная работа", async () => {
@@ -435,9 +437,11 @@ describe("перехватчик 401 в сетевом слое", () => {
     await expect(getMe()).rejects.toBeTruthy();
 
     expect(freshAuth.getState().isAuthenticated).toBe(false);
-    // Раньше здесь стирался только токен, а черновик заказа и кэш магазинов
-    // предыдущего агента оставались на диске до следующего logout(), которого
-    // могло и не быть.
-    expect(freshStorage.removeItem.mock.calls.map((c: any[]) => c[0])).toContain("order_draft");
+    // Раньше здесь стирался только токен, а кэш каталога и магазинов
+    // предыдущего агента оставался на диске до следующего logout(), которого
+    // могло и не быть. Буфер точек — его работа — не стирается.
+    const removed = freshStorage.removeItem.mock.calls.map((c: any[]) => c[0]);
+    expect(removed).toContain("cached_products");
+    expect(removed).not.toContain("pending_locations");
   });
 });

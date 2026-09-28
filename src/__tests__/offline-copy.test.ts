@@ -41,10 +41,10 @@ describe("отложенная копия", () => {
   });
 
   it("разные виды не путаются", async () => {
-    await saveOfflineCopy("shops", 7, ["магазины"]);
-    await saveOfflineCopy("products", 7, ["товары"]);
-    expect((await loadOfflineCopy<string[]>("shops", 7))?.data).toEqual(["магазины"]);
-    expect((await loadOfflineCopy<string[]>("products", 7))?.data).toEqual(["товары"]);
+    await saveOfflineCopy("shops", 7, [{ id: 9, name: "Магазин у дома" }]);
+    await saveOfflineCopy("products", 7, [{ id: 1, name: "Сахар", unitPrice: "12000.00", basePrice: "12000.00" }]);
+    expect((await loadOfflineCopy<{ name: string }[]>("shops", 7))?.data?.map(s => s.name)).toEqual(["Магазин у дома"]);
+    expect((await loadOfflineCopy<{ name: string }[]>("products", 7))?.data?.map(p => p.name)).toEqual(["Сахар"]);
   });
 
   it("испорченная запись не роняет экран", async () => {
@@ -79,7 +79,8 @@ describe("мастер заказа читает копию", () => {
 
   it("оба пикера подключены к useOfflineCopy", () => {
     expect(src).toContain('useOfflineCopy<typeof liveShops>("shops", liveShops)');
-    expect(src).toContain('useOfflineCopy<typeof liveProducts>("products", liveProducts)');
+    // Каталог — копия ЭТОГО магазина: у каждого свои цены и ступени.
+    expect(src).toContain('useOfflineCopy<typeof liveProducts>("products", liveProducts, `shop${shopId ?? 0}`)');
   });
 
   it("о возрасте копии сказано прямо в обоих", () => {
