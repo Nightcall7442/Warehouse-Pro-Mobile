@@ -27,6 +27,32 @@ export function uuidv4() {
 
 const STORAGE_KEY = "pending_orders";
 const DELIVERY_ACTIONS_KEY = "pending_delivery_actions";
+const SHOP_IDS_KEY = "shop_id_map";
+/** Сколько пар «временный id → настоящий» помнить: хватает на неделю новых точек. */
+const SHOP_IDS_KEEP = 50;
+
+/**
+ * Магазин, заведённый без связи (store/shop-queue): сервер о нём ещё не знает.
+ *
+ * Временный id отрицательный — с настоящим не совпадёт никогда. Заказ на такой
+ * магазин ждёт в очереди, пока магазин не уйдёт и не получит свой номер:
+ * отправленный с временным id, он лёг бы на чужую точку или получил отказ.
+ */
+export function isLocalShopId(id: number): boolean {
+  return id < 0;
+}
+
+/**
+ * Настоящий id магазина по временному, если магазин уже ушёл; иначе как есть.
+ *
+ * Пара хранится и после того, как запись магазина покинула очередь: экран
+ * заказа мог быть открыт на новой точке, пока она отправлялась, и черновик
+ * помнит временный id после перезапуска.
+ */
+export function resolveShopId(id: number): number {
+  if (!isLocalShopId(id)) return id;
+  return useOfflineStore.getState().shopIds.find(([local]) => local === id)?.[1] ?? id;
+}
 
 export interface OfflineOrder {
   id: string;
@@ -136,6 +162,8 @@ export function deliveryActionTitle(entry: OfflineDeliveryAction): string {
 interface OfflineStore {
   orders: OfflineOrder[];
   deliveryActions: OfflineDeliveryAction[];
+  /** Пары [временный id магазина, настоящий] — см. resolveShopId. */
+  shopIds: [number, number][];
   loaded: boolean;
   syncingOrders: boolean;
   syncingActions: boolean;
@@ -158,6 +186,8 @@ interface OfflineStore {
   clear: () => Promise<void>;
   retry: (id: string) => Promise<boolean>;
   retryDeliveryAction: (id: string) => Promise<boolean>;
+  /** Магазин из очереди получил настоящий id: переписать ждущие его заказы. */
+  remapShopId: (localId: number, serverId: number) => Promise<void>;
 }
 
 async function readQueue(): Promise<OfflineOrder[]> {
@@ -203,6 +233,15 @@ async function writeQueue(orders: OfflineOrder[]): Promise<boolean> {
 async function readDeliveryActionsQueue(): Promise<OfflineDeliveryAction[]> {
   try {
     const raw = await AsyncStorage.getItem(DELIVERY_ACTIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function readShopIds(): Promise<[number, number][]> {
+  try {
+    const raw = await AsyncStorage.getItem(SHOP_IDS_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -349,13 +388,14 @@ function currentUserId(): number | undefined {
 export const useOfflineStore = create<OfflineStore>((set, get) => ({
   orders: [],
   deliveryActions: [],
+  shopIds: [],
   loaded: false,
   syncingOrders: false,
   syncingActions: false,
 
   load: async () => {
-    const [orders, deliveryActions] = await Promise.all([readQueue(), readDeliveryActionsQueue()]);
-    set({ orders, deliveryActions, loaded: true });
+    const [orders, deliveryActions, shopIds] = await Promise.all([readQueue(), readDeliveryActionsQueue(), readShopIds()]);
+    set({ orders, deliveryActions, shopIds, loaded: true });
   },
 
   addOrder: async (order) => {
@@ -365,7 +405,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     const withKey = {
       ...order,
       ownerId: order.ownerId ?? currentUserId(),
-      input: { ...order.input, idempotencyKey: order.input.idempotencyKey ?? uuidv4() },
+      // Магазин мог уйти, пока экран заказа был открыт: заказ ляжет уже с настоящим id.
+      input: { ...order.input, shopId: resolveShopId(order.input.shopId), idempotencyKey: order.input.idempotencyKey ?? uuidv4() },
       status: "pending" as const,
     };
     const orders = [...get().orders, withKey];
@@ -492,7 +533,9 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       // Capture snapshot at start — work only with this snapshot to avoid race conditions
       const snapshot = get().orders;
       const userId = currentUserId();
-      const pendingOrders = snapshot.filter(o => shouldAutoSync(o, userId));
+      // Заказ на магазин, которого сервер ещё не знает, ждёт: его отпустит
+      // очередь магазинов, переписав id (remapShopId).
+      const pendingOrders = snapshot.filter(o => shouldAutoSync(o, userId) && !isLocalShopId(o.input.shopId));
 
       if (pendingOrders.length === 0) return { synced: 0, failed: 0 };
 
@@ -589,8 +632,10 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
        */
       const latestOrders = get().orders;
       const addedDuringSync = latestOrders.filter(o => !finalSnapshot.some(s => s.id === o.id));
-      const stillHere = new Set(latestOrders.map(o => o.id));
-      const kept = finalSnapshot.filter(o => stillHere.has(o.id));
+      const latestById = new Map(latestOrders.map(o => [o.id, o]));
+      // Не отправлявшиеся в этом проходе — в свежем виде: пока шёл проход,
+      // очередь магазинов могла переписать им id магазина.
+      const kept = finalSnapshot.filter(o => latestById.has(o.id)).map(o => (resultMap.has(o.id) ? o : latestById.get(o.id)!));
       const finalOrders = [...kept, ...addedDuringSync];
 
       set({ orders: finalOrders });
@@ -626,6 +671,8 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
     if (!order || order.synced) return false;
     const uid = currentUserId();
     if (order.ownerId != null && uid != null && order.ownerId !== uid) return false;
+    // Магазин ещё не ушёл — заказу не с чем уходить (см. isLocalShopId).
+    if (isLocalShopId(order.input.shopId)) return false;
 
     const updated = get().orders.map((o) =>
       o.id === id ? { ...o, status: "syncing" as const, error: undefined } : o
@@ -689,5 +736,17 @@ export const useOfflineStore = create<OfflineStore>((set, get) => ({
       await writeDeliveryActionsQueue(final);
       return false;
     }
+  },
+
+  remapShopId: async (localId, serverId) => {
+    // Очередь заказов пишется ниже целиком: не прочитанная с диска, она
+    // записалась бы пустой и стёрла заказы прошлого запуска.
+    if (!get().loaded) await get().load();
+    const pair: [number, number] = [localId, serverId];
+    const shopIds = [...get().shopIds.filter(([l]) => l !== localId), pair].slice(-SHOP_IDS_KEEP);
+    const orders = get().orders.map(o => (o.input.shopId === localId ? { ...o, input: { ...o.input, shopId: serverId } } : o));
+    set({ shopIds, orders });
+    try { await AsyncStorage.setItem(SHOP_IDS_KEY, JSON.stringify(shopIds)); } catch { /* пара нужна только черновику; заказы переписаны ниже */ }
+    await writeQueue(orders);
   },
 }));

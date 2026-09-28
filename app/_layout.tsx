@@ -22,6 +22,7 @@ import { JetBrainsMono_400Regular } from "@expo-google-fonts/jetbrains-mono";
 import { useAuthStore } from "../src/store/auth";
 import { useOfflineStore } from "../src/store/offline";
 import { useVisitQueue } from "../src/store/visit-queue";
+import { useShopQueue } from "../src/store/shop-queue";
 /*
   Фоновая задача GPS объявляется здесь, в точке входа, а не там, где её
   включают. Когда система будит убитое приложение ради накопленных точек, она
@@ -92,11 +93,20 @@ function AutoSync() {
         if (synced > 0) qc.invalidateQueries({ queryKey: ["agentPlans"] });
       }));
     }
-    if (pendingOrders.length > 0) {
-      tasks.push(syncAll().then(({ synced }) => {
+    // Четвёртая очередь — новые магазины: см. store/shop-queue. Заказы — только
+    // после неё: заказ на магазин, заведённый без связи, получает настоящий id
+    // лишь когда уйдёт сам магазин, а до того проход его пропускает.
+    tasks.push(useShopQueue.getState().sync().then(({ synced }) => {
+      if (synced > 0) {
+        qc.invalidateQueries({ queryKey: ["shops"] });
+        qc.invalidateQueries({ queryKey: ["availableShops"] });
+        qc.invalidateQueries({ queryKey: ["myShops"] });
+      }
+      if (pendingOrders.length === 0) return;
+      return syncAll().then(({ synced }) => {
         if (synced > 0) qc.invalidateQueries({ queryKey: ["myOrders"] });
-      }));
-    }
+      });
+    }));
     if (pendingActions.length > 0) {
       tasks.push(syncDeliveryActions().then(({ synced }) => {
         if (synced > 0) qc.invalidateQueries({ queryKey: ["myDeliveries"] });
@@ -202,6 +212,7 @@ export default function RootLayout() {
   useEffect(() => {
     load(); loadTheme(); loadBranding(); void useLangStore.getState().loadLang();
     void useVisitQueue.getState().load();
+    void useShopQueue.getState().load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

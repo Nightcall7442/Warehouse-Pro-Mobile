@@ -16,6 +16,7 @@ import { Typography, Spacing, Radii, ThemeColors, soft, safeBottomPadding } from
 import { ScreenHeader, SearchInput, Card } from "../../src/components/ui";
 import { SecureImage } from "../../src/components/SecureImage";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
+import { PendingShops } from "../../src/components/PendingShops";
 import { useT } from "../../src/i18n";
 
 function ShopCard({
@@ -290,6 +291,8 @@ export default function ShopsScreen() {
       <View style={{ paddingHorizontal: Spacing.base, paddingTop: Spacing.md }}>
         <SearchInput value={search} onChangeText={setSearch} placeholder={t("Поиск магазинов…", "Do'kon qidirish…")} />
       </View>
+      {/* Заведённые без связи — наверху, пока не ушли: с них и заказ, и «Повторить». */}
+      <PendingShops />
       {isLoading ? (
         <View style={{ flex: 1, paddingTop: Spacing.lg, paddingHorizontal: 16, gap: Spacing.md }}>
           {[1, 2, 3, 4].map(i => <ShimmerSkeleton key={i} height={100} radius={Radii.xl} />)}

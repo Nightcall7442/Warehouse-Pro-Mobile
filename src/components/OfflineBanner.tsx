@@ -5,6 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useOfflineStore } from "../store/offline";
 import { useVisitQueue } from "../store/visit-queue";
+import { useShopQueue } from "../store/shop-queue";
 import { Typography } from "../theme";
 import { useThemeColors } from "../store/theme";
 import { plural } from "../lib/plural";
@@ -29,7 +30,9 @@ export function OfflineBanner() {
   const pendingActions = deliveryActions.filter(a => !a.synced).length;
   // Третья очередь — визиты; отвергнутые сервером не «ожидают», они показаны на плане.
   const pendingVisits = useVisitQueue(s => s.actions.filter(a => !a.synced && a.retryable !== false).length);
-  const pendingCount = pendingOrders + pendingActions + pendingVisits;
+  // Четвёртая — новые магазины; отвергнутые показаны на вкладке «Магазины».
+  const pendingShops = useShopQueue(s => s.shops.filter(x => !x.synced && x.retryable !== false).length);
+  const pendingCount = pendingOrders + pendingActions + pendingVisits + pendingShops;
 
   useEffect(() => {
     const unsub = NetInfo.addEventListener(state => {
@@ -71,6 +74,7 @@ export function OfflineBanner() {
     pendingOrders > 0 ? t(`${pendingOrders} ${plural(pendingOrders, "заказ", "заказа", "заказов")}`, `${pendingOrders} ta buyurtma`) : null,
     pendingActions > 0 ? t(`${pendingActions} ${plural(pendingActions, "отметка", "отметки", "отметок")} доставки`, `${pendingActions} ta yetkazish belgisi`) : null,
     pendingVisits > 0 ? t(`${pendingVisits} ${plural(pendingVisits, "визит", "визита", "визитов")}`, `${pendingVisits} ta tashrif`) : null,
+    pendingShops > 0 ? t(`${pendingShops} ${plural(pendingShops, "магазин", "магазина", "магазинов")}`, `${pendingShops} ta do'kon`) : null,
   ].filter((x): x is string => Boolean(x));
   const and = t(" и ", " va ");
   const queued = parts.length > 1 ? parts.slice(0, -1).join(", ") + and + parts[parts.length - 1] : (parts[0] ?? "");
