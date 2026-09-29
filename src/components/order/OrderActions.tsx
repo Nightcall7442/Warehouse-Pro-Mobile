@@ -20,10 +20,16 @@ interface OrderActionsProps {
   onEdit: () => void;
   onCancel: () => void;
   onDelete: () => void;
+  /**
+   * «Повторить»: новый заказ этому магазину с составом этого заказа.
+   * Нет — кнопки нет (курьер, заказ без магазина).
+   */
+  onRepeat?: () => void;
+  repeatPending?: boolean;
   colors: ThemeColors;
 }
 
-export function OrderActions({ canEdit, canCancel, canDelete, cancelPending, deletePending, onEdit, onCancel, onDelete, colors }: OrderActionsProps) {
+export function OrderActions({ canEdit, canCancel, canDelete, cancelPending, deletePending, onEdit, onCancel, onDelete, onRepeat, repeatPending, colors }: OrderActionsProps) {
   const t = useT();
   return (
     <FadeInItem delay={120}>
@@ -61,6 +67,22 @@ export function OrderActions({ canEdit, canCancel, canDelete, cancelPending, del
             </PressableScale>
           )}
         </View>
+        {/*
+          «Повторить» — от любого заказа, и закрытого тоже: магазин почти
+          всегда заказывает «как в прошлый раз», а набирать 10–30 позиций
+          заново агенту приходилось по памяти.
+        */}
+        {onRepeat && (
+          <PressableScale onPress={onRepeat} disabled={repeatPending} haptic="light" style={{ borderRadius: Radii.xl, overflow: "hidden" }}>
+            <Card style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 16, minHeight: 48, backgroundColor: colors.bg.elevated }}>
+              {repeatPending
+                ? <ActivityIndicator size="small" color={colors.accent.primary} />
+                : <Feather name="rotate-ccw" size={18} color={colors.accent.primary} />
+              }
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>{t("Повторить заказ", "Buyurtmani takrorlash")}</Text>
+            </Card>
+          </PressableScale>
+        )}
         {canDelete && (
           <PressableScale onPress={onDelete} haptic="medium" style={{ borderRadius: Radii.xl, overflow: "hidden" }}>
             <Card style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: colors.status.dangerDim, borderWidth: 1, borderColor: colors.status.danger + "40" }}>

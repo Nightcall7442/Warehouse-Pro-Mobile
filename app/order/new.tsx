@@ -7,7 +7,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
-import { getAvailableShops, getProducts, createOrder, Shop, type CreateOrderInput } from "../../src/api";
+import { getAvailableShops, getProducts, createOrder, getRepeatDraft, Shop, type CreateOrderInput, type RepeatDraft } from "../../src/api";
 import { PromisedDelivery } from "../../src/components/order/PromisedDelivery";
 import { useOfflineStore, uuidv4, isRetryableError, isLocalShopId, resolveShopId } from "../../src/store/offline";
 import { usePendingShops } from "../../src/store/shop-queue";
@@ -19,7 +19,7 @@ import { notify } from "../../src/store/toast";
 import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { Typography, Spacing, Radii, ThemeColors, safeBottomPadding, soft } from "../../src/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Card, SearchInput, Skeleton } from "../../src/components/ui";
+import { Button, Card, SearchInput, Skeleton } from "../../src/components/ui";
 import { PressableScale } from "../../src/components/Animated";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { bumpLine, findScanned, cartSummary } from "../../src/lib/cart";
@@ -27,6 +27,7 @@ import { linePrice, lineTotal, lineTotalBeforeDiscount, orderTotals } from "../.
 import { priceAt, type PriceTier } from "../../src/lib/price-tiers";
 import { qty as qtyText } from "../../src/lib/format";
 import { unitShort } from "../../src/lib/units";
+import { fillLikeLastTime, lastTimeMap, linesFromRepeatParam, skippedFromParam } from "../../src/lib/repeat-order";
 import { useT, useLang } from "../../src/i18n";
 
 interface OrderLine {
@@ -261,10 +262,14 @@ function ShopPicker({ selectedId, onSelect, colors }: { selectedId: number; onSe
 }
 
 // ── Step 2: Product Picker + Cart ────────────────────────────────────────────
-function ProductStep({ lines, onChange, colors, shopId }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors; shopId?: number }) {
+/** Подсказка «как в прошлый раз» — то из order.repeatDraft, что нужно выбору товара. */
+type LastTimeHintData = Pick<RepeatDraft, "lastTime" | "skipped"> | null;
+
+function ProductStep({ lines, onChange, colors, shopId, hint }: { lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors; shopId?: number; hint?: LastTimeHintData }) {
   const { isDark } = useThemeStore();
   const t = useT();
   const lang = useLang();
+  const lastTimeOf = useMemo(() => lastTimeMap(hint?.lastTime), [hint]);
   /*
     Пустая корзина — окно выбора открыто сразу.
 
@@ -324,6 +329,11 @@ function ProductStep({ lines, onChange, colors, shopId }: { lines: OrderLine[]; 
                 {line.available == null ? t("Остаток уточняется", "Qoldiq aniqlanmoqda") : t(`Остаток: ${line.available}${overStock ? " (превышено!)" : ""}`, `Qoldiq: ${line.available}${overStock ? " (oshib ketdi!)" : ""}`)}
               </Text>
             </View>
+            {lastTimeOf.has(line.productId) && (
+              <Text testID={`line-last-time-${line.productId}`} style={{ fontSize: Typography.size.xs, color: colors.text.secondary, fontFamily: Typography.fontMedium }}>
+                {t(`в прошлый раз: ${qtyText(lastTimeOf.get(line.productId)?.quantity)} ${unitShort(line.unit, lang)}`, `o'tgan safar: ${qtyText(lastTimeOf.get(line.productId)?.quantity)} ${unitShort(line.unit, lang)}`)}
+              </Text>
+            )}
             {/* Inputs */}
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1.4, gap: 4 }}>
@@ -372,7 +382,7 @@ function ProductStep({ lines, onChange, colors, shopId }: { lines: OrderLine[]; 
       })}
 
       {/* Product picker modal */}
-      <ProductPicker visible={showPicker} onClose={() => setShowPicker(false)} lines={lines} onChange={onChange} colors={colors} shopId={shopId} />
+      <ProductPicker visible={showPicker} onClose={() => setShowPicker(false)} lines={lines} onChange={onChange} colors={colors} shopId={shopId} hint={hint} />
     </View>
   );
 }
@@ -388,10 +398,12 @@ function ProductStep({ lines, onChange, colors, shopId }: { lines: OrderLine[]; 
   или кода товара прибавляет единицу.
 */
 // ── Product Picker Modal ─────────────────────────────────────────────────────
-function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
+function ProductPicker({ visible, onClose, lines, onChange, colors, shopId, hint }: {
   visible: boolean; onClose: () => void; lines: OrderLine[]; onChange: (l: OrderLine[]) => void; colors: ThemeColors;
   /** Магазин заказа: цены — его прайс-листа, как посчитает сервер. */
   shopId?: number;
+  /** «В прошлый раз» этого магазина; null — подсказки нет (нет связи, нет заказов, отказ). */
+  hint?: LastTimeHintData;
 }) {
   const insets = useSafeAreaInsets();
   const { isDark } = useThemeStore();
@@ -422,6 +434,30 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
 
   const qtyOf = useMemo(() => new Map(lines.map(l => [l.productId, Number(l.quantity || 0)])), [lines]);
   const summary = cartSummary(lines);
+  const lastTimeOf = useMemo(() => lastTimeMap(hint?.lastTime), [hint]);
+  const lastTimeCount = hint?.lastTime.length ?? 0;
+  const skippedNames = (hint?.skipped ?? []).map(s => s.name);
+
+  /*
+    «Как в прошлый раз» — корзина по подсказке одним нажатием, ДОПОЛНЕНИЕМ
+    (lib/repeat-order.ts): набранное агентом не трогается, кладутся только
+    недостающие товары с подсказанным количеством. Цена и ступени — из этого
+    же каталога магазина, как у строки, набранной плюсом. Что не положено и
+    почему — сказано сразу, спокойной строкой, а не ошибкой.
+  */
+  const likeLastTime = () => {
+    const r = fillLikeLastTime(lines, hint?.lastTime, products);
+    if (r.added > 0) {
+      onChange(r.lines);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    const parts = [
+      r.added > 0 ? t(`Добавлено из прошлого раза: ${r.added}`, `O'tgan safardan qo'shildi: ${r.added}`) : "",
+      r.kept > 0 ? t(`уже в корзине, не тронуто: ${r.kept}`, `savatda bor, o'zgartirilmadi: ${r.kept}`) : "",
+      r.missing > 0 ? t(`нет на складе: ${r.missing}`, `omborda yo'q: ${r.missing}`) : "",
+    ].filter(Boolean);
+    if (parts.length > 0) notify.info(parts.join(" · "));
+  };
 
   const onScanned = ({ data }: { data: string }) => {
     // Одна коробка в кадре — один плюс: тот же код принимается снова через паузу.
@@ -505,6 +541,18 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
               <Text style={{ flex: 1, fontSize: Typography.size.xs, color: colors.text.secondary }}>{copyNotice}</Text>
             </View>
           )}
+          {lastTimeCount > 0 && (
+            <View style={{ marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
+              <Button testID="like-last-time" variant="secondary" icon="rotate-ccw" fullWidth onPress={likeLastTime}>
+                {t(`Как в прошлый раз · ${lastTimeCount} поз.`, `O'tgan safargidek · ${lastTimeCount} ta`)}
+              </Button>
+            </View>
+          )}
+          {skippedNames.length > 0 && (
+            <Text testID="last-time-skipped" style={{ marginHorizontal: Spacing.base, marginBottom: Spacing.sm, fontSize: Typography.size.xs, color: colors.text.secondary }}>
+              {t(`Из прошлого заказа сняты с продажи: ${skippedNames.join(", ")}`, `O'tgan buyurtmadan sotuvdan olingan: ${skippedNames.join(", ")}`)}
+            </Text>
+          )}
           {/* Stock filter */}
           <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
             <View style={{ width: 20, height: 20, borderRadius: 4, ...(onlyInStock ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
@@ -551,6 +599,11 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId }: {
                             {stock == null ? t("· остаток уточняется", "· qoldiq aniqlanmoqda") : stock <= 0 ? t("· нет на складе", "· omborda yo'q") : t(`· остаток ${qtyText(stock)}`, `· qoldiq ${qtyText(stock)}`)}
                           </Text>
                         </View>
+                        {lastTimeOf.has(p.id) && (
+                          <Text testID={`last-time-${p.id}`} style={{ fontSize: Typography.size.xs, color: colors.text.secondary, fontFamily: Typography.fontMedium, marginTop: 2 }}>
+                            {t(`в прошлый раз: ${qtyText(lastTimeOf.get(p.id)?.quantity)} ${unitShort(p.unit, lang)}`, `o'tgan safar: ${qtyText(lastTimeOf.get(p.id)?.quantity)} ${unitShort(p.unit, lang)}`)}
+                          </Text>
+                        )}
                       </View>
                       {added ? (
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }} testID={`stepper-${p.id}`}>
@@ -721,7 +774,7 @@ export default function NewOrderScreen() {
   const { isDark } = useThemeStore();
   const insets = useSafeAreaInsets();
   const t = useT();
-  const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string; productQty?: string; fromCart?: string }>();
+  const params = useLocalSearchParams<{ shopId?: string; shopName?: string; productId?: string; productName?: string; productPrice?: string; productQty?: string; fromCart?: string; repeatOf?: string; repeatLines?: string; repeatSkipped?: string }>();
   const { addOrder } = useOfflineStore();
   const { user } = useAuthStore();
   /*
@@ -742,6 +795,8 @@ export default function NewOrderScreen() {
     // Из корзины каталога: строки набраны там, здесь — магазин, оплата, отправка.
     // Только своя корзина: чужая, оставшаяся в памяти от прежнего входа, не оформляется под вошедшим.
     if (params.fromCart) return myCartLines().map(l => ({ ...l }));
+    // «Повторить» из карточки заказа: состав того заказа (lib/repeat-order).
+    if (params.repeatLines) return linesFromRepeatParam(params.repeatLines);
     if (params.productId && params.productPrice) {
       // Остаток со сканера не приходит, поэтому здесь честное «не знаю», а не
       // ноль. Ноль на этом месте гасил кнопку «Продолжить» и рисовал агенту
@@ -812,6 +867,26 @@ export default function NewOrderScreen() {
   // переставляют: набранные со связью ступени магазина они бы стёрли.
   const { data: savedCatalog, cardPrices } = useOfflineCopy<typeof liveCatalog>("products", liveCatalog, `shop${shopId ?? 0}`);
   const catalog = cardPrices ? undefined : savedCatalog;
+
+  /*
+    «В прошлый раз» — подсказка сервера (order.repeatDraft по магазину):
+    сколько магазин брал в среднем за три последних заказа этого агента.
+
+    Только подсказка: не пришла — экран тот же, что без неё. Поэтому ни
+    ошибки, ни повтора: без связи, чужой магазин (403), архивная точка или
+    старый сервер без ручки — просто нет строки «в прошлый раз» и кнопки.
+    Своего кэша у подсказки нет намеренно: отложенная копия сохранена для
+    каталога и магазинов, а вчерашнее среднее без связи агенту заказа не
+    соберёт — цены и остаток всё равно из каталога.
+  */
+  const { data: repeatHint } = useQuery({
+    queryKey: ["repeatDraft", "shop", shopId ?? 0],
+    queryFn: () => getRepeatDraft({ shopId: shopId as number }),
+    enabled: shopId != null,
+    retry: false,
+  });
+  const hint = repeatHint && repeatHint.shop.id === shopId ? repeatHint : null;
+  const repeatSkipped = useMemo(() => skippedFromParam(params.repeatSkipped), [params.repeatSkipped]);
 
   /**
    * Строки заказа с ценой магазина и подставленным остатком.
@@ -1062,7 +1137,19 @@ export default function NewOrderScreen() {
       {/* Content */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {step === 1 && <ShopPicker selectedId={selectedShop?.id ?? 0} onSelect={(s) => { setSelectedShop(s); setStep(2); addRecentShopSafely(s.id); }} colors={colors} />}
-        {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} shopId={shopId} />}
+        {step === 2 && params.repeatOf ? (
+          <View testID="repeat-notice" style={{ marginHorizontal: Spacing.base, marginTop: Spacing.sm, padding: 12, borderRadius: Radii.md, backgroundColor: colors.status.infoDim, gap: 4 }}>
+            <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: colors.text.primary }}>
+              {t(`Повтор заказа #${params.repeatOf} — цены и остаток сегодняшние`, `#${params.repeatOf} buyurtma takrori — narx va qoldiq bugungi`)}
+            </Text>
+            {repeatSkipped.length > 0 && (
+              <Text testID="repeat-skipped" style={{ fontSize: Typography.size.xs, color: colors.text.secondary }}>
+                {t(`Не повторены — сняты с продажи: ${repeatSkipped.join(", ")}`, `Takrorlanmadi — sotuvdan olingan: ${repeatSkipped.join(", ")}`)}
+              </Text>
+            )}
+          </View>
+        ) : null}
+        {step === 2 && <ProductStep lines={lines} onChange={setLines} colors={colors} shopId={shopId} hint={hint} />}
         {step === 3 && <ReviewStep shopName={selectedShop?.name ?? ""} lines={lines} notes={notes} onNotesChange={setNotes} paymentMethod={paymentMethod} onPaymentChange={setPaymentMethod} promisedAt={promisedAt} onPromisedChange={setPromisedAt} colors={colors} />}
       </ScrollView>
 

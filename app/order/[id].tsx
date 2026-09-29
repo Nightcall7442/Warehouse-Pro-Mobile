@@ -26,8 +26,10 @@ import {
   updateOrderItems,
   setPromisedDelivery,
   getProducts,
+  getRepeatDraft,
   type OrderDetail,
 } from "../../src/api";
+import { repeatParams } from "../../src/lib/repeat-order";
 import {
   Radii,
 } from "../../src/theme";
@@ -107,6 +109,10 @@ export default function OrderDetailScreen() {
   });
 
   const [showEditModal, setShowEditModal] = useState(false);
+  // Черновик повтора спрашивается по нажатию, голым вызовом: свежие цены и
+  // остаток нужны ровно тогда, когда попросили, а useMutation из эффекта
+  // под StrictMode терял ответ.
+  const [repeating, setRepeating] = useState(false);
   const [editNotes, setEditNotes] = useState("");
   const [editDiscount, setEditDiscount] = useState("");
 
@@ -207,6 +213,28 @@ export default function OrderDetailScreen() {
       title: t(`Заказ #${order.orderNumber}`, `Buyurtma #${order.orderNumber}`),
       message: t(`Заказ #${order.orderNumber}\nМагазин: ${shop}\nСумма: ${total}\nСтатус: ${status}`, `Buyurtma #${order.orderNumber}\nDo'kon: ${shop}\nSumma: ${total}\nHolat: ${status}`),
     });
+  }
+
+  /*
+    «Повторить»: состав ЭТОГО заказа по сегодняшним ценам и остатку
+    (order.repeatDraft по orderId) — в оформление нового заказа тому же
+    магазину. Заказ отсюда не создаётся: агент видит корзину, правит и
+    отправляет обычной дорогой, со всеми проверками сервера.
+  */
+  async function handleRepeat() {
+    if (repeating) return;
+    setRepeating(true);
+    try {
+      const d = await getRepeatDraft({ orderId: Number(id) });
+      if (d.lines.length === 0) {
+        notify.info(t("Товары этого заказа сняты с продажи — наберите заказ заново", "Bu buyurtma mahsulotlari sotuvdan olingan — buyurtmani qaytadan tuzing"));
+      }
+      router.push({ pathname: "/order/new", params: repeatParams(d) });
+    } catch (e) {
+      notify.error(errorText(e));
+    } finally {
+      setRepeating(false);
+    }
   }
 
   function handleCancel() {
@@ -357,6 +385,9 @@ export default function OrderDetailScreen() {
           onEdit={handleEditOpen}
           onCancel={handleCancel}
           onDelete={handleDelete}
+          // Курьер заказы не оформляет — сервер (fieldSalesQuery) ему откажет.
+          onRepeat={order.shop?.id && user?.role !== "courier" ? handleRepeat : undefined}
+          repeatPending={repeating}
           colors={colors}
         />
         {/*
