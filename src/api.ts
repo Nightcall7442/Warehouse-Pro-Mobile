@@ -923,6 +923,45 @@ export async function getOrderById(id: number): Promise<OrderDetail | null> {
   return trpcQuery<OrderDetail | null>("order.getById", { id });
 }
 
+/**
+ * Строка черновика повтора. Цена — ТЕКУЩАЯ и при ЭТОМ количестве (списки
+ * магазина, ступень), остаток — основного склада; DECIMAL приходит строкой.
+ */
+export interface RepeatDraftLine {
+  productId: number;
+  name: string;
+  code: string;
+  unit: string;
+  quantity: string;
+  unitPrice: string;
+  available: string;
+}
+
+/**
+ * Черновик «как в прошлый раз» (order.repeatDraft, веб api/services/order-repeat.ts).
+ * Заказ из него не создаётся — только обычным order.create со всеми проверками.
+ * Типы вписаны здесь, а не импортом: сверка с сервером читает файл текстом.
+ */
+export interface RepeatDraft {
+  shop: { id: number; name: string };
+  /** Какой заказ повторён; null — у магазина (у этого агента) заказов ещё не было. */
+  source: { id: number; orderNumber: string; createdAt: string } | null;
+  lines: RepeatDraftLine[];
+  /** Товары того заказа, которые сняты с продажи, — по именам. */
+  skipped: Array<{ productId: number; name: string; quantity: string }>;
+  /** «В прошлый раз»: среднее по трём последним заказам магазина, только товары в продаже. */
+  lastTime: Array<{ productId: number; quantity: string; orders: number }>;
+}
+
+/**
+ * По orderId — состав этого заказа, по shopId — последнего заказа магазина.
+ * Агенту видны только оформленные им заказы: чужой заказ — отказ, чужой
+ * магазин — пустая подсказка.
+ */
+export async function getRepeatDraft(input: { orderId: number } | { shopId: number }): Promise<RepeatDraft> {
+  return trpcQuery<RepeatDraft>("order.repeatDraft", input);
+}
+
 export async function cancelOrder(id: number): Promise<void> {
   return trpcMutation<void>("order.cancel", { id });
 }
