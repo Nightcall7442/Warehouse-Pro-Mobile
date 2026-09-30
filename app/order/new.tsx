@@ -29,6 +29,7 @@ import { qty as qtyText } from "../../src/lib/format";
 import { unitShort } from "../../src/lib/units";
 import { fillLikeLastTime, lastTimeMap, linesFromRepeatParam, skippedFromParam } from "../../src/lib/repeat-order";
 import { useT, useLang } from "../../src/i18n";
+import { heldNotice } from "../../src/lib/hold-reason";
 
 interface OrderLine {
   productId: number;
@@ -998,9 +999,10 @@ export default function NewOrderScreen() {
       // второй. В быстром заказе из каталога это давно сделано, здесь забыли.
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Скидка выше порога: заказ оформлен, но ждёт офиса — сказать это сразу,
-      // иначе агент ждёт курьера по заказу, который никто не подтвердил.
-      if (created?.held) notify.info(t("Заказ оформлен и ждёт подтверждения офиса — скидка выше порога", "Buyurtma rasmiylashtirildi va ofis tasdig'ini kutmoqda — chegirma chegaradan yuqori"));
+      // Заказ оформлен, но ждёт офиса (скидка выше порога или просроченный долг
+      // магазина) — сказать это сразу и с настоящей причиной, иначе агент ждёт
+      // курьера по заказу, который никто не подтвердил.
+      if (created?.held) notify.info(heldNotice(created.holdReason, t));
       else notify.success(t("Заказ создан!", "Buyurtma yaratildi!"));
       router.back();
     },
