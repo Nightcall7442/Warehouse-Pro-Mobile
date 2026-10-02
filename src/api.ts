@@ -629,6 +629,49 @@ export async function saveVisitPhoto(
   await trpcMutation("agent.saveVisitPhoto", { planId, photoUrl, notes, recordedAt, ...choice });
 }
 
+// ── Светофор магазина ───────────────────────────────────────────────────────
+/*
+  Можно ли грузить магазину — цвет, причины кодами и цифры. Считает сервер
+  (shop.light / shop.lights), правила и фразы — src/lib/shop-light.ts (копия
+  контракта веба). Виды повторены здесь буквально по той же причине, что
+  NoOrderReason: сверка с роутером читает этот файл текстом.
+*/
+export type ShopLightColor = "red" | "yellow" | "green";
+
+export type ShopLightReason =
+  | { code: "overdue"; amount: number; oldestDays: number }
+  | { code: "over_limit"; debt: number; limit: number }
+  | { code: "near_limit"; debt: number; limit: number; pct: number }
+  | { code: "long_pause"; daysSince: number; usualDays: number };
+
+export interface ShopLight {
+  shopId: number;
+  color: ShopLightColor;
+  reasons: ShopLightReason[];
+  debt: number;
+  overdue: number;
+  oldestOverdueDays: number;
+  graceDays: number;
+  /** У организации включена «стоп отгрузки»: новый заказ встанет на проверку офиса. */
+  holdsOrders: boolean;
+  creditLimit: number | null;
+  avgCheck: number | null;
+  avgCheckOrders: number;
+  daysSinceOrder: number | null;
+  usualIntervalDays: number | null;
+  lastNoOrder: { reason: string; note: string | null; date: string } | null;
+}
+
+/** Светофор одного магазина — для карточки. null — магазин чужой или его нет. */
+export async function getShopLight(shopId: number): Promise<ShopLight | null> {
+  return trpcQuery<ShopLight | null>("shop.light", { shopId });
+}
+
+/** Светофоры списка — одним запросом (до 500 магазинов). Чужих в ответе нет. */
+export async function getShopLights(shopIds: number[]): Promise<ShopLight[]> {
+  return trpcQuery<ShopLight[]>("shop.lights", { shopIds });
+}
+
 // ── Barcode Lookup ───────────────────────────────────────────────────────────
 export async function findByBarcode(barcode: string): Promise<{
   id: number; code: string; name: string; unitPrice: string; unit: string; available: string | null;
