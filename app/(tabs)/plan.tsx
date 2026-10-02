@@ -14,7 +14,7 @@ import { Card, Badge, EmptyState } from "../../src/components/ui";
 // 100 (80 панели + отбивка), и такие же числа расползлись по другим экранам.
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
-import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, getMySalary, Plan } from "../../src/api";
+import { getPlans, updatePlanStatus, getMyQuota, getAgentKpi, getMySalary, Plan, type NoOrderChoice } from "../../src/api";
 import { useRouter } from "expo-router";
 import { notify } from "../../src/store/toast";
 import { useAuthStore } from "../../src/store/auth";
@@ -27,6 +27,7 @@ import { sendVisitPing } from "../../src/lib/visit-ping";
 import { formatMoney } from "../../src/store/branding";
 import { useT, useLang } from "../../src/i18n";
 import { GpsOffHint } from "../../src/components/plans/GpsOffHint";
+import { useNoOrderGate } from "../../src/components/plans/useNoOrderGate";
 
 type IconName = keyof typeof Feather.glyphMap;
 
@@ -294,7 +295,9 @@ export default function PlanScreen() {
     // как перехватчик обнулил вошедшего (см. add в store/visit-queue).
     // Вошедшего нет уже сейчас — отказ до запроса (lib/offline-guard).
     onMutate: () => ownerOrThrow(),
-    mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) => updatePlanStatus(planId, status),
+    // choice — почему без заказа (шторка useNoOrderGate); уходит тем же запросом.
+    mutationFn: ({ planId, status, choice }: { planId: number; status: Plan["status"]; choice?: NoOrderChoice }) =>
+      updatePlanStatus(planId, status, undefined, choice),
     onSuccess: (_d, variables) => {
       qc.invalidateQueries({ queryKey: ["plans"] });
       qc.invalidateQueries({ queryKey: ["myQuota"] });
@@ -307,7 +310,7 @@ export default function PlanScreen() {
         notify.error(t(`Отметка не сохранена: ${e.message}`, `Belgi saqlanmadi: ${e.message}`));
         return;
       }
-      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status, ownerId });
+      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status, noOrder: variables.choice, ownerId });
       if (ok) notify.info(t("Нет связи — отметка сохранена и уйдёт сама", "Aloqa yo'q — belgi saqlandi, o'zi yuboriladi"));
       else notify.error(t(`Отметка не сохранена: ${e.message}. Повторите, когда появится связь.`, `Belgi saqlanmadi: ${e.message}. Aloqa paydo bo'lganda qayta urining.`));
     },
@@ -319,6 +322,9 @@ export default function PlanScreen() {
     лежал в AgentPlansView — на вкладке, которой у мерчандайзера нет. В бою
     роль не производила ни одного отчёта, а KPI считал визиты сделанными.
   */
+  // Визит без заказа закрывается только с причиной — шторка «Почему без заказа?».
+  const gate = useNoOrderGate();
+
   const handleDone = (plan: Plan) => {
     if (isMerchandiser) {
       router.push({
@@ -327,7 +333,8 @@ export default function PlanScreen() {
       });
       return;
     }
-    updateMutation.mutate({ planId: plan.id, status: "visited" });
+    // Без заказа — сначала причина (шторка), отметка уходит вместе с ней.
+    gate.ask(plan, choice => updateMutation.mutate({ planId: plan.id, status: "visited", choice }));
   };
 
   const handleRefresh = useCallback(async () => {
@@ -347,6 +354,7 @@ export default function PlanScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
+      {gate.sheet}
       {/* Header */}
       <View style={{ paddingTop: insets.top + Spacing.sm, paddingHorizontal: Spacing.base, paddingBottom: Spacing.md, backgroundColor: colors.bg.secondary, borderBottomWidth: 1, borderBottomColor: colors.border.default }}>
         <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: 22, color: colors.text.primary }}>{t("План", "Reja")}</Text>

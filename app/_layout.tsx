@@ -136,7 +136,13 @@ export function AutoSync() {
       }
       if (pendingOrders.length === 0) return;
       return syncAll().then(({ synced }) => {
-        if (synced > 0) qc.invalidateQueries({ queryKey: ["myOrders"] });
+        if (synced > 0) {
+          qc.invalidateQueries({ queryKey: ["myOrders"] });
+          // Заказ ушёл из очереди — планы должны узнать о нём (hasOrder),
+          // иначе «Готово» спросило бы «почему без заказа» по старому списку.
+          qc.invalidateQueries({ queryKey: ["agentPlans"] });
+          qc.invalidateQueries({ queryKey: ["plans"] });
+        }
       });
     }));
     if (pendingActions.length > 0) {

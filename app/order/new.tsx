@@ -998,6 +998,10 @@ export default function NewOrderScreen() {
       // минуты. Заказ на сервере есть, на экране его нет — и агент оформляет
       // второй. В быстром заказе из каталога это давно сделано, здесь забыли.
       queryClient.invalidateQueries({ queryKey: ["myOrders"] });
+      // Планы дня тоже: у визита теперь есть заказ (hasOrder), и «Готово» не
+      // должно спрашивать «почему без заказа» по списку до заказа.
+      queryClient.invalidateQueries({ queryKey: ["agentPlans"] });
+      queryClient.invalidateQueries({ queryKey: ["plans"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Заказ оформлен, но ждёт офиса (скидка выше порога или просроченный долг
       // магазина) — сказать это сразу и с настоящей причиной, иначе агент ждёт

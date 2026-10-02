@@ -18,6 +18,7 @@ import { preparePhoto } from "../../src/lib/prepare-photo";
 import { PressableScale, FadeInItem, ShimmerSkeleton } from "../../src/components/Animated";
 import { formatMoney } from "../../src/store/branding";
 import { useT } from "../../src/i18n";
+import { ShopLightPanel } from "../../src/components/ShopLight";
 
 export default function ShopDetailScreen() {
   const { isDark } = useThemeStore();
@@ -230,6 +231,9 @@ export default function ShopDetailScreen() {
           </View>
           <Feather name={hasDebt ? "alert-circle" : "check-circle"} size={28} color={hasDebt ? colors.accent.danger : colors.accent.success} />
         </View>
+
+        {/* Светофор: можно ли грузить и почему — агенту у прилавка, под долгом. */}
+        {user?.role === "agent" && <ShopLightPanel shopId={Number(id)} />}
 
         {/* Info card */}
         <FadeInItem delay={0}>

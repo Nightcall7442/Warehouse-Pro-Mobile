@@ -18,11 +18,14 @@ import { SecureImage } from "../../src/components/SecureImage";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 import { PendingShops } from "../../src/components/PendingShops";
 import { useT } from "../../src/i18n";
+import { ShopLightDot } from "../../src/components/ShopLight";
+import { useShopLights } from "../../src/hooks/useShopLights";
+import type { ShopLight } from "../../src/api";
 
 function ShopCard({
-  shop, isDark: _isDark, colors, index, distance, estimatedTime, onView, onOrder }: {
+  shop, isDark: _isDark, colors, index, distance, estimatedTime, light, onView, onOrder }: {
   shop: Shop; isDark: boolean; colors: ThemeColors; index: number;
-  distance?: number; estimatedTime?: string; onView: () => void; onOrder: () => void;
+  distance?: number; estimatedTime?: string; light?: ShopLight; onView: () => void; onOrder: () => void;
 }) {
   const hasDebt = Number(shop.debt ?? 0) > 0;
   const isActive = shop.status !== "inactive";
@@ -44,7 +47,11 @@ function ShopCard({
           <View style={{ flex: 1, minWidth: 0 }}>
             <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
               <View style={{ minWidth: 0, flex: 1 }}>
-                <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{shop.name}</Text>
+                {/* Светофор — точкой у названия: можно ли грузить, видно не открывая карточку. */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <ShopLightDot light={light} />
+                  <Text style={{ flexShrink: 1, fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{shop.name}</Text>
+                </View>
                 {shop.ownerName && <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.secondary, marginTop: 2 }} numberOfLines={1}>{shop.ownerName}</Text>}
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -175,6 +182,10 @@ export default function ShopsScreen() {
 
   const effectiveShops = (shops ?? []).length > 0 ? shops : availableShops;
 
+  // Светофоры всех строк — одним запросом на список (shop.lights), только агенту.
+  const lightIds = useMemo(() => (effectiveShops ?? []).map(s => s.id), [effectiveShops]);
+  const lights = useShopLights(lightIds, isAgent);
+
   const filtered = useMemo(() => {
     let result: ShopWithDistance[] = (effectiveShops ?? []).filter(s =>
       !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.ownerName?.toLowerCase().includes(search.toLowerCase()) || s.district?.toLowerCase().includes(search.toLowerCase())
@@ -246,7 +257,7 @@ export default function ShopsScreen() {
             showsVerticalScrollIndicator={false}
             refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.accent.primary} />}
             renderItem={({ item: s, index: idx }) => (
-              <ShopCard key={s.id} shop={s} isDark={isDark} colors={colors} index={idx}
+              <ShopCard key={s.id} shop={s} isDark={isDark} colors={colors} index={idx} light={lights.get(s.id)?.light}
                 distance={sortByDistance && location ? s._distance : undefined}
                 estimatedTime={sortByDistance && location ? s._estimatedTime : undefined}
                 onView={() => router.push({ pathname: "/shop/[id]", params: { id: String(s.id) } })}
@@ -319,7 +330,7 @@ export default function ShopsScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.accent.primary} />}
           renderItem={({ item: s, index: idx }) => (
-              <ShopCard key={s.id} shop={s} isDark={isDark} colors={colors} index={idx}
+              <ShopCard key={s.id} shop={s} isDark={isDark} colors={colors} index={idx} light={lights.get(s.id)?.light}
                 distance={s._distance}
                 estimatedTime={s._estimatedTime}
                 onView={() => router.push({ pathname: "/shop/[id]", params: { id: String(s.id) } })}
