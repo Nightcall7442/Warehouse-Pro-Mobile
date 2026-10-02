@@ -14,6 +14,7 @@ import {
   uploadFile,
   getOptimizedRoute,
   Plan,
+  type NoOrderChoice,
 } from "../../api";
 import { notify } from "../../store/toast";
 import { useThemeColors, useThemeStore } from "../../store/theme";
@@ -32,6 +33,7 @@ import { useVisitQueue } from "../../store/visit-queue";
 import { isRetryableError } from "../../store/offline";
 import { useT, useLang } from "../../i18n";
 import { GpsOffHint } from "./GpsOffHint";
+import { useNoOrderGate } from "./useNoOrderGate";
 
 export function AgentPlansView() {
   const insets = useSafeAreaInsets();
@@ -98,8 +100,9 @@ export function AgentPlansView() {
     // как перехватчик обнулил вошедшего (см. add в store/visit-queue).
     // Вошедшего нет уже сейчас — отказ до запроса (lib/offline-guard).
     onMutate: () => ownerOrThrow(),
-    mutationFn: ({ planId, status }: { planId: number; status: Plan["status"] }) =>
-      updatePlanStatus(planId, status),
+    // choice — почему без заказа (шторка useNoOrderGate); уходит тем же запросом.
+    mutationFn: ({ planId, status, choice }: { planId: number; status: Plan["status"]; choice?: NoOrderChoice }) =>
+      updatePlanStatus(planId, status, undefined, choice),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["agentPlans"] });
       notify.success(t("Статус обновлён", "Holat yangilandi"));
@@ -127,7 +130,7 @@ export function AgentPlansView() {
     */
     onError: async (e: Error, variables, ownerId) => {
       if (!isRetryableError(e)) { notify.error(errorText(e)); return; }
-      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status, ownerId });
+      const ok = await queueVisit.add({ planId: variables.planId, status: variables.status, noOrder: variables.choice, ownerId });
       if (ok) notify.info(t("Нет связи — отметка сохранена и уйдёт сама", "Aloqa yo'q — belgi saqlandi, o'zi yuboriladi"));
       else notify.error(errorText(e));
       // Точка снимается сейчас, где агент стоит, и ждёт связи в буфере: иначе
@@ -140,8 +143,8 @@ export function AgentPlansView() {
 
   const photoMutation = useMutation({
     onMutate: () => ownerOrThrow(),
-    mutationFn: ({ planId, photoUrl }: { planId: number; photoUrl: string }) =>
-      saveVisitPhoto(planId, photoUrl),
+    mutationFn: ({ planId, photoUrl, choice }: { planId: number; photoUrl: string; choice?: NoOrderChoice }) =>
+      saveVisitPhoto(planId, photoUrl, undefined, undefined, choice),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agentPlans"] });
       notify.success(t("Фото отправлено, визит отмечен", "Rasm yuborildi, tashrif belgilandi"));
@@ -155,7 +158,7 @@ export function AgentPlansView() {
     */
     onError: async (e: Error, variables, ownerId) => {
       if (!isRetryableError(e)) { notify.error(errorText(e)); return; }
-      const ok = await queueVisit.add({ planId: variables.planId, status: "visited", photoUrl: variables.photoUrl, ownerId });
+      const ok = await queueVisit.add({ planId: variables.planId, status: "visited", photoUrl: variables.photoUrl, noOrder: variables.choice, ownerId });
       if (ok) notify.info(t("Нет связи — фото и отметка сохранены и уйдут сами", "Aloqa yo'q — rasm va belgi saqlandi, o'zi yuboriladi"));
       else notify.error(errorText(e));
       if (ok) void sendVisitPing();
@@ -191,7 +194,7 @@ export function AgentPlansView() {
     }
   };
 
-  const handleTakePhoto = async (planId: number) => {
+  const handleTakePhoto = async (planId: number, choice?: NoOrderChoice) => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(t("Нет доступа", "Ruxsat yo'q"), t("Разрешите доступ к камере в настройках", "Sozlamalarda kameraga ruxsat bering"));
@@ -215,11 +218,11 @@ export function AgentPlansView() {
         // магазинов ему незачем. Папка в uploadFile была объявлена и не
         // использовалась.
         const url = await uploadFile(dataUrl, "visits");
-        photoMutation.mutate({ planId, photoUrl: url });
+        photoMutation.mutate({ planId, photoUrl: url, choice });
       } catch (e) {
         // Без связи снимок ждёт в очереди ссылкой на файл камеры и грузится
         // при первой связи вместе с отметкой.
-        if (isRetryableError(e) && await queueVisit.add({ planId, status: "visited", photoUri: uri, ownerId })) {
+        if (isRetryableError(e) && await queueVisit.add({ planId, status: "visited", photoUri: uri, noOrder: choice, ownerId })) {
           notify.info(t("Нет связи — фото и отметка сохранены и уйдут сами", "Aloqa yo'q — rasm va belgi saqlandi, o'zi yuboriladi"));
           void sendVisitPing();
         } else {
@@ -229,7 +232,14 @@ export function AgentPlansView() {
     }
   };
 
-  const handleVisitDone = (planId: number, planName: string, shopId?: number) => {
+  // Визит без заказа закрывается только с причиной — и «Без фото», и «С фото»
+  // (причина спрашивается до камеры и уходит вместе со снимком).
+  const gate = useNoOrderGate();
+
+  const handleVisitDone = (plan: Plan) => {
+    const planId = plan.id;
+    const planName = plan.shopName ?? t("Магазин", "Do'kon");
+    const shopId = plan.shopId;
     if (isMerchandiser) {
       router.push({
         pathname: "/merchandiser/visit",
@@ -239,8 +249,8 @@ export function AgentPlansView() {
     }
     Alert.alert(t("Подтвердить визит", "Tashrifni tasdiqlash"), t(`Отметить "${planName}" как посещённый?`, `"${planName}" tashrif qilindi deb belgilaysizmi?`), [
       { text: t("Отмена", "Bekor"), style: "cancel" },
-      { text: t("Без фото", "Rasmsiz"), onPress: () => updateMutation.mutate({ planId, status: "visited" }) },
-      { text: t("С фото", "Rasm bilan"), onPress: () => handleTakePhoto(planId) },
+      { text: t("Без фото", "Rasmsiz"), onPress: () => gate.ask(plan, choice => updateMutation.mutate({ planId, status: "visited", choice })) },
+      { text: t("С фото", "Rasm bilan"), onPress: () => gate.ask(plan, choice => { void handleTakePhoto(planId, choice); }) },
     ]);
   };
 
@@ -254,6 +264,7 @@ export function AgentPlansView() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>
+      {gate.sheet}
       <ScreenHeader
         title={t("Мои планы", "Mening rejalarim")}
         subtitle={`${greeting} — ${today.toLocaleDateString(lang === "uz" ? "uz-Latn-UZ" : "ru", { day: "numeric", month: "long" })}`}
@@ -398,7 +409,7 @@ export function AgentPlansView() {
                 colors={colors}
                 isDark={isDark}
                 onPress={() => plan.shopId && router.push({ pathname: "/shop/[id]", params: { id: String(plan.shopId) } })}
-                onVisit={() => handleVisitDone(plan.id, plan.shopName ?? t("Магазин", "Do'kon"), plan.shopId)}
+                onVisit={() => handleVisitDone(plan)}
                 onSkip={() => updateMutation.mutate({ planId: plan.id, status: "skipped" })}
                 // Пендинг — по строке, а не по всему списку. Отметка одного
                 // визита гасила кнопки во всех карточках сразу: агент на

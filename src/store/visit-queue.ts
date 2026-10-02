@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "./auth";
 import { errorText } from "../lib/error-text";
 import { adoptOwnerless, giveOwnerless, isOwnedBy, isRetryableError, shouldAutoSync, uuidv4 } from "./offline";
-import { updatePlanStatus, saveVisitPhoto, uploadFile, type Plan } from "../api";
+import { updatePlanStatus, saveVisitPhoto, uploadFile, type Plan, type NoOrderChoice } from "../api";
 import { preparePhoto } from "../lib/prepare-photo";
 import { notify } from "./toast";
 import { tt } from "../i18n";
@@ -31,6 +31,13 @@ export interface VisitAction {
   /** Снимок уже в хранилище, а привязка к визиту сорвалась по сети: осталось привязать. */
   photoUrl?: string;
   planName?: string;
+  /**
+   * Почему визит без заказа — выбрано на экране до отметки и уходит вместе с
+   * ней, тем же запросом. Отдельной записи нет: повтор отметки повторяет и
+   * причину (сервер просто перезапишет то же), а потерять её отдельно от
+   * визита нельзя.
+   */
+  noOrder?: NoOrderChoice;
   createdAt: string;
   ownerId?: number;
   synced: boolean;
@@ -82,6 +89,11 @@ function ownedNow(actions: VisitAction[], id: string): boolean {
  * вошедший сверяется перед каждым запросом, а не раз на проход.
  */
 const OWNER_GONE = new Error("owner gone");
+
+/** Причина «без заказа» — только если выбрана: отметка без неё уходит ровно как раньше. */
+function reason(a: VisitAction): [] | [NoOrderChoice] {
+  return a.noOrder ? [a.noOrder] : [];
+}
 function ensure(still: () => boolean): void {
   if (!still()) throw OWNER_GONE;
 }
@@ -106,7 +118,7 @@ async function send(a: VisitAction, still: () => boolean): Promise<string | unde
       ({ dataUrl } = await preparePhoto(a.photoUri));
     } catch {
       ensure(still);
-      await updatePlanStatus(a.planId, a.status, a.createdAt);
+      await updatePlanStatus(a.planId, a.status, a.createdAt, ...reason(a));
       return tt("Снимок пропал с телефона — визит отмечен без фото", "Rasm telefondan yo'qolgan — tashrif rasmsiz belgilandi");
     }
     ensure(still);
@@ -120,10 +132,10 @@ async function send(a: VisitAction, still: () => boolean): Promise<string | unde
   ensure(still);
   // Время отметки — из очереди: визит стоит в журнале тогда, когда был.
   if (url) {
-    await saveVisitPhoto(a.planId, url, undefined, a.createdAt);
+    await saveVisitPhoto(a.planId, url, undefined, a.createdAt, ...reason(a));
     return;
   }
-  await updatePlanStatus(a.planId, a.status, a.createdAt);
+  await updatePlanStatus(a.planId, a.status, a.createdAt, ...reason(a));
 }
 
 export const useVisitQueue = create<VisitQueue>((set, get) => ({

@@ -592,7 +592,7 @@ describe("ответ 401 на само действие: работа остаё
 
   describe("отметки визита", () => {
     const today = new Date().toISOString().slice(0, 10);
-    const plan = { id: 5, planDate: today, status: "planned", shopId: 1, shopName: "Магазин у дома" };
+    const plan = { id: 5, planDate: today, status: "planned", shopId: 1, shopName: "Магазин у дома", hasOrder: true }; // с заказом: шторка причины — в no-order-reason-*.test
     const queuedOwner = async () => {
       await afterUnauthorized();
       await waitFor(() => expect(useVisitQueue.getState().actions).toHaveLength(1));
@@ -1016,7 +1016,7 @@ describe("действие без вошедшего: не отправляем,
 
   describe("каждый экран с очередью", () => {
     const today = new Date().toISOString().slice(0, 10);
-    const plan = { id: 5, planDate: today, status: "planned", shopId: 1, shopName: "Магазин у дома" };
+    const plan = { id: 5, planDate: today, status: "planned", shopId: 1, shopName: "Магазин у дома", hasOrder: true }; // с заказом: шторка причины — в no-order-reason-*.test
     const delivery = (deliveryStatus: string) => ({ id: 41, orderNumber: "ЗК-41", status: "processing", deliveryStatus, total: "33000", shopName: "Магазин у дома",
       shopAddress: null, shopCity: null, shopGpsLat: null, shopGpsLng: null, createdAt: new Date().toISOString(), deliveredAt: null });
     const { useVisitQueue } = require("../store/visit-queue") as typeof import("../store/visit-queue");

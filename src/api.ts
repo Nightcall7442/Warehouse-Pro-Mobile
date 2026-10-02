@@ -256,6 +256,19 @@ export interface CreateShopInput {
   idempotencyKey?: string;
 }
 
+/*
+  Почему визит прошёл без заказа — коды и подписи в src/lib/no-order-reason.ts
+  (копия контракта веба). Здесь код повторён буквально: сверка с роутером веба
+  (scripts/mobile-contract.mjs) читает этот файл текстом, без импортов.
+*/
+export type NoOrderReason = "closed" | "no_money" | "has_stock" | "competitor" | "no_owner" | "other";
+
+/** Причина, выбранная агентом при закрытии визита без заказа. noOrderNote — только для «Другое». */
+export interface NoOrderChoice {
+  noOrderReason: NoOrderReason;
+  noOrderNote?: string;
+}
+
 export interface Plan {
   id: number;
   planDate: string;
@@ -277,6 +290,14 @@ export interface Plan {
   shopCity?: string;
   agentName?: string;
   agentId?: number;
+  /**
+   * У агента есть заказ этому магазину в день плана (правило сервера —
+   * visitHasOrderSql). Нет заказа — закрыть визит можно только с причиной.
+   */
+  hasOrder?: boolean;
+  /** Причина «без заказа», записанная при отметке; null — заказ был или причины не присылали. */
+  noOrderReason?: NoOrderReason | null;
+  noOrderNote?: string | null;
 }
 
 export interface AgentKpis {
@@ -558,8 +579,10 @@ export async function updatePlanStatus(
   planId: number,
   status: Plan["status"],
   recordedAt?: string,
+  /** Почему без заказа. Не передана — сервер сохранённую причину не трогает. */
+  choice?: NoOrderChoice,
 ): Promise<void> {
-  await trpcMutation("agent.updatePlanStatus", { planId, status, recordedAt });
+  await trpcMutation("agent.updatePlanStatus", { planId, status, recordedAt, ...choice });
 }
 
 export async function saveLocation(
@@ -600,8 +623,10 @@ export async function saveVisitPhoto(
   photoUrl: string,
   notes?: string,
   recordedAt?: string,
+  /** Почему без заказа — как у updatePlanStatus. */
+  choice?: NoOrderChoice,
 ): Promise<void> {
-  await trpcMutation("agent.saveVisitPhoto", { planId, photoUrl, notes, recordedAt });
+  await trpcMutation("agent.saveVisitPhoto", { planId, photoUrl, notes, recordedAt, ...choice });
 }
 
 // ── Barcode Lookup ───────────────────────────────────────────────────────────
