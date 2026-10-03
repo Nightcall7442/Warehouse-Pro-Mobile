@@ -232,7 +232,7 @@ export default function DeliveryScreen() {
       paid: t(`100% оплата: ${total} ${cur}`, `100% to'lov: ${total} ${cur}`),
       partial_paid: t(`Оплата: ${paidStr} ${cur}, долг: ${debtStr} ${cur}`, `To'lov: ${paidStr} ${cur}, qarz: ${debtStr} ${cur}`),
       returned: t("Полный возврат — товар вернётся на склад", "To'liq qaytarish — tovar omborga qaytadi"),
-      partial_returned: t(`Возврат: ${n} позици${n === 1 ? "я" : "и"}; оплата ${paidStr} ${cur}`, `Qaytarish: ${n} ta pozitsiya; to'lov ${paidStr} ${cur}`) +
+      partial_returned: t(`Возврат: ${n} ${plural(n, "позиция", "позиции", "позиций")}; оплата ${paidStr} ${cur}`, `Qaytarish: ${n} ta pozitsiya; to'lov ${paidStr} ${cur}`) +
         (debt > 0 ? t(`, долг ${debtStr} ${cur}`, `, qarz ${debtStr} ${cur}`) : ""),
     };
 

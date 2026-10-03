@@ -42,7 +42,8 @@
           "locationAlwaysAndWhenInUsePermission": "Приложение использует геолокацию в фоне для отслеживания местоположения агентов и доставок",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,
-          "isIosBackgroundLocationEnabled": true
+          "isIosBackgroundLocationEnabled": true,
+          "motionUsagePermission": "Приложение не собирает данные о движении и не запрашивает к ним доступ"
         }
       ],
       [
@@ -53,7 +54,12 @@
           "recordAudioAndroid": false
         }
       ],
-      "expo-image-picker",
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-local-authentication",
         {

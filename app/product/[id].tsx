@@ -27,6 +27,7 @@ import { PressableScale, FadeInItem, ShimmerSkeleton } from "../../src/component
 import { formatMoney } from "../../src/store/branding";
 import { readableInk } from "../../src/lib/contrast";
 import { unitShort, formatQty } from "../../src/lib/units";
+import { liveMarkdown, priceBeforeMarkdown, markdownUntil } from "../../src/lib/sell-first";
 import { useT, useLang } from "../../src/i18n";
 
 const num = (v: number | string | null | undefined) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -89,6 +90,10 @@ export default function ProductScreen() {
   const weight = num(product.unitWeight);
   const sub = [product.category, product.code ? t(`арт. ${product.code}`, `art. ${product.code}`) : null].filter(Boolean).join(" · ");
   const canAdd = !outOfStock && qty <= available;
+  // Уценка по сроку (lib/sell-first): прежняя цена зачёркнута, и сказано, почему
+  // этот товар предлагать первым и до какого дня — как в листе товара на вебе.
+  const mark = liveMarkdown(product);
+  const was = priceBeforeMarkdown(product);
 
   const goOrder = () => {
     if (!canAdd) return;
@@ -131,6 +136,9 @@ export default function ProductScreen() {
             <View style={{ flex: 1.2, backgroundColor: colors.accent.primary + "18", borderRadius: Radii.xl, padding: 16, ...soft(isDark).raisedSm }}>
               <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: colors.accent.primary, marginBottom: 4 }}>{t(`ЦЕНА ЗА ${unit.toUpperCase()}`, `${unit.toUpperCase()} NARXI`)}</Text>
               <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size["2xl"], color: colors.accent.primary }}>{formatMoney(price)}</Text>
+              {was && (
+                <Text testID="product-was" style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.muted, textDecorationLine: "line-through", marginTop: 2 }}>{formatMoney(was)}</Text>
+              )}
             </View>
             <View style={{ flex: 1, backgroundColor: outOfStock ? colors.status.dangerDim : colors.status.successDim, borderRadius: Radii.xl, padding: 16, ...soft(isDark).inset }}>
               <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, color: outOfStock ? colors.status.danger : colors.status.success, marginBottom: 4 }}>{t("ОСТАТОК", "QOLDIQ")}</Text>
@@ -139,6 +147,16 @@ export default function ProductScreen() {
               </Text>
             </View>
           </View>
+
+          {mark && (
+            <View testID="product-sell-first" style={{ flexDirection: "row", alignItems: "flex-start", gap: Spacing.md, backgroundColor: colors.status.warningDim, borderRadius: Radii.xl, padding: 14, marginBottom: 16 }}>
+              <Feather name="clock" size={18} color={colors.status.warning} style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontFamily: Typography.fontRegular, fontSize: Typography.size.sm, lineHeight: 20, color: colors.text.primary }}>
+                <Text style={{ fontFamily: Typography.fontBold }}>{t("Продать первым. ", "Birinchi sotish. ")}</Text>
+                {t(`Уценка до ${markdownUntil(mark)}: у партии кончается срок — предложите магазину в первую очередь.`, `${markdownUntil(mark)} gacha arzonlashtirilgan: partiya muddati tugayapti — do'konga birinchi taklif qiling.`)}
+              </Text>
+            </View>
+          )}
 
           <FadeInItem delay={0}>
             <Card style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>

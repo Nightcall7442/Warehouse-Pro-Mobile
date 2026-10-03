@@ -17,6 +17,7 @@ import { BUCKETS, bucketOf, sortDebtors, debtorTotals } from "../../src/lib/debt
 import { useT, useLang } from "../../src/i18n";
 import { useAuthStore } from "../../src/store/auth";
 import { canSeeDebtors } from "../../src/lib/tabs";
+import { plural } from "../../src/lib/plural";
 
 /**
  * Задолженности магазинов — экран супервайзера.
@@ -116,7 +117,7 @@ export default function DebtorsScreen() {
                 <>
                   <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: bucketColor(b) }} />
                   <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: bucketColor(b) }}>
-                    {t(`висит ${item.oldestDays} ${item.oldestDays === 1 ? "день" : item.oldestDays < 5 ? "дня" : "дней"}`, `${item.oldestDays} kundan beri turibdi`)}
+                    {t(`висит ${item.oldestDays} ${plural(item.oldestDays, "день", "дня", "дней")}`, `${item.oldestDays} kundan beri turibdi`)}
                   </Text>
                 </>
               )}

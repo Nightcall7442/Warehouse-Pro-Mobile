@@ -1,6 +1,6 @@
 // Warehouse Pro — Tracking v2 (cold palette, Card component)
 import React, { useMemo, useRef, useState, useCallback } from "react";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, Redirect } from "expo-router";
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import { ShimmerSkeleton, PressableScale, FadeInItem } from "../../src/component
 import YandexMapView, { centerOnAgent, fitAllMarkers } from "../../src/components/YandexMapView";
 import type { WebView } from "react-native-webview";
 import { tt, useT, useLang } from "../../src/i18n";
+import { useAuthStore } from "../../src/store/auth";
+import { canSeeAgentMap } from "../../src/lib/tabs";
 
 const ONLINE_WINDOW = 600;
 
@@ -59,6 +61,15 @@ export default function TrackingScreen() {
   const lang = useLang();
 
   /*
+    Карта — только тем, кому сервер отдаёт местоположения (agent.getLocations
+    на supervisorQuery: владелец и супервайзер). Вкладки у оператора нет, но
+    экран открывался карточкой «Трекинг» на главной и прямым адресом — и
+    показывал отказ сервера. Остальных уводим на главную ДО запроса, как
+    «Долги магазинов» (canSeeDebtors).
+  */
+  const allowed = canSeeAgentMap(useAuthStore(s => s.user)?.role);
+
+  /*
     Опрос идёт, только пока экран открыт.
 
     Вкладки не размонтируются: один раз открыв «Трекинг», супервайзер получал
@@ -86,6 +97,7 @@ export default function TrackingScreen() {
     queryFn: getAgentLocations,
     refetchInterval: screenFocused ? 15_000 : false,
     retry: 2,
+    enabled: allowed,
   });
 
   /*
@@ -145,6 +157,8 @@ export default function TrackingScreen() {
   }, []);
 
   const selectedLoc = locations.find(l => l.agentId === selectedId);
+
+  if (!allowed) return <Redirect href="/" />;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>

@@ -383,6 +383,16 @@ export interface Product {
   packLabel?: string | null;
   unitWeight?: string | number | null;
   description?: string | null;
+  /** Цена карточки до прайс-листа и уценки — то, что зачёркивают рядом с ценой уценки. */
+  basePrice?: string;
+  /**
+   * Уценка по сроку — «продать первым» (сервер: services/markdown.ts, веб #157).
+   * unitPrice и ступени сервер уже срезал по её цене; здесь — что сказать
+   * агенту: цена уценки и последний день «ГГГГ-ММ-ДД». Нет уценки — null;
+   * сервер до уценок поля не присылает вовсе. Тип вписан, а не импортом
+   * Markdown из lib/sell-first: сверка с сервером читает этот файл текстом.
+   */
+  markdown?: { price: string; endsOn: string } | null;
 }
 
 export interface OrderItem {
@@ -816,6 +826,33 @@ export async function getNotifications(opts?: { unreadOnly?: boolean; cursor?: n
 
 export async function getNotificationCounts(): Promise<{ unread: number; byType: Record<NotificationType, number> }> {
   return trpcQuery<{ unread: number; byType: Record<NotificationType, number> }>("notification.counts");
+}
+
+/* ── Объявления платформы ──────────────────────────────────────────────────
+   Пишет владелец платформы в консоли (веб #154): «в субботу ночью
+   обновление», «появилась новая накладная». Сервер (services/announcements.ts)
+   отдаёт только адресованные организации, начавшиеся, не истёкшие и не
+   закрытые этим человеком — срок и адресат решаются там, телефону их не
+   присылают. Закрытие хранится на сервере: закрыл на телефоне — нет и на
+   компьютере.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export interface Announcement {
+  id: number;
+  level: "info" | "warning";
+  title: string;
+  body: string;
+  /** Узбекский текст — по желанию автора; показывается, только если есть оба поля. */
+  titleUz: string | null;
+  bodyUz: string | null;
+}
+
+export async function getActiveAnnouncements(): Promise<Announcement[]> {
+  return trpcQuery<Announcement[]>("announcement.active");
+}
+
+export async function dismissAnnouncement(id: number): Promise<{ ok: boolean }> {
+  return trpcMutation<{ ok: boolean }>("announcement.dismiss", { id });
 }
 
 export async function markNotificationRead(id: number): Promise<unknown> {

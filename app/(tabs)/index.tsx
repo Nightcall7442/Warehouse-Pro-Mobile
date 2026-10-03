@@ -11,6 +11,7 @@ import { useAuthStore } from "../../src/store/auth";
 import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, getNotificationCounts, getReceivablesAging, getMyDebts } from "../../src/api";
 import { plural } from "../../src/lib/plural";
 import { debtorTotals } from "../../src/lib/debtors";
+import { canSeeAgentMap } from "../../src/lib/tabs";
 import { formatMoney } from "../../src/store/branding";
 import { Card } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
@@ -20,6 +21,7 @@ import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 import { CashCard } from "../../src/components/CashCard";
+import { Announcements } from "../../src/components/Announcements";
 import { money } from "../../src/components/order/OrderStyles";
 
 type IconName = keyof typeof Feather.glyphMap;
@@ -234,6 +236,9 @@ function AgentHome() {
           </View>
         </View>
       </FadeInItem>
+
+      {/* Объявления платформы — всем ролям, под шапкой (components/Announcements). */}
+      <Announcements />
 
       {/* ── Today's visits ───────────────────────────────────────────────── */}
       {/* The route is the agent's day. It used to live only behind the plan tab,
@@ -646,6 +651,9 @@ function SupervisorHome() {
         </View>
       </FadeInItem>
 
+      {/* Объявления платформы — всем ролям, под шапкой (components/Announcements). */}
+      <Announcements />
+
       {/* ── Smart Alerts ────────────────────────────────────────────────── */}
       {alerts && alerts.length > 0 && (
         <FadeInItem delay={60}>
@@ -780,7 +788,7 @@ function SupervisorHome() {
             <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Статусы заказов", "Buyurtma holatlari")}</Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-            <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel={t("заказов", "buyurtma")} />
+            <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel={t(plural(statusTotal, "заказ", "заказа", "заказов"), "buyurtma")} />
             <View style={{ flex: 1, gap: 8 }}>
               {donutSegments.map((seg, i) => (
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -797,6 +805,13 @@ function SupervisorHome() {
       {/* ── Quick Actions (no create order) ──────────────────────────────── */}
       <FadeInItem delay={180}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          {/*
+            «Трекинг» — тем же правилом, что и вкладка карты (canSeeAgentMap):
+            agent.getLocations стоит на supervisorQuery, оператору сервер
+            отказывает. Карточка у оператора открывала экран с отказом; теперь
+            её нет, и «Планы» занимают ряд целиком.
+          */}
+          {canSeeAgentMap(user?.role) && (
           <PressableScale onPress={() => router.push("/(tabs)/tracking")} haptic="light" style={{ flex: 1 }}>
             <View
               style={{ backgroundColor: colors.brand.cta, alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
@@ -806,6 +821,7 @@ function SupervisorHome() {
               <Text style={{ fontSize: 14, fontFamily: Typography.fontBold, color: colors.brand.ctaInk }}>{t("Трекинг", "Kuzatuv")}</Text>
             </View>
           </PressableScale>
+          )}
           <PressableScale onPress={() => router.push("/(tabs)/plans")} haptic="light" style={{ flex: 1 }}>
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
@@ -842,7 +858,7 @@ function SupervisorHome() {
             <Feather name="clipboard" size={16} color={colors.accent.primary} />
             <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Последние заказы", "So'nggi buyurtmalar")}</Text>
           </View>
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{activity?.length ?? 0} {t("заказов", "ta buyurtma")}</Text>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{activity?.length ?? 0} {t(plural(activity?.length ?? 0, "заказ", "заказа", "заказов"), "ta buyurtma")}</Text>
         </View>
         <Card style={{ padding: 0, overflow: "hidden" }}>
           {!activity?.length ? (
@@ -951,6 +967,9 @@ function CourierHome() {
         </View>
       </FadeInItem>
 
+      {/* Объявления платформы — всем ролям, под шапкой (components/Announcements). */}
+      <Announcements />
+
       {/* ── KPI Cards (matching web kpi-hero style) ──────────────────────── */}
       <FadeInItem delay={60}>
         {isLoading ? (
@@ -1051,7 +1070,7 @@ function CourierHome() {
             <Feather name="truck" size={16} color={colors.accent.primary} />
             <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{t("Последние доставки", "So'nggi yetkazishlar")}</Text>
           </View>
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.tertiary }}>{total} {t("заказов", "ta buyurtma")}</Text>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.tertiary }}>{total} {t(plural(total, "заказ", "заказа", "заказов"), "ta buyurtma")}</Text>
         </View>
         <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, ...soft(isDark).raised }}>
           {isLoading ? (

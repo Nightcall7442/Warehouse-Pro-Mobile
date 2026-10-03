@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { capAtMarkdown, type Markdown } from "./sell-first";
 
 /**
  * Отложенная копия списка — чтобы без связи было из чего собрать заказ.
@@ -55,7 +56,7 @@ interface Stored<T> {
   cardPrices, чтобы экран сказал об этом прямо. Цена другого магазина не
   подставляется никогда.
 */
-type CatalogRow = { id: number; unitPrice: string; basePrice?: string | null; tiers?: unknown };
+type CatalogRow = { id: number; unitPrice: string; basePrice?: string | null; tiers?: unknown; markdown?: Markdown | null };
 /** Цена магазина и ступени — только у товаров, где они не совпадают с карточкой. */
 type ShopPrices = Record<number, [string, unknown]>;
 
@@ -127,7 +128,11 @@ export async function loadOfflineCopy<T>(kind: OfflineKind, ownerId: number, sco
     if (p) return [{ ...r, unitPrice: p[0], tiers: p[1] }];
     // Карточной цены нет (копия прежней версии) — такой товар показать не по
     // чему: чужая цена хуже пустоты.
-    return r.basePrice == null ? [] : [{ ...r, unitPrice: r.basePrice, tiers: null }];
+    //
+    // Цена карточки — не выше уценки по сроку (lib/sell-first): сервер любому
+    // магазину отдаёт её срезанной, и без связи окно заказа не должно обещать
+    // дороже. Сама уценка (markdown) лежит в общей копии вместе с товаром.
+    return r.basePrice == null ? [] : [{ ...r, unitPrice: capAtMarkdown(r.basePrice, r), tiers: null }];
   });
   // Дата — старшая из двух: цены и остатки могли сняться в разные дни.
   const savedAt = own && own.savedAt < stored.savedAt ? own.savedAt : stored.savedAt;

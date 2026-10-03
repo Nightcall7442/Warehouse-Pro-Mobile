@@ -18,6 +18,7 @@ import { SecureImage } from "../../src/components/SecureImage";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 import { PendingShops } from "../../src/components/PendingShops";
 import { useT } from "../../src/i18n";
+import { plural } from "../../src/lib/plural";
 import { ShopLightDot } from "../../src/components/ShopLight";
 import { useShopLights } from "../../src/hooks/useShopLights";
 import type { ShopLight } from "../../src/api";
@@ -236,7 +237,7 @@ export default function ShopsScreen() {
               <Text style={{ fontFamily: Typography.fontExtraBold, fontSize: Typography.size.xl, color: colors.text.primary }} numberOfLines={1}>
                 {selectedTerritory === "__all__" ? t("Все магазины", "Barcha do'konlar") : selectedTerritory}
               </Text>
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{selectedShops.length} {t("магазинов", "ta do'kon")}</Text>
+              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{selectedShops.length} {t(plural(selectedShops.length, "магазин", "магазина", "магазинов"), "ta do'kon")}</Text>
             </View>
           </View>
         </View>
@@ -351,7 +352,7 @@ export default function ShopsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Все магазины", "Barcha do'konlar")}</Text>
-                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{filtered.length} {t("магазинов", "ta do'kon")}</Text>
+                  <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{filtered.length} {t(plural(filtered.length, "магазин", "магазина", "магазинов"), "ta do'kon")}</Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.text.secondary} />
               </View>
@@ -369,7 +370,7 @@ export default function ShopsScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{group.territory}</Text>
-                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{group.shops.length} {t("магазинов", "ta do'kon")}</Text>
+                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{group.shops.length} {t(plural(group.shops.length, "магазин", "магазина", "магазинов"), "ta do'kon")}</Text>
                     </View>
                     <Feather name="chevron-right" size={18} color={colors.text.secondary} />
                   </View>
