@@ -30,6 +30,11 @@ import { unitShort } from "../../src/lib/units";
 import { fillLikeLastTime, lastTimeMap, linesFromRepeatParam, skippedFromParam } from "../../src/lib/repeat-order";
 import { useT, useLang } from "../../src/i18n";
 import { heldNotice } from "../../src/lib/hold-reason";
+import { SecureImage } from "../../src/components/SecureImage";
+import { readableInk } from "../../src/lib/contrast";
+
+/** Миниатюра товара в окне выбора: размер пальца, чтобы упаковку было видно. */
+const PICKER_THUMB = 44;
 
 interface OrderLine {
   productId: number;
@@ -588,8 +593,25 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId, hint
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }} haptic="light">
                     <Card style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, marginBottom: 4, ...(added ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: added ? colors.status.success + "0D" : colors.bg.card }}>
-                      <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: added ? colors.status.success + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
-                        <Feather name={added ? "check" : "package"} size={16} color={added ? colors.status.success : colors.text.muted} />
+                      {/*
+                        Фото товара, как в каталоге; коробка — только когда фото нет.
+                        Агент узнаёт товар по упаковке быстрее, чем по названию, а
+                        окно выбора было единственным местом, где фото не было
+                        (снимки для App Store, 03.10.2026). Размер задан точно —
+                        строка не прыгает, пока картинка грузится; кэш и токен —
+                        общие с каталогом (SecureImage).
+                      */}
+                      <View testID={`picker-thumb-${p.id}`} style={{ width: PICKER_THUMB, height: PICKER_THUMB, borderRadius: Radii.md, overflow: "hidden", backgroundColor: added && !p.photoUrl ? colors.status.success + "20" : colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+                        {p.photoUrl ? (
+                          <SecureImage uri={p.photoUrl} style={{ width: PICKER_THUMB, height: PICKER_THUMB }} resizeMode="cover" />
+                        ) : (
+                          <Feather name={added ? "check" : "package"} size={16} color={added ? colors.status.success : colors.text.muted} />
+                        )}
+                        {p.photoUrl && added && (
+                          <View style={{ position: "absolute", right: 2, bottom: 2, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.status.success, alignItems: "center", justifyContent: "center" }}>
+                            <Feather name="check" size={12} color={readableInk(colors.status.success)} />
+                          </View>
+                        )}
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: added ? colors.text.secondary : colors.text.primary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }} numberOfLines={1}>{p.name}</Text>
