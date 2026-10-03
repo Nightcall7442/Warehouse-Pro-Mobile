@@ -112,3 +112,24 @@ describe("e.message из trpcMutation — уже для человека", () =>
     expect(err!.message).toBe("Заказ уже завершён");
   });
 });
+
+describe("экраны не печатают error.message запроса как есть", () => {
+  /*
+    У GET-запроса message — строка axios («Request failed with status code
+    403»): обёртки, как у trpcMutation, у него нет. Отказ запроса на экране —
+    только через errorText или ErrorState. Так печатал каталог.
+
+    Нарочная поломка: вернуть в каталог {error?.message ?? …} — падает.
+  */
+  it("ни один экран и общий компонент не выводит {error.message} в разметку", () => {
+    const { readdirSync, readFileSync, statSync } = require("node:fs") as typeof import("node:fs");
+    const { join } = require("node:path") as typeof import("node:path");
+    const walk = (dir: string): string[] => readdirSync(dir).flatMap(n => {
+      const p = join(dir, n);
+      return statSync(p).isDirectory() ? walk(p) : p.endsWith(".tsx") ? [p] : [];
+    });
+    const offenders = [...walk("app"), ...walk("src/components")]
+      .filter(f => /\{\s*(error|err|q\.error)\??\.message/.test(readFileSync(f, "utf8")));
+    expect(offenders).toEqual([]);
+  });
+});
