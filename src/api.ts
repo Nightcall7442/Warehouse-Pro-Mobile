@@ -828,6 +828,33 @@ export async function getNotificationCounts(): Promise<{ unread: number; byType:
   return trpcQuery<{ unread: number; byType: Record<NotificationType, number> }>("notification.counts");
 }
 
+/* ── Объявления платформы ──────────────────────────────────────────────────
+   Пишет владелец платформы в консоли (веб #154): «в субботу ночью
+   обновление», «появилась новая накладная». Сервер (services/announcements.ts)
+   отдаёт только адресованные организации, начавшиеся, не истёкшие и не
+   закрытые этим человеком — срок и адресат решаются там, телефону их не
+   присылают. Закрытие хранится на сервере: закрыл на телефоне — нет и на
+   компьютере.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export interface Announcement {
+  id: number;
+  level: "info" | "warning";
+  title: string;
+  body: string;
+  /** Узбекский текст — по желанию автора; показывается, только если есть оба поля. */
+  titleUz: string | null;
+  bodyUz: string | null;
+}
+
+export async function getActiveAnnouncements(): Promise<Announcement[]> {
+  return trpcQuery<Announcement[]>("announcement.active");
+}
+
+export async function dismissAnnouncement(id: number): Promise<{ ok: boolean }> {
+  return trpcMutation<{ ok: boolean }>("announcement.dismiss", { id });
+}
+
 export async function markNotificationRead(id: number): Promise<unknown> {
   return trpcMutation("notification.markRead", { id });
 }

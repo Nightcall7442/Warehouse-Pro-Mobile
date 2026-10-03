@@ -11,6 +11,7 @@ import { useAuthStore } from "../../src/store/auth";
 import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, getNotificationCounts, getReceivablesAging, getMyDebts } from "../../src/api";
 import { plural } from "../../src/lib/plural";
 import { debtorTotals } from "../../src/lib/debtors";
+import { canSeeAgentMap } from "../../src/lib/tabs";
 import { formatMoney } from "../../src/store/branding";
 import { Card } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
@@ -20,6 +21,7 @@ import { useThemeColors, useThemeStore } from "../../src/store/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FadeInItem, PressableScale, ShimmerSkeleton } from "../../src/components/Animated";
 import { CashCard } from "../../src/components/CashCard";
+import { Announcements } from "../../src/components/Announcements";
 import { money } from "../../src/components/order/OrderStyles";
 
 type IconName = keyof typeof Feather.glyphMap;
@@ -234,6 +236,9 @@ function AgentHome() {
           </View>
         </View>
       </FadeInItem>
+
+      {/* Объявления платформы — всем ролям, под шапкой (components/Announcements). */}
+      <Announcements />
 
       {/* ── Today's visits ───────────────────────────────────────────────── */}
       {/* The route is the agent's day. It used to live only behind the plan tab,
@@ -646,6 +651,9 @@ function SupervisorHome() {
         </View>
       </FadeInItem>
 
+      {/* Объявления платформы — всем ролям, под шапкой (components/Announcements). */}
+      <Announcements />
+
       {/* ── Smart Alerts ────────────────────────────────────────────────── */}
       {alerts && alerts.length > 0 && (
         <FadeInItem delay={60}>
@@ -797,6 +805,13 @@ function SupervisorHome() {
       {/* ── Quick Actions (no create order) ──────────────────────────────── */}
       <FadeInItem delay={180}>
         <View style={{ flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.base }}>
+          {/*
+            «Трекинг» — тем же правилом, что и вкладка карты (canSeeAgentMap):
+            agent.getLocations стоит на supervisorQuery, оператору сервер
+            отказывает. Карточка у оператора открывала экран с отказом; теперь
+            её нет, и «Планы» занимают ряд целиком.
+          */}
+          {canSeeAgentMap(user?.role) && (
           <PressableScale onPress={() => router.push("/(tabs)/tracking")} haptic="light" style={{ flex: 1 }}>
             <View
               style={{ backgroundColor: colors.brand.cta, alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8 }}>
@@ -806,6 +821,7 @@ function SupervisorHome() {
               <Text style={{ fontSize: 14, fontFamily: Typography.fontBold, color: colors.brand.ctaInk }}>{t("Трекинг", "Kuzatuv")}</Text>
             </View>
           </PressableScale>
+          )}
           <PressableScale onPress={() => router.push("/(tabs)/plans")} haptic="light" style={{ flex: 1 }}>
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: Spacing.lg, borderRadius: Radii.lg, gap: 8, backgroundColor: colors.bg.card, ...soft(isDark).raised }}>
               <View style={{ width: 36, height: 36, borderRadius: Radii.md, backgroundColor: colors.brand.primaryDim, alignItems: "center", justifyContent: "center" }}>
@@ -950,6 +966,9 @@ function CourierHome() {
           </View>
         </View>
       </FadeInItem>
+
+      {/* Объявления платформы — всем ролям, под шапкой (components/Announcements). */}
+      <Announcements />
 
       {/* ── KPI Cards (matching web kpi-hero style) ──────────────────────── */}
       <FadeInItem delay={60}>
