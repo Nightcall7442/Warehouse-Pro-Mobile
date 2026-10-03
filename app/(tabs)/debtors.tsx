@@ -3,7 +3,7 @@ import { View, Text, FlatList, RefreshControl, ActivityIndicator, Pressable, Scr
 import { useScrollTopOnFocus } from "../../src/hooks/useScrollTopOnFocus";
 import { useScrollTopOnChange } from "../../src/hooks/useScrollTopOnChange";
 
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,6 +15,8 @@ import { formatMoney } from "../../src/store/branding";
 import { errorText } from "../../src/lib/error-text";
 import { BUCKETS, bucketOf, sortDebtors, debtorTotals } from "../../src/lib/debtors";
 import { useT, useLang } from "../../src/i18n";
+import { useAuthStore } from "../../src/store/auth";
+import { canSeeDebtors } from "../../src/lib/tabs";
 
 /**
  * Задолженности магазинов — экран супервайзера.
@@ -55,7 +57,15 @@ export default function DebtorsScreen() {
   useScrollTopOnFocus(listRef);
   useScrollTopOnChange(listRef, [search, bucket, byAmount]);
 
-  const q = useQuery({ queryKey: ["receivablesAging"], queryFn: getReceivablesAging, retry: false });
+  /*
+    Экран — только тем, кому сервер отдаст ответ. Остальных (агент, курьер,
+    мерчендайзер) уводим на главную ДО запроса: иначе они видели бы отказ
+    сервера вместо экрана, которым всё равно не могут пользоваться.
+  */
+  const user = useAuthStore(s => s.user);
+  const allowed = canSeeDebtors(user?.role);
+
+  const q = useQuery({ queryKey: ["receivablesAging"], queryFn: getReceivablesAging, retry: false, enabled: allowed });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -152,6 +162,10 @@ export default function DebtorsScreen() {
       </Card>
     );
   };
+
+  // Сессия ещё читается — решать рано; роль без доступа — на главную.
+  if (!user) return null;
+  if (!allowed) return <Redirect href="/" />;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary, paddingTop: insets.top + Spacing.md }}>

@@ -1,6 +1,7 @@
 import axios from "axios";
 import Constants from "expo-constants";
 import { SecureStore } from "./storage";
+import { errorText } from "./lib/error-text";
 
 export const API_BASE = (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim())
   ? process.env.EXPO_PUBLIC_API_URL
@@ -191,12 +192,18 @@ async function trpcMutation<T>(
       // can't get it from the HTTP status: most of the API rejects with a plain
       // `throw new Error(...)`, which tRPC maps to 500, so status alone makes
       // "этот магазин удалён" indistinguishable from a server restart.
-      const wrapped = new Error(e.trpcMessage) as Error & {
+      //
+      // Текст — через errorText: middleware отказывает по-английски
+      // («Insufficient permissions»), а экраны показывают e.message как есть.
+      // Русские слова сервера проходят без изменений.
+      const wrapped = new Error(errorText(e)) as Error & {
         response?: unknown;
         serverRejected?: boolean;
+        forHumans?: boolean;
       };
       wrapped.response = e.response;
       wrapped.serverRejected = true;
+      wrapped.forHumans = true;
       throw wrapped;
     }
     throw err;

@@ -5,6 +5,7 @@ import { Spacing, Radii } from "../theme";
 import { Button, EmptyState } from "./ui";
 import { ShimmerSkeleton } from "./Animated";
 import { isRetryableError } from "../store/offline";
+import { errorText } from "../lib/error-text";
 import { useT } from "../i18n";
 
 /**
@@ -49,8 +50,14 @@ export function ErrorState({
   // он будет искать сеть там, где дело в правах. isRetryableError различает их
   // по конверту tRPC: он есть только у запроса, который дошёл до обработчика.
   const t = useT();
-  const refused = error != null && !isRetryableError(error);
-  const refusal = refused && error instanceof Error ? error.message : null;
+  //
+  // 401 и 403 очередь считает повторяемыми (сессия, подписка — см. offline.ts),
+  // но на экране это ответ сервера, а не связь: «проверьте подключение» агенту,
+  // открывшему чужой раздел, отправило бы его искать сеть.
+  const status = (error as { response?: { status?: number } } | null | undefined)?.response?.status;
+  const refused = error != null && (!isRetryableError(error) || status === 401 || status === 403);
+  // Слова отказа — через errorText: английский текст сервера на экран не выходит.
+  const refusal = refused ? errorText(error) : null;
   const whatUz = what.charAt(0).toUpperCase() + what.slice(1);
 
   return (

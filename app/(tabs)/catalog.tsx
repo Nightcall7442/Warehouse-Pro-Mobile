@@ -25,6 +25,7 @@ import { useDebounce } from "../../src/hooks/useDebounce";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { formatMoney } from "../../src/store/branding";
+import { errorText } from "../../src/lib/error-text";
 import { useT, useLang } from "../../src/i18n";
 /*
   Своей таблицы единиц у каталога больше нет — она была третьей в приложении и
@@ -229,7 +230,7 @@ export default function CatalogScreen() {
             <Feather name="wifi-off" size={32} color={colors.status.danger} />
           </View>
           <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>{t("Ошибка загрузки", "Yuklashda xatolik")}</Text>
-          <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>{error?.message ?? t("Проверьте подключение", "Ulanishni tekshiring")}</Text>
+          <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>{error ? errorText(error) : t("Проверьте подключение", "Ulanishni tekshiring")}</Text>
           {/*
             Повторить было нечем. Сетка с потягиванием вниз в этой ветке не
             рисуется вовсе, а другого способа перезапустить запрос нет: агент в
