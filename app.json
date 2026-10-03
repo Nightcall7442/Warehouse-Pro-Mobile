@@ -54,6 +54,12 @@
         }
       ],
       "expo-image-picker",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Вход в приложение по Face ID"
+        }
+      ],
       "expo-notifications",
       "expo-font",
       [
