@@ -81,6 +81,14 @@ function withClient(node: React.ReactElement) {
 }
 const asRole = (role: string) => useAuthStore.setState({ user: { id: 7, name: "Тест Тестов", role } as never, isLoading: false } as never);
 
+// Первый require главной на полном наборе — секунды (шрифты, графики, навигация
+// под нагрузкой других воркеров): греем модули до тестов, иначе первый из них
+// упирался в 5-секундный предел jest (так же в product-screen.test).
+beforeAll(() => {
+  require("../../app/(tabs)/index");
+  require("../../app/(tabs)/tracking");
+}, 60_000);
+
 beforeEach(() => {
   mockRedirect.mockReset();
   api.getActiveAnnouncements.mockReset();

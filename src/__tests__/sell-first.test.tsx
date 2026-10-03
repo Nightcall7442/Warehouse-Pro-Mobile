@@ -104,6 +104,13 @@ function withClient(node: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
 }
 
+// Первый require экранов на полном наборе — секунды: греем до тестов (как product-screen.test).
+beforeAll(() => {
+  require("../../app/(tabs)/catalog");
+  require("../../app/order/new");
+  require("../../app/product/[id]");
+}, 60_000);
+
 beforeEach(async () => {
   await AsyncStorage.clear();
   for (const k of Object.keys(mockRouteParams)) delete mockRouteParams[k];

@@ -30,6 +30,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { getActiveAnnouncements, dismissAnnouncement } from "../api";
 import { useAuthStore } from "../store/auth";
@@ -50,6 +51,19 @@ export function Announcements() {
   // У суперадмина своя консоль, и это его же сообщения — сервер ему отдаёт пусто.
   const enabled = !!user && (user.role as string) !== "superadmin";
 
+  /*
+    Опрос — только пока главная на экране. Вкладки не размонтируются: без
+    этого телефон спрашивал бы объявления каждые пять минут весь день, и с
+    другой вкладки, и из кармана (страж — battery.test).
+  */
+  const [screenFocused, setScreenFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      return () => setScreenFocused(false);
+    }, []),
+  );
+
   const q = useQuery({
     // Человек в ключе: на общем телефоне закрытое одним не должно прятаться у другого.
     queryKey: ["announcements", user?.id ?? 0],
@@ -57,7 +71,7 @@ export function Announcements() {
     enabled,
     retry: false,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
+    refetchInterval: screenFocused ? 5 * 60_000 : false,
   });
 
   const [closed, setClosed] = useState<ReadonlySet<number>>(() => new Set());
