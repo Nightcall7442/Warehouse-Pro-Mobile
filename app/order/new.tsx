@@ -27,6 +27,7 @@ import { linePrice, lineTotal, lineTotalBeforeDiscount, orderTotals } from "../.
 import { priceAt, type PriceTier } from "../../src/lib/price-tiers";
 import { qty as qtyText } from "../../src/lib/format";
 import { unitShort } from "../../src/lib/units";
+import { liveMarkdown, sellFirstCount, sellFirstOnTop, priceBeforeMarkdown, markdownUntil } from "../../src/lib/sell-first";
 import { fillLikeLastTime, lastTimeMap, linesFromRepeatParam, skippedFromParam } from "../../src/lib/repeat-order";
 import { useT, useLang } from "../../src/i18n";
 import { heldNotice } from "../../src/lib/hold-reason";
@@ -421,6 +422,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId, hint
   const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const debouncedSearch = useDebounce(search, 300);
   const [onlyInStock, setOnlyInStock] = useState(true);
+  const [sellFirst, setSellFirst] = useState(false);
   // Тот же запасной путь, что у магазинов: см. ShopPicker. Копия — ЭТОГО
   // магазина: у каждого свои цены и ступени (lib/offline-copy).
   const { data: liveProducts, isLoading: liveLoading } = useQuery({ queryKey: ["products", shopId ?? 0], queryFn: () => getProducts(undefined, shopId) });
@@ -432,11 +434,20 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId, hint
     : cardPrices ? t(`Цен этого магазина на телефоне нет — показаны базовые цены без ступеней, сумму пересчитают при отправке. Каталог от ${savedOn}`, `Bu do'kon narxlari telefonda yo'q — pog'onasiz asosiy narxlar ko'rsatilgan, summa yuborishda qayta hisoblanadi. Katalog ${savedOn}`)
     : t(`Каталог сохранён ${savedOn} — связи нет, остатки и цены могли измениться`, `Katalog ${savedOn} da saqlangan — aloqa yo'q, qoldiq va narxlar o'zgargan bo'lishi mumkin`);
 
+  /*
+    «Продать первым» — уценка по сроку (lib/sell-first; веб — ProductSelector,
+    #157): такие товары идут в начале списка и собраны в фишку. Цена уже
+    срезана сервером; здесь — показать её рядом с прежней и сказать «до когда».
+  */
+  const sellFirstN = useMemo(() => sellFirstCount(products ?? []), [products]);
+  const sellFirstOn = sellFirst && sellFirstN > 0;
+
   const filtered = useMemo(() => {
     let list = (products ?? []).filter(p => !debouncedSearch || p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || (p.code ?? "").toLowerCase().includes(debouncedSearch.toLowerCase()));
     if (onlyInStock) list = list.filter(p => p.available == null || Number(p.available) > 0);
-    return list.sort((a, b) => (a.category ?? "").localeCompare(b.category ?? "") || a.name.localeCompare(b.name));
-  }, [products, debouncedSearch, onlyInStock]);
+    if (sellFirstOn) list = list.filter(p => liveMarkdown(p));
+    return sellFirstOnTop(list.sort((a, b) => (a.category ?? "").localeCompare(b.category ?? "") || a.name.localeCompare(b.name)));
+  }, [products, debouncedSearch, onlyInStock, sellFirstOn]);
 
   const qtyOf = useMemo(() => new Map(lines.map(l => [l.productId, Number(l.quantity || 0)])), [lines]);
   const summary = cartSummary(lines);
@@ -559,14 +570,23 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId, hint
               {t(`Из прошлого заказа сняты с продажи: ${skippedNames.join(", ")}`, `O'tgan buyurtmadan sotuvdan olingan: ${skippedNames.join(", ")}`)}
             </Text>
           )}
-          {/* Stock filter */}
-          <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
+          {/* Stock filter и «Продать первым» — одной строкой; не влезли — фишка уходит вниз. */}
+          <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: Spacing.md, rowGap: 4, marginHorizontal: Spacing.base, marginBottom: Spacing.sm }}>
+          <TouchableOpacity onPress={() => setOnlyInStock(v => !v)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }} style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 }}>
             <View style={{ width: 20, height: 20, borderRadius: 4, ...(onlyInStock ? soft(isDark).raisedSm : soft(isDark).inset), backgroundColor: onlyInStock ? colors.accent.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
               {onlyInStock && <Feather name="check" size={12} color={colors.brand.ink} />}
             </View>
             <Text style={{ fontSize: Typography.size.sm, color: colors.text.secondary, fontFamily: Typography.fontMedium }}>{t("Только в наличии", "Faqat bor bo'lganlar")}</Text>
             <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary }}>({filtered.length})</Text>
           </TouchableOpacity>
+          {sellFirstN > 0 && (
+            <TouchableOpacity testID="picker-chip-sell-first" accessibilityRole="button" accessibilityState={{ selected: sellFirstOn }} onPress={() => setSellFirst(v => !v)}
+              style={{ marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: Radii.full, backgroundColor: sellFirstOn ? colors.status.warningDim : colors.bg.elevated, ...(sellFirstOn ? soft(isDark).raisedSm : soft(isDark).inset) }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.warning }} />
+              <Text style={{ fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, color: sellFirstOn ? colors.text.primary : colors.text.secondary }}>{t(`Продать первым · ${sellFirstN}`, `Birinchi sotish · ${sellFirstN}`)}</Text>
+            </TouchableOpacity>
+          )}
+          </View>
           {/* Product list */}
           {isLoading ? (
             <View style={{ padding: Spacing.base, gap: 10 }}>{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height={60} radius={Radii.lg} />)}</View>
@@ -586,6 +606,10 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId, hint
                 */
                 const stock = parseStock(p.available);
                 const atLimit = stock != null && qty >= stock;
+                // Уценка по сроку: цена строки уже срезана; прежняя — зачёркнута рядом.
+                const mark = liveMarkdown(p);
+                const shownPrice = priceAt(p.unitPrice, p.tiers, qty);
+                const was = priceBeforeMarkdown(p, shownPrice);
                 return (
                   <PressableScale onPress={() => {
                     if (added || atLimit) return;
@@ -615,13 +639,20 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId, hint
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: added ? colors.text.secondary : colors.text.primary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }} numberOfLines={1}>{p.name}</Text>
-                        <View style={{ flexDirection: "row", gap: 6, marginTop: 2 }}>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
                           {p.code && <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, backgroundColor: colors.bg.elevated, paddingHorizontal: 4, borderRadius: 4 }}>{p.code}</Text>}
-                          <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontMedium }}>{Number(priceAt(p.unitPrice, p.tiers, qty)).toLocaleString("ru")} {t("сум", "so'm")}</Text>
+                          <Text style={{ fontSize: Typography.size.xs, color: colors.accent.primary, fontFamily: Typography.fontMedium }}>{Number(shownPrice).toLocaleString("ru")} {t("сум", "so'm")}</Text>
+                          {was && <Text testID={`picker-was-${p.id}`} style={{ fontSize: Typography.size.xs, color: colors.text.muted, textDecorationLine: "line-through" }}>{Number(was).toLocaleString("ru")}</Text>}
                           <Text testID={`picker-stock-${p.id}`} style={{ fontSize: Typography.size.xs, color: atLimit ? colors.status.danger : colors.text.tertiary }}>
                             {stock == null ? t("· остаток уточняется", "· qoldiq aniqlanmoqda") : stock <= 0 ? t("· нет на складе", "· omborda yo'q") : t(`· остаток ${qtyText(stock)}`, `· qoldiq ${qtyText(stock)}`)}
                           </Text>
                         </View>
+                        {mark && (
+                          <View testID={`picker-sell-first-${p.id}`} style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.status.warning }} />
+                            <Text style={{ fontSize: Typography.size.xs, color: colors.text.secondary, fontFamily: Typography.fontSemibold }}>{t(`Продать первым · уценка до ${markdownUntil(mark)}`, `Birinchi sotish · ${markdownUntil(mark)} gacha arzon`)}</Text>
+                          </View>
+                        )}
                         {lastTimeOf.has(p.id) && (
                           <Text testID={`last-time-${p.id}`} style={{ fontSize: Typography.size.xs, color: colors.text.secondary, fontFamily: Typography.fontMedium, marginTop: 2 }}>
                             {t(`в прошлый раз: ${qtyText(lastTimeOf.get(p.id)?.quantity)} ${unitShort(p.unit, lang)}`, `o'tgan safar: ${qtyText(lastTimeOf.get(p.id)?.quantity)} ${unitShort(p.unit, lang)}`)}

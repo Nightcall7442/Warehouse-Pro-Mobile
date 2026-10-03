@@ -34,6 +34,7 @@ import { useT, useLang } from "../../src/i18n";
   жил здесь один, а корзина нового заказа печатала тот же остаток как есть.
 */
 import { unitShort, formatQty } from "../../src/lib/units";
+import { liveMarkdown, sellFirstCount, sellFirstOnTop, priceBeforeMarkdown, markdownUntil } from "../../src/lib/sell-first";
 
 // ── Hero Product Card ────────────────────────────────────────────────────────
 function ProductCard({
@@ -48,6 +49,10 @@ function ProductCard({
   const hasPhoto = !!product.photoUrl;
   const inStock = Number(product.available) > 0;
   const imgHeight = cardWidth * 0.7;
+  // Уценка по сроку (lib/sell-first): бирка «Продать первым» вместо «В наличии»
+  // и прежняя цена зачёркнутой под ценой — как на вебе (веб #157).
+  const mark = inStock ? liveMarkdown(product) : null;
+  const was = priceBeforeMarkdown(product);
 
   return (
     <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={{ width: cardWidth, marginBottom: Spacing.base }}>
@@ -65,9 +70,9 @@ function ProductCard({
               тот прозрачен на 87 %, и зелёные буквы на фото арбуза или мяса
               не читались. Цвет состояния несёт точка (status.* — заливки, не
               чернила, см. theme.ts), надпись — основными чернилами. */}
-          <View style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.bg.card, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 4, ...soft(isDark).raisedSm }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: inStock ? colors.status.success : colors.status.danger }} />
-            <Text style={{ color: colors.text.primary, fontSize: 11, fontFamily: Typography.fontSemibold }}>{inStock ? t("В наличии", "Bor") : t("Нет", "Yo'q")}</Text>
+          <View testID={mark ? `catalog-sell-first-${product.id}` : undefined} style={{ position: "absolute", top: Spacing.sm, left: Spacing.sm, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.bg.card, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 4, ...soft(isDark).raisedSm }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: !inStock ? colors.status.danger : mark ? colors.status.warning : colors.status.success }} />
+            <Text style={{ color: colors.text.primary, fontSize: 11, fontFamily: Typography.fontSemibold }}>{!inStock ? t("Нет", "Yo'q") : mark ? t("Продать первым", "Birinchi sotish") : t("В наличии", "Bor")}</Text>
           </View>
           {/* В корзину: одно нажатие — одна единица; в корзине — степпер. */}
           {inStock && (inCart > 0 ? (
@@ -95,6 +100,12 @@ function ProductCard({
             <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.accent.primary }}>{fmt(product.unitPrice)}<Text style={{ fontSize: Typography.size.xs, color: colors.text.muted }}>/{unitShort(product.unit, lang)}</Text></Text>
             {inStock && <Text style={{ fontSize: Typography.size.xs, color: colors.status.success, fontFamily: Typography.fontMedium }}>{formatQty(product.available)} {unitShort(product.unit, lang)}</Text>}
           </View>
+          {mark && (
+            <Text testID={`catalog-markdown-${product.id}`} numberOfLines={1} style={{ fontSize: 11, color: colors.text.muted, fontFamily: Typography.fontMedium, marginTop: 2 }}>
+              {was && <Text testID={`catalog-was-${product.id}`} style={{ textDecorationLine: "line-through" }}>{fmt(was)}</Text>}
+              {t(`${was ? " · " : ""}до ${markdownUntil(mark)}`, `${was ? " · " : ""}${markdownUntil(mark)} gacha`)}
+            </Text>
+          )}
         </View>
       </Card>
     </TouchableOpacity>
@@ -116,9 +127,10 @@ export default function CatalogScreen() {
 
   const [search, setSearch] = useState("");
   const [selectedCat, setSelectedCat] = useState("all");
+  const [sellFirst, setSellFirst] = useState(false);
   const listRef = useRef<FlatList>(null);
   useScrollTopOnFocus(listRef);
-  useScrollTopOnChange(listRef, [search, selectedCat]);
+  useScrollTopOnChange(listRef, [search, selectedCat, sellFirst]);
   const [cachedProducts, setCachedProducts] = useState<Product[]>([]);
   // Корзина: строки копятся здесь, заказ оформляется один раз на экране заказа.
   const cartAdd = useCartStore(s => s.add);
@@ -180,12 +192,24 @@ export default function CatalogScreen() {
 
   // Отбор по НЕзадержанной строке: пока едет ответ сервера, набранная буква
   // сужает уже показанный список сразу, а не через 300 мс.
+  /*
+    «Продать первым» — товары с уценкой по сроку (lib/sell-first): директор
+    уценил партию, которая иначе сгорит. Они стоят в начале сетки и собраны в
+    отдельную фишку — агент предлагает их магазину первыми. Без связи — из
+    копии на диске: кончившаяся там уценка не считается.
+  */
+  const sellFirstN = useMemo(() => sellFirstCount(effectiveProducts), [effectiveProducts]);
+  // Уценок не стало (обновился каталог) — нажатая фишка не прячет весь список.
+  const sellFirstOn = sellFirst && sellFirstN > 0;
+
   const filtered = useMemo(() => {
     let result = effectiveProducts;
     if (search) { const q = search.toLowerCase(); result = result.filter(p => p.name.toLowerCase().includes(q) || p.code?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q)); }
     if (selectedCat !== "all") result = result.filter(p => p.category?.toLowerCase() === selectedCat);
-    return result;
-  }, [effectiveProducts, search, selectedCat]);
+    if (sellFirstOn) result = result.filter(p => liveMarkdown(p));
+    return sellFirstOnTop(result);
+  }, [effectiveProducts, search, selectedCat, sellFirstOn]);
+  const narrowed = !!search || selectedCat !== "all" || sellFirstOn;
 
   const fmt = useCallback((v: number | string | null | undefined) => {
     return formatMoney(v);
@@ -207,15 +231,24 @@ export default function CatalogScreen() {
           flexGrow/flexShrink: 0 обязательны: у ScrollView по умолчанию
           flex-сжатие, и в колонке рядом с сеткой flex: 1 лента сжималась в
           полоску — чипы уходили под фото (кадр лендинга 25.09.2026). */}
-      {categories.length > 1 && (
+      {/* Фишки — 44 точки, как все цели касания (стояло 36: мимо попадали;
+          веб поднял их до 44 в #157 тем же доводом). */}
+      {(categories.length > 1 || sellFirstN > 0) && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
           style={{ flexGrow: 0, flexShrink: 0, marginBottom: Spacing.base }}
           contentContainerStyle={{ paddingHorizontal: Spacing.base, gap: Spacing.sm }}>
-          {categories.map(cat => {
+          {sellFirstN > 0 && (
+            <TouchableOpacity testID="catalog-chip-sell-first" accessibilityRole="button" accessibilityState={{ selected: sellFirstOn }} onPress={() => setSellFirst(v => !v)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: sellFirstOn ? colors.status.warningDim : colors.bg.elevated, borderRadius: Radii.full, ...(sellFirstOn ? soft(isDark).raisedSm : soft(isDark).inset), paddingHorizontal: 16, minHeight: 44, justifyContent: "center" }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.warning }} />
+              <Text style={{ color: sellFirstOn ? colors.text.primary : colors.text.secondary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold }}>{t(`Продать первым · ${sellFirstN}`, `Birinchi sotish · ${sellFirstN}`)}</Text>
+            </TouchableOpacity>
+          )}
+          {categories.length > 1 && categories.map(cat => {
             const active = selectedCat === cat.key;
             return (
               <TouchableOpacity key={cat.key} onPress={() => setSelectedCat(cat.key)}
-                style={{ backgroundColor: active ? colors.accent.primary : colors.bg.elevated, borderRadius: Radii.full, ...(active ? soft(isDark).raisedSm : soft(isDark).inset), paddingHorizontal: 16, paddingVertical: 8, minHeight: 36, justifyContent: "center" }}>
+                style={{ backgroundColor: active ? colors.accent.primary : colors.bg.elevated, borderRadius: Radii.full, ...(active ? soft(isDark).raisedSm : soft(isDark).inset), paddingHorizontal: 16, paddingVertical: 8, minHeight: 44, justifyContent: "center" }}>
                 <Text style={{ color: active ? colors.brand.ink : colors.text.secondary, fontSize: Typography.size.sm, fontFamily: Typography.fontSemibold, textAlign: "center" }}>{cat.label}</Text>
               </TouchableOpacity>
             );
@@ -280,10 +313,10 @@ export default function CatalogScreen() {
               {/* Пустой каталог — это пустой каталог, а не «введите запрос»:
                   список товаров приходит и без поиска. */}
               <Text style={{ color: colors.text.secondary, fontSize: Typography.size.lg, fontFamily: Typography.fontSemibold }}>
-                {search ? t("Товары не найдены", "Mahsulot topilmadi") : t("Каталог пуст", "Katalog bo'sh")}
+                {narrowed ? t("Товары не найдены", "Mahsulot topilmadi") : t("Каталог пуст", "Katalog bo'sh")}
               </Text>
               <Text style={{ color: colors.text.muted, fontSize: Typography.size.sm, marginTop: 4, textAlign: "center" }}>
-                {search ? t("Попробуйте изменить запрос", "So'rovni o'zgartirib ko'ring") : t("Товары появятся, когда их заведут на складе", "Mahsulotlar omborga kiritilgach paydo bo'ladi")}
+                {narrowed ? t("Попробуйте изменить запрос", "So'rovni o'zgartirib ko'ring") : t("Товары появятся, когда их заведут на складе", "Mahsulotlar omborga kiritilgach paydo bo'ladi")}
               </Text>
             </View>
           }

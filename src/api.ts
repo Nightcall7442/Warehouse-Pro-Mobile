@@ -383,6 +383,16 @@ export interface Product {
   packLabel?: string | null;
   unitWeight?: string | number | null;
   description?: string | null;
+  /** Цена карточки до прайс-листа и уценки — то, что зачёркивают рядом с ценой уценки. */
+  basePrice?: string;
+  /**
+   * Уценка по сроку — «продать первым» (сервер: services/markdown.ts, веб #157).
+   * unitPrice и ступени сервер уже срезал по её цене; здесь — что сказать
+   * агенту: цена уценки и последний день «ГГГГ-ММ-ДД». Нет уценки — null;
+   * сервер до уценок поля не присылает вовсе. Тип вписан, а не импортом
+   * Markdown из lib/sell-first: сверка с сервером читает этот файл текстом.
+   */
+  markdown?: { price: string; endsOn: string } | null;
 }
 
 export interface OrderItem {
