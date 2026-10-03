@@ -103,3 +103,73 @@ describe("Face ID", () => {
     expect(out.modResults.NSFaceIDUsageDescription).not.toMatch(/Allow/);
   });
 });
+
+/*
+  Английские разрешения, которых приложение не просит.
+
+  npx expo config --type introspect (04.10.2026) показал два хвоста:
+
+  · expo-location сам кладёт в Info.plist NSMotionUsageDescription — «Allow
+    Warehouse Pro to detect your current motion activity». Движение приложение
+    не читает. Убрать ключ совсем плагин умеет (motionUsagePermission: false),
+    но нативный модуль всё равно ссылается на CMMotionActivityManager
+    (ios/Requesters/MotionActivityPermissionRequester.swift), а App Store
+    Connect отбивает сборку без строки для API из кода (ITMS-90683). Поэтому
+    строка остаётся — русская и честная: доступ не запрашивается.
+
+  · expo-image-picker по умолчанию добавляет Android RECORD_AUDIO (видео со
+    звуком). Мы снимаем только фото; микрофон в списке разрешений Google Play
+    — лишний вопрос к приложению. microphonePermission: false снимает его и
+    ставит запрет (tools:node="remove"), чтобы его не вернул другой пакет.
+
+  Проверяются настоящие плагины пакетов — они и решают, что попадёт в сборку.
+
+  Нарочные поломки: убери motionUsagePermission — падает «строка движения»
+  (в Info.plist снова «Allow…»); верни "expo-image-picker" строкой — падают
+  обе проверки микрофона.
+*/
+type PluginEntry = [string, Record<string, unknown>];
+const pluginEntry = (name: string): PluginEntry | undefined => {
+  const raw = JSON.parse(readFileSync(join(root, "app.json"), "utf8")) as { expo: { plugins: Array<string | PluginEntry> } };
+  return raw.expo.plugins.find(p => Array.isArray(p) && p[0] === name) as PluginEntry | undefined;
+};
+const nextMod = { nextMod: async (c: unknown) => c };
+
+describe("строка движения (expo-location)", () => {
+  it("в app.json — русская, без английского по умолчанию", () => {
+    const entry = pluginEntry("expo-location");
+    expect(entry?.[1].motionUsagePermission).toMatch(/[а-яё]/i);
+  });
+
+  it("в Info.plist попадает наша строка, а не «Allow … motion activity»", async () => {
+    const entry = pluginEntry("expo-location");
+    const mod = require("expo-location/app.plugin");
+    const plugin = mod.default ?? mod;
+    const cfg = plugin({ name: "x", slug: "x", ios: { infoPlist: {} } }, entry?.[1]);
+    const out = await cfg.mods.ios.infoPlist({ ...cfg, modResults: {}, modRequest: { ...nextMod, platform: "ios" } });
+    expect(out.modResults.NSMotionUsageDescription).toBe(entry?.[1].motionUsagePermission);
+    expect(out.modResults.NSMotionUsageDescription).not.toMatch(/Allow|motion activity/);
+  });
+});
+
+describe("микрофон (expo-image-picker)", () => {
+  it("плагин объявлен с microphonePermission: false", () => {
+    expect(pluginEntry("expo-image-picker")?.[1].microphonePermission).toBe(false);
+  });
+
+  it("RECORD_AUDIO не добавлен и запрещён в манифесте, строки микрофона в Info.plist нет", async () => {
+    const entry = pluginEntry("expo-image-picker");
+    const mod = require("expo-image-picker/app.plugin");
+    const plugin = mod.default ?? mod;
+    const cfg = plugin({ name: "x", slug: "x", android: { permissions: [] }, ios: { infoPlist: {} } }, entry?.[1]);
+    expect(cfg.android.permissions.join(" ")).not.toContain("RECORD_AUDIO");
+
+    const manifest = await cfg.mods.android.manifest({ ...cfg, modResults: { manifest: { $: {}, "uses-permission": [] } }, modRequest: { ...nextMod, platform: "android" } });
+    const uses = manifest.modResults.manifest["uses-permission"] as Array<{ $: Record<string, string> }>;
+    const audio = uses.find(u => u.$["android:name"] === "android.permission.RECORD_AUDIO");
+    expect(audio?.$["tools:node"]).toBe("remove");
+
+    const plist = await cfg.mods.ios.infoPlist({ ...cfg, modResults: { NSMicrophoneUsageDescription: "Allow x to access your microphone" }, modRequest: { ...nextMod, platform: "ios" } });
+    expect(plist.modResults.NSMicrophoneUsageDescription).toBeUndefined();
+  });
+});

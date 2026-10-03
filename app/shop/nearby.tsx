@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import { useLocation, getDistanceKm, getEstimatedTime } from "../../src/hooks/useLocation";
 import { formatMoney } from "../../src/store/branding";
 import { useT } from "../../src/i18n";
+import { plural } from "../../src/lib/plural";
 
 function DistanceBadge({ distance }: { distance: number }) {
   const colors = useThemeColors();
@@ -185,7 +186,7 @@ export default function NearbyShopsScreen() {
           <>
             <View style={{ marginBottom: 12 }}>
               <Text style={{ fontSize: 13, fontFamily: Typography.fontMedium, color: colors.text.secondary }}>
-                {t(`${filteredShops.length} магазин${filteredShops.length === 1 ? "" : filteredShops.length < 5 ? "а" : "ов"}`, `${filteredShops.length} ta do'kon`)}
+                {t(`${filteredShops.length} ${plural(filteredShops.length, "магазин", "магазина", "магазинов")}`, `${filteredShops.length} ta do'kon`)}
               </Text>
             </View>
             {filteredShops.map((shop, index) => (

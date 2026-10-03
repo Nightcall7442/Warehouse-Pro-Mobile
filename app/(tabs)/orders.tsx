@@ -22,6 +22,7 @@ import { Card, Badge } from "../../src/components/ui";
 import { ProgressRing, NeumorphicProgressBar } from "../../src/components/Charts";
 import { FadeInItem, PressableScale } from "../../src/components/Animated";
 import { orderStatusLabel } from "../../src/lib/order-status";
+import { plural } from "../../src/lib/plural";
 
 const BOTTOM_TAB_HEIGHT = 80;
 
@@ -174,7 +175,7 @@ export default function OrdersScreen() {
               <Feather name="wifi-off" size={18} color={colors.status.warning} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
-                  {t(`${pendingOffline.length} ${pendingOffline.length === 1 ? "заказ" : "заказов"} не отправлен${pendingOffline.length === 1 ? "" : "ы"}`, `${pendingOffline.length} ta buyurtma yuborilmadi`)}
+                  {t(`${pendingOffline.length} ${plural(pendingOffline.length, "заказ не отправлен", "заказа не отправлены", "заказов не отправлены")}`, `${pendingOffline.length} ta buyurtma yuborilmadi`)}
                 </Text>
                 {syncingOrders ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
@@ -250,7 +251,7 @@ export default function OrdersScreen() {
               <Feather name="truck" size={18} color={colors.status.warning} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.sm, color: colors.text.primary }}>
-                  {t(`${pendingActions.length} ${pendingActions.length === 1 ? "действие" : "действий"} ожидают отправки`, `${pendingActions.length} ta amal yuborishni kutmoqda`)}
+                  {t(`${pendingActions.length} ${plural(pendingActions.length, "действие ожидает", "действия ожидают", "действий ожидают")} отправки`, `${pendingActions.length} ta amal yuborishni kutmoqda`)}
                 </Text>
                 {syncingActions ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>

@@ -23,6 +23,7 @@ import { Button, Card, SearchInput, Skeleton } from "../../src/components/ui";
 import { PressableScale } from "../../src/components/Animated";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { bumpLine, findScanned, cartSummary } from "../../src/lib/cart";
+import { plural } from "../../src/lib/plural";
 import { linePrice, lineTotal, lineTotalBeforeDiscount, orderTotals } from "../../src/lib/order-money";
 import { priceAt, type PriceTier } from "../../src/lib/price-tiers";
 import { qty as qtyText } from "../../src/lib/format";
@@ -686,7 +687,7 @@ function ProductPicker({ visible, onClose, lines, onChange, colors, shopId, hint
           <View testID="picker-summary" style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: Spacing.base, paddingVertical: Spacing.md, paddingBottom: safeBottomPadding(insets.bottom, Spacing.md), borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.bg.secondary }}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: Typography.size.xs, color: colors.text.tertiary, fontFamily: Typography.fontMedium }}>
-                {summary.count === 0 ? t("Корзина пуста", "Savat bo'sh") : t(`${summary.count} ${summary.count === 1 ? "товар" : summary.count < 5 ? "товара" : "товаров"}`, `${summary.count} ta mahsulot`)}
+                {summary.count === 0 ? t("Корзина пуста", "Savat bo'sh") : t(`${summary.count} ${plural(summary.count, "товар", "товара", "товаров")}`, `${summary.count} ta mahsulot`)}
               </Text>
               <Text style={{ fontSize: Typography.size.lg, fontFamily: Typography.fontBold, color: colors.text.primary }}>{summary.total.toLocaleString("ru")} {t("сум", "so'm")}</Text>
             </View>
