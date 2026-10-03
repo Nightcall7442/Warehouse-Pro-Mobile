@@ -788,7 +788,7 @@ function SupervisorHome() {
             <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Статусы заказов", "Buyurtma holatlari")}</Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-            <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel={t("заказов", "buyurtma")} />
+            <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel={t(plural(statusTotal, "заказ", "заказа", "заказов"), "buyurtma")} />
             <View style={{ flex: 1, gap: 8 }}>
               {donutSegments.map((seg, i) => (
                 <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -858,7 +858,7 @@ function SupervisorHome() {
             <Feather name="clipboard" size={16} color={colors.accent.primary} />
             <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Последние заказы", "So'nggi buyurtmalar")}</Text>
           </View>
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{activity?.length ?? 0} {t("заказов", "ta buyurtma")}</Text>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{activity?.length ?? 0} {t(plural(activity?.length ?? 0, "заказ", "заказа", "заказов"), "ta buyurtma")}</Text>
         </View>
         <Card style={{ padding: 0, overflow: "hidden" }}>
           {!activity?.length ? (
@@ -1070,7 +1070,7 @@ function CourierHome() {
             <Feather name="truck" size={16} color={colors.accent.primary} />
             <Text style={{ fontFamily: Typography.fontBold, fontSize: 16, color: colors.text.primary }}>{t("Последние доставки", "So'nggi yetkazishlar")}</Text>
           </View>
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.tertiary }}>{total} {t("заказов", "ta buyurtma")}</Text>
+          <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.tertiary }}>{total} {t(plural(total, "заказ", "заказа", "заказов"), "ta buyurtma")}</Text>
         </View>
         <View style={{ backgroundColor: colors.bg.card, borderRadius: 20, ...soft(isDark).raised }}>
           {isLoading ? (
