@@ -15,7 +15,7 @@
 import { describe, it, expect } from "@jest/globals";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BUCKETS, bucketOf, sortDebtors, debtorTotals } from "../lib/debtors";
+import { BUCKETS, bucketOf, sortDebtors, debtorTotals, cappedBuckets } from "../lib/debtors";
 import type { ShopAging, ReceivablesAging } from "../api";
 
 /** В Jest у expect один довод — причину пишем сами. */
@@ -25,7 +25,7 @@ function must(ok: boolean, why: string) {
 
 const shop = (over: Partial<ShopAging>): ShopAging => ({
   shopId: 1, shopName: "Магазин", phone: null, agentName: null,
-  debt: 0, buckets: { d0_7: 0, d8_30: 0, d31_60: 0, d60plus: 0 },
+  debt: 1_000, buckets: { d0_7: 0, d8_30: 0, d31_60: 0, d60plus: 0 },
   unattributed: 0, oldestDays: null, ...over,
 });
 
@@ -153,6 +153,81 @@ describe("итоги", () => {
     expect(t.totalDebt).toBe(0);
     expect(t.overdue).toBe(0);
     expect(t.buckets.d60plus).toBe(0);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Часть не больше целого.
+
+   Снимки для App Store, 03.10.2026: на главной супервайзера «Долги магазинов:
+   всего 9 949 900 сум», а строкой ниже «старше месяца: 49 124 220 сум».
+
+   Оба числа — из одной ручки shop.receivablesAging. «Всего» — сумма долгов с
+   карточек магазинов (shops.debt), «старше месяца» — корзины неоплаченных
+   ЗАКАЗОВ. Когда долг магазина закрыт не оплатой заказа (возврат, оплата без
+   заказа), заказы больше долга, и сервер отдаёт разницу отрицательным
+   `unattributed`. Экран этот минус терял и складывал корзины как есть.
+
+   Нарочная поломка: в debtorTotals взять корзины ответа без cappedBuckets —
+   падают все три проверки ниже.
+   ═══════════════════════════════════════════════════════════════════════════ */
+describe("часть не больше целого", () => {
+  // Как магазин «Супер Дўкон» на стенде: долг 570 000, неоплаченных заказов на 7,4 млн.
+  const paidOffBySomethingElse = shop({
+    shopId: 7, debt: 570_000, oldestDays: 75,
+    buckets: { d0_7: 1_000_000, d8_30: 2_420_535, d31_60: 2_000_000, d60plus: 2_020_600 },
+    unattributed: -6_871_135,
+  });
+  // Возврат по заказу трёхнедельной давности: долг 100, заказ висит на 400.
+  const returned = shop({ shopId: 8, debt: 100, oldestDays: 20, buckets: { d0_7: 0, d8_30: 400, d31_60: 0, d60plus: 0 }, unattributed: -300 });
+  // Ручное начисление сверх заказов: долг 500, заказов на 300.
+  const manual = shop({ shopId: 9, debt: 500, oldestDays: 12, buckets: { d0_7: 0, d8_30: 300, d31_60: 0, d60plus: 0 }, unattributed: 200 });
+  const data: ReceivablesAging = {
+    totalDebt: 570_600,
+    buckets: { d0_7: 1_000_000, d8_30: 2_420_835, d31_60: 2_000_000, d60plus: 2_020_600 },
+    unattributed: -6_871_235,
+    debtorCount: 3,
+    shops: [paidOffBySomethingElse, returned, manual],
+  };
+
+  it("«старше месяца» не больше «всего» — и у каждого магазина не больше его долга", () => {
+    const t = debtorTotals(data);
+    must(t.overdue <= t.totalDebt, `старше месяца ${t.overdue} больше всего долга ${t.totalDebt}`);
+    // Излишек снят со свежих корзин: от старого долга магазина осталось ровно его долг.
+    expect(t.overdue).toBe(570_000);
+    expect(cappedBuckets(paidOffBySomethingElse.buckets, paidOffBySomethingElse.debt))
+      .toEqual({ d0_7: 0, d8_30: 0, d31_60: 0, d60plus: 570_000 });
+  });
+
+  it("корзины плюс неотнесённое дают ровно долг, и неотнесённое не уходит в минус", () => {
+    const t = debtorTotals(data);
+    const sum = t.buckets.d0_7 + t.buckets.d8_30 + t.buckets.d31_60 + t.buckets.d60plus + t.unattributed;
+    expect(sum).toBe(t.totalDebt);
+    expect(t.unattributed).toBe(200); // ручное начисление — как было
+    expect(t.buckets.d8_30).toBe(400); // возврат: 100 вместо 400, и 300 из ручного магазина
+  });
+
+  it("излишек снимается со свежих корзин: старый долг не молодеет", () => {
+    // Долг 100, а заказов на 400: 50 недельных и 350 двухмесячных. Чья оплата —
+    // неизвестно; показать долг старше — позвать разобраться, моложе — спрятать.
+    expect(cappedBuckets({ d0_7: 0, d8_30: 50, d31_60: 0, d60plus: 350 }, 100))
+      .toEqual({ d0_7: 0, d8_30: 0, d31_60: 0, d60plus: 100 });
+    // Без излишка корзины не трогаются, и пустой долг их обнуляет.
+    expect(cappedBuckets({ d8_30: 300 }, 500)).toEqual({ d0_7: 0, d8_30: 300, d31_60: 0, d60plus: 0 });
+    expect(cappedBuckets({ d60plus: 300 }, 0)).toEqual({ d0_7: 0, d8_30: 0, d31_60: 0, d60plus: 0 });
+  });
+
+  it("магазин, который ничего не должен, в списке должников не стоит", () => {
+    // Сервер отдаёт его ради неоплаченных заказов, но долга за ним нет.
+    const clear = shop({ shopId: 10, shopName: "Всё вернули", debt: 0, oldestDays: 180, buckets: { d0_7: 0, d8_30: 0, d31_60: 0, d60plus: 900 }, unattributed: -900 });
+    const rows = sortDebtors([clear, manual], { search: "", bucket: null, byAmount: false });
+    expect(rows.map(r => r.shopId)).toEqual([9]);
+    expect(sortDebtors([clear], { search: "", bucket: "d60plus", byAmount: false })).toEqual([]);
+  });
+
+  it("без списка магазинов — то же правило по итогу", () => {
+    const t = debtorTotals({ ...data, shops: [] });
+    must(t.overdue <= t.totalDebt, `по итогу старше месяца ${t.overdue} больше всего ${t.totalDebt}`);
   });
 });
 
