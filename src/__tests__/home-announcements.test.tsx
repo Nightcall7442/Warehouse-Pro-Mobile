@@ -138,13 +138,24 @@ describe("объявления платформы", () => {
     expect(api.dismissAnnouncement.mock.calls.length).toBe(calls);
   });
 
-  it("без связи — ни карточки, ни ошибки", async () => {
+  it("без связи — ни карточки, ни ошибки; связь пропала — прежние карточки уходят", async () => {
     asRole("agent");
     api.getActiveAnnouncements.mockRejectedValue(new Error("Network Error"));
-    const { container } = withClient(<Announcements />);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    const { container } = render(<QueryClientProvider client={client}><Announcements /></QueryClientProvider>);
     await waitFor(() => expect(api.getActiveAnnouncements).toHaveBeenCalled());
     await act(async () => { await new Promise(r => setTimeout(r, 20)); });
     expect(container.textContent).toBe("");
+
+    // Связь появилась — объявление пришло.
+    api.getActiveAnnouncements.mockResolvedValue([UPDATE]);
+    await act(async () => { await client.refetchQueries({ queryKey: ["announcements"] }); });
+    expect(await screen.findByText("Обновление в субботу")).toBeTruthy();
+
+    // Пропала снова: вчерашнее «завтра обновление» не висит, пока не спросим сервер.
+    api.getActiveAnnouncements.mockRejectedValue(new Error("Network Error"));
+    await act(async () => { await client.refetchQueries({ queryKey: ["announcements"] }); });
+    await waitFor(() => expect(container.textContent).toBe(""));
   });
 
   it("не больше трёх", async () => {
