@@ -70,3 +70,36 @@ describe("экспортный контроль", () => {
     expect(app.expo.ios.infoPlist.ITSAppUsesNonExemptEncryption).toBe(false);
   });
 });
+
+/*
+  Face ID спрашивается по-русски.
+
+  expo-local-authentication стоит в зависимостях (вход по Face ID, BiometricRow),
+  а в plugins его не было. Expo подключает плагин сам, но без параметров — и
+  iOS спрашивала «Allow Warehouse Pro to use Face ID»: единственная английская
+  строка разрешений (снимки для App Store, 03.10.2026; npx expo config --type
+  introspect это показывает).
+
+  Нарочная поломка: убери плагин из app.json или переименуй параметр
+  (faceIdPermission) — падают обе проверки.
+*/
+describe("Face ID", () => {
+  const raw = JSON.parse(readFileSync(join(root, "app.json"), "utf8")) as { expo: { plugins: Array<string | [string, Record<string, string>]> } };
+  const entry = raw.expo.plugins.find(p => Array.isArray(p) && p[0] === "expo-local-authentication") as [string, Record<string, string>] | undefined;
+
+  it("плагин объявлен, строка русская и про Face ID", () => {
+    expect(entry).toBeTruthy();
+    expect(entry![1].faceIDPermission).toMatch(/[а-яё]/i);
+    expect(entry![1].faceIDPermission).toContain("Face ID");
+  });
+
+  it("в Info.plist попадает наша строка, а не английская по умолчанию", async () => {
+    // Настоящий плагин пакета: он и решает, что окажется в NSFaceIDUsageDescription.
+    const mod = require("expo-local-authentication/app.plugin");
+    const plugin = mod.default ?? mod;
+    const cfg = plugin({ name: "x", slug: "x", ios: { infoPlist: {} } }, entry?.[1]);
+    const out = await cfg.mods.ios.infoPlist({ ...cfg, modResults: {}, modRequest: { nextMod: async (c: unknown) => c, platform: "ios" } });
+    expect(out.modResults.NSFaceIDUsageDescription).toBe(entry?.[1].faceIDPermission);
+    expect(out.modResults.NSFaceIDUsageDescription).not.toMatch(/Allow/);
+  });
+});

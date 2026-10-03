@@ -106,6 +106,20 @@ describe("QueryState", () => {
     expect(screen.queryByText(/Проверьте подключение/)).toBeNull();
   });
 
+  it("английский отказ сервера на экран не выходит — говорится по-русски", () => {
+    // Так приходит отказ по роли на GET-запросе: ошибка axios, к которой api.ts
+    // приклеил слова tRPC. Агент, открывший /debtors, читал «Insufficient
+    // permissions» (снимки для App Store, 03.10.2026).
+    const refused = Object.assign(new Error("Request failed with status code 403"), {
+      response: { status: 403, data: { error: { json: { message: "Insufficient permissions", data: { code: "FORBIDDEN" } } } } },
+      trpcMessage: "Insufficient permissions",
+    });
+    render(<ErrorState what="долги" error={refused} onRetry={() => {}} />);
+
+    expect(screen.getByText(/Нет доступа/)).toBeTruthy();
+    expect(screen.queryByText(/Insufficient|Request failed/)).toBeNull();
+  });
+
   it("оборванная связь объясняется связью", () => {
     render(<ErrorState what="нормы" error={new Error("Network Error")} onRetry={() => {}} />);
 

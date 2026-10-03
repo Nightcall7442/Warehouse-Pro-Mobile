@@ -20,6 +20,19 @@ export function isOversight(role: string | undefined): boolean {
   return role === "supervisor" || role === "ceo" || role === "operator";
 }
 
+/**
+ * Кому сервер отдаёт долги всех магазинов (shop.receivablesAging стоит на
+ * managementQuery: владелец, оператор, супервайзер).
+ *
+ * Вкладки «Долги» нет ни у кого — но экран открывается карточкой с главной и
+ * прямым адресом. Агент, попавший на /debtors, видел «Не загрузилось ·
+ * Insufficient permissions» (снимки для App Store, 03.10.2026): экран, который
+ * роль не может использовать, не должен открываться вовсе.
+ */
+export function canSeeDebtors(role: string | undefined): boolean {
+  return isOversight(role);
+}
+
 /** Кому сервер отдаёт местоположения агентов (agent.getLocations). */
 export function canSeeAgentMap(role: string | undefined): boolean {
   return role === "ceo" || role === "supervisor";

@@ -105,12 +105,20 @@ export function usePushNotifications() {
       полминуты, приложение открыли не им.
     */
     const OPENED_BY_TAP_WITHIN_MS = 30_000;
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (!response) return;
-      const tappedAt = response.notification?.date;
-      const fresh = typeof tappedAt === "number" ? Date.now() - tappedAt < OPENED_BY_TAP_WITHIN_MS : false;
-      if (fresh) handleNotificationResponse(response);
-    });
+    /*
+      В вебе этого вызова нет вовсе: expo-notifications бросает «not available
+      on web» на каждой загрузке (сборка для браузера — стенд и снимки). Нажатых
+      уведомлений там не бывает, спрашивать незачем. catch — на случай, если
+      нативная часть откажет и на телефоне: открыть приложение это не мешает.
+    */
+    if (Platform.OS !== "web") {
+      Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (!response) return;
+        const tappedAt = response.notification?.date;
+        const fresh = typeof tappedAt === "number" ? Date.now() - tappedAt < OPENED_BY_TAP_WITHIN_MS : false;
+        if (fresh) handleNotificationResponse(response);
+      }).catch(() => {});
+    }
 
     return () => {
       cancelled = true;

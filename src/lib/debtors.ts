@@ -62,6 +62,14 @@ export function sortDebtors(shops: ShopAging[], f: DebtorFilter): ShopAging[] {
   const needle = f.search.trim().toLowerCase();
 
   const filtered = shops.filter(s => {
+    /*
+      Не должен — не должник. Сервер отдаёт и магазин с нулевым долгом, если
+      по нему висят неоплаченные заказы (долг закрыт возвратом или оплатой без
+      заказа), но в счёт должников его не берёт. В списке он стоял строкой
+      «0 сум · висит 180 дней» красным — под шапкой «15 магазинов» строк было
+      28 (снимки для App Store, 03.10.2026).
+    */
+    if (!(s.debt > 0)) return false;
     if (f.bucket && bucketOf(s.oldestDays) !== f.bucket) return false;
     if (!needle) return true;
     // Ищем и по магазину, и по агенту: супервайзер спрашивает и «где Нодира»,
@@ -103,20 +111,76 @@ export interface DebtorTotals {
 
 const EMPTY: Record<AgeBucket, number> = { d0_7: 0, d8_30: 0, d31_60: 0, d60plus: 0 };
 
+/** От свежих к старым: в этом порядке корзины отдают излишек. */
+const YOUNG_FIRST: AgeBucket[] = ["d0_7", "d8_30", "d31_60", "d60plus"];
+
+const cents = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Корзины, урезанные до долга: сумма корзин не больше того, что должны.
+ *
+ * ── Почему корзины бывают больше долга ──────────────────────────────────────
+ *
+ * Сервер (services/receivables.ts) старит НЕОПЛАЧЕННЫЕ ЗАКАЗЫ, а долг берёт с
+ * карточки магазина (shops.debt). Долг меньше заказов, когда его закрыло то,
+ * что к заказу не привязано: возврат, оплата без заказа. Сервер честно отдаёт
+ * эту разницу отрицательным `unattributed` — «корзины + неотнесённое = долг».
+ *
+ * Экран минус терял: «старше месяца» складывал корзины как есть, и на главной
+ * супервайзера стояло «всего 9 949 900 · старше месяца 49 124 220» — часть
+ * больше целого (снимки для App Store, 03.10.2026).
+ *
+ * ── Что снимается и откуда ──────────────────────────────────────────────────
+ *
+ * Излишек снимается со СВЕЖИХ корзин: какой заказ закрыла оплата без заказа,
+ * неизвестно, и долг лучше показать старше, чем моложе, — первое зовёт
+ * разобраться, второе прячет (то же правило, что у сервера). Потолок — долг
+ * магазина, как и у просрочки на сервере (shop-debt.ts → overdueDebt).
+ */
+export function cappedBuckets(buckets: Partial<Record<AgeBucket, number>> | undefined, debt: number): Record<AgeBucket, number> {
+  const out: Record<AgeBucket, number> = { ...EMPTY, ...(buckets ?? {}) };
+  let excess = YOUNG_FIRST.reduce((s, k) => s + out[k], 0) - Math.max(0, debt);
+  for (const k of YOUNG_FIRST) {
+    if (excess <= 0) break;
+    const cut = Math.min(out[k], excess);
+    out[k] = cents(out[k] - cut);
+    excess = cents(excess - cut);
+  }
+  return out;
+}
+
 export function debtorTotals(data: ReceivablesAging | undefined): DebtorTotals {
   if (!data) return { totalDebt: 0, debtorCount: 0, unattributed: 0, buckets: { ...EMPTY }, overdue: 0 };
-  const b = data.buckets ?? EMPTY;
+  const totalDebt = data.totalDebt ?? 0;
+  const shops = data.shops ?? [];
+
+  /*
+    По магазинам, а не по итогу: излишек одного магазина не гасит старый долг
+    другого. Без списка (старый ответ) — тем же правилом по итогу.
+  */
+  const buckets: Record<AgeBucket, number> = { ...EMPTY };
+  if (shops.length > 0) {
+    for (const s of shops) {
+      const c = cappedBuckets(s.buckets, s.debt);
+      for (const k of YOUNG_FIRST) buckets[k] = cents(buckets[k] + c[k]);
+    }
+  } else {
+    Object.assign(buckets, cappedBuckets(data.buckets, totalDebt));
+  }
+  const attributed = YOUNG_FIRST.reduce((s, k) => s + buckets[k], 0);
+
   return {
-    totalDebt: data.totalDebt ?? 0,
+    totalDebt,
     debtorCount: data.debtorCount ?? 0,
-    unattributed: data.unattributed ?? 0,
-    buckets: { ...EMPTY, ...b },
+    // Остаток до итога: корзины плюс он дают ровно долг, и он не бывает минусом.
+    unattributed: cents(Math.max(0, totalDebt - attributed)),
+    buckets,
     /*
       Просроченным считаем старше месяца — это тот срок, после которого агент
       едет разговаривать (то же правило, что и на сервере). Долг без привязки
       к заказу сюда НЕ входит: он может быть и вчерашним, и назвать его
       просроченным значило бы придумать.
     */
-    overdue: (b.d31_60 ?? 0) + (b.d60plus ?? 0),
+    overdue: cents(buckets.d31_60 + buckets.d60plus),
   };
 }
