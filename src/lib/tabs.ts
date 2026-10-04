@@ -33,6 +33,18 @@ export function canSeeDebtors(role: string | undefined): boolean {
   return isOversight(role);
 }
 
+/**
+ * Кому сервер отдаёт сводку продаж на главной: динамику, статусы заказов и
+ * последние заказы (dashboard.trends / statusBreakdown / activity стоят на
+ * supervisorQuery: владелец и супервайзер).
+ *
+ * Оператор открывает ту же главную, что и они, и видел три пустых графика —
+ * под каждым отказ 403 (04.10.2026). Владелец: «убрать, если они пустые».
+ */
+export function canSeeSalesDashboard(role: string | undefined): boolean {
+  return role === "ceo" || role === "supervisor";
+}
+
 /** Кому сервер отдаёт местоположения агентов (agent.getLocations). */
 export function canSeeAgentMap(role: string | undefined): boolean {
   return role === "ceo" || role === "supervisor";
