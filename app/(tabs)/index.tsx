@@ -11,7 +11,7 @@ import { useAuthStore } from "../../src/store/auth";
 import { getPlans, getMyOrders, getRevenueTrend, getDashboardTrends, getDashboardStatusBreakdown, getDashboardActivity, getSmartAlerts, getNotificationCounts, getReceivablesAging, getMyDebts } from "../../src/api";
 import { plural } from "../../src/lib/plural";
 import { debtorTotals } from "../../src/lib/debtors";
-import { canSeeAgentMap } from "../../src/lib/tabs";
+import { canSeeAgentMap, canSeeSalesDashboard } from "../../src/lib/tabs";
 import { formatMoney } from "../../src/store/branding";
 import { Card } from "../../src/components/ui";
 import { ProgressRing, Sparkline, NeumorphicProgressBar, DonutChart, MiniBarChart } from "../../src/components/Charts";
@@ -580,20 +580,32 @@ function SupervisorHome() {
   const [refreshing, setRefreshing] = useState(false);
   const [range, setRange] = useState<"7d" | "30d" | "month">("7d");
 
+  /*
+    Динамика продаж, статусы заказов и последние заказы — сводка директора и
+    супервайзера. Оператору сервер её не отдаёт (dashboard.* — supervisorQuery),
+    и его главная показывала три пустые карточки, под которыми каждый раз
+    уходили три запроса с отказом 403. Кому сводка положена — решает одно
+    правило, canSeeSalesDashboard; остальным ни карточек, ни запросов.
+  */
+  const salesDashboard = canSeeSalesDashboard(user?.role);
+
   // Dashboard queries
   const { data: trends, refetch } = useQuery({
     queryKey: ["dashboardTrends", range], queryFn: () => getDashboardTrends(range), retry: false,
+    enabled: salesDashboard,
   });
 
   const { data: statusData } = useQuery({
     queryKey: ["dashboardStatus"], queryFn: getDashboardStatusBreakdown, retry: false,
+    enabled: salesDashboard,
   });
 
   const { data: activity } = useQuery({
     queryKey: ["dashboardActivity"], queryFn: getDashboardActivity, retry: false,
+    enabled: salesDashboard,
   });
 
-  const { data: alerts } = useQuery({
+  const { data: alerts, refetch: refetchAlerts } = useQuery({
     queryKey: ["smartAlerts"], queryFn: getSmartAlerts, retry: false,
   });
 
@@ -601,7 +613,7 @@ function SupervisorHome() {
     Долги магазинов. Тот же ключ, что и на вкладке «Долги», — значит открытая
     вкладка достаётся уже посчитанной, без второго похода на сервер.
   */
-  const { data: aging } = useQuery({
+  const { data: aging, refetch: refetchAging } = useQuery({
     queryKey: ["receivablesAging"], queryFn: getReceivablesAging, retry: false,
   });
   const debts = debtorTotals(aging);
@@ -621,10 +633,12 @@ function SupervisorHome() {
   const greeting = hour < 12 ? t("Доброе утро", "Xayrli tong") : hour < 18 ? t("Добрый день", "Xayrli kun") : t("Добрый вечер", "Xayrli kech");
   const firstName = (user?.name ?? user?.email ?? "").split(" ")[0];
 
+  // refetch() у запроса с enabled: false всё равно идёт на сервер — поэтому
+  // сводку обновляем только тем, кому она положена.
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { await refetch(); } finally { setRefreshing(false); }
-  }, [refetch]);
+    try { await Promise.all([salesDashboard ? refetch() : null, refetchAlerts(), refetchAging()]); } finally { setRefreshing(false); }
+  }, [salesDashboard, refetch, refetchAlerts, refetchAging]);
 
   const scrollRefresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand.primary} />;
 
@@ -743,64 +757,68 @@ function SupervisorHome() {
         </FadeInItem>
       )}
 
-      {/* ── Sales Dynamics Chart ─────────────────────────────────────────── */}
-      <FadeInItem delay={100}>
-        <Card style={{ marginBottom: Spacing.base }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      {salesDashboard && (
+        <>
+        {/* ── Sales Dynamics Chart ─────────────────────────────────────────── */}
+        <FadeInItem delay={100}>
+          <Card style={{ marginBottom: Spacing.base }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <View>
+                <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Динамика продаж", "Sotuvlar dinamikasi")}</Text>
+                <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{t("Выручка и заказы", "Tushum va buyurtmalar")}</Text>
+              </View>
+              <View style={{ flexDirection: "row", backgroundColor: colors.bg.elevated, borderRadius: Radii.full, padding: 2 }}>
+                {(["7d", "30d", "month"] as const).map(r => (
+                  <PressableScale key={r} onPress={() => setRange(r)} haptic="light" scaleTo={0.95}>
+                    <View style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radii.full, backgroundColor: range === r ? colors.brand.primary : "transparent" }}>
+                      <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: range === r ? colors.brand.ink : colors.text.tertiary }}>{r === "7d" ? t("7д", "7 k") : r === "30d" ? t("30д", "30 k") : t("Месяц", "Oy")}</Text>
+                    </View>
+                  </PressableScale>
+                ))}
+              </View>
+            </View>
+            <View style={{ marginBottom: 12 }}>
+              <Sparkline data={revenueTrend.length ? revenueTrend : [0]} color={colors.accent.primary} width={320} height={50} />
+            </View>
             <View>
-              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Динамика продаж", "Sotuvlar dinamikasi")}</Text>
-              <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>{t("Выручка и заказы", "Tushum va buyurtmalar")}</Text>
+              <Sparkline data={ordersTrend.length ? ordersTrend : [0]} color={colors.status.success} width={320} height={40} />
             </View>
-            <View style={{ flexDirection: "row", backgroundColor: colors.bg.elevated, borderRadius: Radii.full, padding: 2 }}>
-              {(["7d", "30d", "month"] as const).map(r => (
-                <PressableScale key={r} onPress={() => setRange(r)} haptic="light" scaleTo={0.95}>
-                  <View style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radii.full, backgroundColor: range === r ? colors.brand.primary : "transparent" }}>
-                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: 11, color: range === r ? colors.brand.ink : colors.text.tertiary }}>{r === "7d" ? t("7д", "7 k") : r === "30d" ? t("30д", "30 k") : t("Месяц", "Oy")}</Text>
-                  </View>
-                </PressableScale>
-              ))}
+            <View style={{ flexDirection: "row", justifyContent: "center", gap: 20, marginTop: 12 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent.primary }} />
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>{t("Выручка", "Tushum")}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.success }} />
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>{t("Заказы", "Buyurtmalar")}</Text>
+              </View>
             </View>
-          </View>
-          <View style={{ marginBottom: 12 }}>
-            <Sparkline data={revenueTrend.length ? revenueTrend : [0]} color={colors.accent.primary} width={320} height={50} />
-          </View>
-          <View>
-            <Sparkline data={ordersTrend.length ? ordersTrend : [0]} color={colors.status.success} width={320} height={40} />
-          </View>
-          <View style={{ flexDirection: "row", justifyContent: "center", gap: 20, marginTop: 12 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent.primary }} />
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>{t("Выручка", "Tushum")}</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.status.success }} />
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: 11, color: colors.text.tertiary }}>{t("Заказы", "Buyurtmalar")}</Text>
-            </View>
-          </View>
-        </Card>
-      </FadeInItem>
+          </Card>
+        </FadeInItem>
 
-      {/* ── Order Status Donut ───────────────────────────────────────────── */}
-      <FadeInItem delay={140}>
-        <Card style={{ marginBottom: Spacing.base }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
-            <Feather name="pie-chart" size={16} color={colors.accent.primary} />
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Статусы заказов", "Buyurtma holatlari")}</Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-            <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel={t(plural(statusTotal, "заказ", "заказа", "заказов"), "buyurtma")} />
-            <View style={{ flex: 1, gap: 8 }}>
-              {donutSegments.map((seg, i) => (
-                <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: seg.color }} />
-                  <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, flex: 1 }} numberOfLines={1}>{seg.label}</Text>
-                  <Text style={{ fontFamily: Typography.fontBold, fontSize: 12, color: colors.text.primary }}>{seg.value}</Text>
-                </View>
-              ))}
+        {/* ── Order Status Donut ───────────────────────────────────────────── */}
+        <FadeInItem delay={140}>
+          <Card style={{ marginBottom: Spacing.base }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <Feather name="pie-chart" size={16} color={colors.accent.primary} />
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Статусы заказов", "Buyurtma holatlari")}</Text>
             </View>
-          </View>
-        </Card>
-      </FadeInItem>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
+              <DonutChart segments={donutSegments} size={120} strokeWidth={18} centerLabel={String(statusTotal)} centerSublabel={t(plural(statusTotal, "заказ", "заказа", "заказов"), "buyurtma")} />
+              <View style={{ flex: 1, gap: 8 }}>
+                {donutSegments.map((seg, i) => (
+                  <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: seg.color }} />
+                    <Text style={{ fontFamily: Typography.fontMedium, fontSize: 12, color: colors.text.secondary, flex: 1 }} numberOfLines={1}>{seg.label}</Text>
+                    <Text style={{ fontFamily: Typography.fontBold, fontSize: 12, color: colors.text.primary }}>{seg.value}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </Card>
+        </FadeInItem>
+        </>
+      )}
 
       {/* ── Quick Actions (no create order) ──────────────────────────────── */}
       <FadeInItem delay={180}>
@@ -851,44 +869,48 @@ function SupervisorHome() {
         </View>
       </FadeInItem>
 
-      {/* ── Recent Orders ────────────────────────────────────────────────── */}
-      <FadeInItem delay={220}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Feather name="clipboard" size={16} color={colors.accent.primary} />
-            <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Последние заказы", "So'nggi buyurtmalar")}</Text>
-          </View>
-          <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{activity?.length ?? 0} {t(plural(activity?.length ?? 0, "заказ", "заказа", "заказов"), "ta buyurtma")}</Text>
-        </View>
-        <Card style={{ padding: 0, overflow: "hidden" }}>
-          {!activity?.length ? (
-            <View style={{ padding: Spacing.xl, alignItems: "center", gap: 8 }}>
-              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="clipboard" size={20} color={colors.text.muted} />
-              </View>
-              <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.muted }}>{t("Заказов пока нет", "Hali buyurtma yo'q")}</Text>
+      {salesDashboard && (
+        <>
+        {/* ── Recent Orders ────────────────────────────────────────────────── */}
+        <FadeInItem delay={220}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Feather name="clipboard" size={16} color={colors.accent.primary} />
+              <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>{t("Последние заказы", "So'nggi buyurtmalar")}</Text>
             </View>
-          ) : (
-            activity.slice(0, 10).map((order, idx) => (
-              <TouchableOpacity key={order.id} activeOpacity={0.7} onPress={() => router.push(`/order/${order.id}`)}>
-                <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 12 }}>
-                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: orderStatusColor(order.status) }} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{order.agentName ?? "—"}</Text>
-                    <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
-                      #{order.orderNumber} · {order.createdAt ? format(new Date(order.createdAt), "HH:mm") : ""}
+            <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.xs, color: colors.text.tertiary }}>{activity?.length ?? 0} {t(plural(activity?.length ?? 0, "заказ", "заказа", "заказов"), "ta buyurtma")}</Text>
+          </View>
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            {!activity?.length ? (
+              <View style={{ padding: Spacing.xl, alignItems: "center", gap: 8 }}>
+                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg.elevated, alignItems: "center", justifyContent: "center" }}>
+                  <Feather name="clipboard" size={20} color={colors.text.muted} />
+                </View>
+                <Text style={{ fontFamily: Typography.fontMedium, fontSize: Typography.size.sm, color: colors.text.muted }}>{t("Заказов пока нет", "Hali buyurtma yo'q")}</Text>
+              </View>
+            ) : (
+              activity.slice(0, 10).map((order, idx) => (
+                <TouchableOpacity key={order.id} activeOpacity={0.7} onPress={() => router.push(`/order/${order.id}`)}>
+                  <View style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 12 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: orderStatusColor(order.status) }} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontFamily: Typography.fontSemibold, fontSize: Typography.size.base, color: colors.text.primary }} numberOfLines={1}>{order.agentName ?? "—"}</Text>
+                      <Text style={{ fontFamily: Typography.fontRegular, fontSize: Typography.size.xs, color: colors.text.tertiary, marginTop: 2 }}>
+                        #{order.orderNumber} · {order.createdAt ? format(new Date(order.createdAt), "HH:mm") : ""}
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>
+                      {Number(order.total).toLocaleString("ru")}
                     </Text>
                   </View>
-                  <Text style={{ fontFamily: Typography.fontBold, fontSize: Typography.size.base, color: colors.text.primary }}>
-                    {Number(order.total).toLocaleString("ru")}
-                  </Text>
-                </View>
-                {idx < Math.min(activity.length, 10) - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 36 }} />}
-              </TouchableOpacity>
-            ))
-          )}
-        </Card>
-      </FadeInItem>
+                  {idx < Math.min(activity.length, 10) - 1 && <View style={{ height: 1, backgroundColor: colors.border.subtle, marginLeft: 36 }} />}
+                </TouchableOpacity>
+              ))
+            )}
+          </Card>
+        </FadeInItem>
+        </>
+      )}
     </ScrollView>
   );
 }

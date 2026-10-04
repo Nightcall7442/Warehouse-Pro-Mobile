@@ -2,6 +2,7 @@ import axios from "axios";
 import Constants from "expo-constants";
 import { SecureStore } from "./storage";
 import { errorText } from "./lib/error-text";
+import { currentLang, tt } from "./i18n";
 
 export const API_BASE = (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim())
   ? process.env.EXPO_PUBLIC_API_URL
@@ -21,6 +22,10 @@ const api = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
+  // Язык интерфейса — в каждом запросе: на нём сервер отвечает отказом и
+  // помечает это data.lang (см. lib/error-text.ts). Берётся в момент запроса:
+  // язык переключают без перезапуска. Старый сервер заголовок не читает.
+  config.headers["x-lang"] = currentLang();
   try {
     const token = await SecureStore.getItemAsync("session_token");
     if (token) config.headers["Authorization"] = `Bearer ${token}`;
@@ -501,7 +506,9 @@ export async function login(
       { email, password, ...(tenantId === undefined ? {} : { tenantId }), ...(code ? { code } : {}) },
       {
         timeout: 15_000,
-        headers: { "Content-Type": "application/json" }
+        // Отказ входа — на языке интерфейса; язык ответа сервер называет
+        // заголовком Content-Language.
+        headers: { "Content-Type": "application/json", "x-lang": currentLang() }
       }
     );
   } catch (e) {
@@ -509,12 +516,12 @@ export async function login(
     const data = response?.data as { code?: string; error?: string; organizations?: Array<{ tenantId: number; name: string }> } | undefined;
     if (response?.status === 409 && data?.code === "TENANT_REQUIRED") {
       throw new TenantChoiceRequired(
-        data.error ?? "Выберите организацию",
+        data.error ?? tt("Выберите организацию", "Tashkilotni tanlang"),
         data.organizations ?? [],
       );
     }
     if (response?.status === 401 && data?.code === "TOTP_REQUIRED") {
-      throw new TotpCodeRequired(data.error ?? "Введите код из приложения");
+      throw new TotpCodeRequired(data.error ?? tt("Введите код из приложения", "Ilovadagi kodni kiriting"));
     }
     throw e;
   }

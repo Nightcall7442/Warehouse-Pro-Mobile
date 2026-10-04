@@ -24,17 +24,36 @@
  * Не все слова сервера русские. Отказ по роли и по входу middleware пишет
  * по-английски («Insufficient permissions», «Authentication required»), и
  * агент, открывший экран супервайзера, читал «Не загрузилось · Insufficient
- * permissions» (снимки для App Store, 03.10.2026). Поэтому текст сервера
- * проходит, только если в нём есть кириллица; английский отказ называется
- * по коду ответа — «нет доступа», «сессия закончилась», «не найдено».
+ * permissions» (снимки для App Store, 03.10.2026). Английский отказ
+ * называется по коду ответа — «нет доступа», «сессия закончилась», «не найдено».
+ *
+ * ── Язык слов сервера ───────────────────────────────────────────────────────
+ *
+ * Приложение шлёт язык интерфейса заголовком x-lang, и сервер отвечает
+ * отказом на нём, помечая это: data.lang у tRPC, Content-Language у входа.
+ * Пометке и верим: текст сервера на языке интерфейса показывается как есть,
+ * на другом — нет (язык переключили, ответ старый). Узбекский латиницей по
+ * виду не отличить от строки axios, поэтому «есть кириллица» тут не признак.
+ *
+ * Сервер без пометки — старый, до перевода отказов. Тогда по-прежнему:
+ * русский текст — русскому интерфейсу, узбекскому — фраза по коду ответа.
  */
 
-import { tt } from "../i18n";
+import { currentLang, tt } from "../i18n";
+
+type ResponseHeaders = Record<string, unknown> & { get?: (name: string) => unknown };
+
+interface TrpcEnvelope { message?: string; json?: { message?: string; data?: { code?: string; lang?: string } } }
 
 interface MaybeAxios {
-  response?: { status?: number; data?: { message?: string; error?: { message?: string; json?: { message?: string; data?: { code?: string } } } } };
+  response?: {
+    status?: number;
+    headers?: ResponseHeaders;
+    // error — конверт tRPC или строка REST-входа ({ error: "…" }).
+    data?: { message?: string; error?: string | TrpcEnvelope };
+  };
   trpcMessage?: string;
-  trpcData?: { code?: string };
+  trpcData?: { code?: string; lang?: string };
   message?: string;
   code?: string;
   forHumans?: boolean;
@@ -50,6 +69,7 @@ const UNKNOWN = () => tt("Не получилось. Попробуйте ещё
 const NO_ACCESS = () => tt("Нет доступа: у вашей роли нет прав на это.", "Ruxsat yo'q: rolingizda bunga huquq yo'q.");
 const SESSION_OVER = () => tt("Сессия закончилась. Войдите снова.", "Sessiya tugadi. Qaytadan kiring.");
 const WRONG_PASSWORD = () => tt("Текущий пароль не подошёл.", "Joriy parol mos kelmadi.");
+const WRONG_LOGIN = () => tt("Неверный email или пароль.", "Email yoki parol noto'g'ri.");
 const NOT_FOUND = () => tt("Не найдено — возможно, уже удалено.", "Topilmadi — ehtimol, o'chirilgan.");
 const TOO_MANY = () => tt("Слишком много попыток. Попробуйте позже.", "Urinishlar juda ko'p. Keyinroq urinib ko'ring.");
 
@@ -72,23 +92,44 @@ export function humanError(message: string): Error {
   return Object.assign(new Error(message), { forHumans: true });
 }
 
+/** Заголовок ответа axios: обычный объект или AxiosHeaders с get(). */
+function headerOf(headers: ResponseHeaders | undefined, name: string): string | undefined {
+  if (!headers) return undefined;
+  const v = typeof headers.get === "function" ? headers.get(name) : headers[name];
+  return typeof v === "string" ? v : undefined;
+}
+
 export function errorText(e: unknown): string {
   const err = (e ?? {}) as MaybeAxios;
   const raw = typeof err.message === "string" ? err.message : "";
+  const lang = currentLang();
 
   // Уже сказано для человека: humanError или отказ сервера, переведённый в api.ts.
   if (raw && err.forHumans) return raw;
 
-  // Слова сервера — если они написаны для человека (см. шапку файла).
+  // Слова сервера (см. шапку файла).
   const data = err.response?.data;
-  const fromServer = data?.error?.message ?? data?.message ?? data?.error?.json?.message ?? err.trpcMessage;
-  if (typeof fromServer === "string" && forHumans(fromServer)) return fromServer;
+  const envelope = typeof data?.error === "object" ? data.error : undefined;
+  const restError = typeof data?.error === "string" ? data.error : undefined;
+  const fromServer = restError ?? envelope?.message ?? data?.message ?? envelope?.json?.message ?? err.trpcMessage;
+  const serverLang = err.trpcData?.lang ?? envelope?.json?.data?.lang ?? headerOf(err.response?.headers, "content-language");
+  if (typeof fromServer === "string" && fromServer) {
+    if (serverLang) {
+      if (serverLang === lang) return fromServer;
+    } else if (lang === "ru" && forHumans(fromServer)) {
+      return fromServer;
+    }
+  }
 
-  const code = err.trpcData?.code ?? data?.error?.json?.data?.code;
+  const url = String(err.config?.url ?? "");
+  const code = err.trpcData?.code ?? envelope?.json?.data?.code;
   const status = err.response?.status ?? (code ? STATUS_OF_CODE[code] : undefined);
   if (typeof status === "number") {
     // 401 смены пароля — «не тот пароль», а не конец сессии (см. isSelfInflicted401 в api.ts).
-    if (status === 401) return String(err.config?.url ?? "").includes("user.changePassword") ? WRONG_PASSWORD() : SESSION_OVER();
+    if (status === 401 && url.includes("user.changePassword")) return WRONG_PASSWORD();
+    // 401 входа — неверные почта или пароль: сессии ещё нет, кончаться нечему.
+    if (status === 401 && url.includes("/api/login")) return WRONG_LOGIN();
+    if (status === 401) return SESSION_OVER();
     if (status === 403) return NO_ACCESS();
     if (status === 404) return NOT_FOUND();
     if (status === 408) return TOO_LONG();
